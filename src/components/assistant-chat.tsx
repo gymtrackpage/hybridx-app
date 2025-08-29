@@ -23,6 +23,10 @@ interface Message {
   content: string;
 }
 
+// NOTE: Using a hardcoded user ID for demonstration purposes.
+// In a real application, this would come from your authentication context.
+const TEST_USER_ID = 'test-user-id';
+
 export function AssistantChat() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -59,14 +63,11 @@ export function AssistantChat() {
     setIsLoading(true);
 
     try {
-      // Mock AI call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      // In a real app, you would use the result from the genkit flow:
-      // const result = await trainingAssistant({ workoutData: "...", question: input });
+      const result = await trainingAssistant({ userId: TEST_USER_ID, question: input });
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: "Based on your recent focus on sled pushes and pulls, to improve your time, I recommend incorporating explosive leg workouts like box jumps and kettlebell swings on your strength days. This will build the power needed for a faster start. Also, focus on maintaining a consistent, low body angle during the push. Great work on your consistency!",
+        content: result.answer,
       };
       setMessages((prev) => [...prev, aiResponse]);
     } catch (error) {
