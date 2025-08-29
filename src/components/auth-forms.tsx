@@ -121,12 +121,17 @@ const signupSchema = z.object({
 
 type SignupData = z.infer<typeof signupSchema>;
 
+const initialSignupData: Partial<SignupData> = {
+  email: '',
+  password: '',
+};
+
 export function SignupForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState<Partial<SignupData>>({});
+  const [formData, setFormData] = useState<Partial<SignupData>>(initialSignupData);
 
   const handleNext = (data: Partial<SignupData>) => {
     setFormData((prev) => ({ ...prev, ...data }));
