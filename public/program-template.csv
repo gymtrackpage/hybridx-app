@@ -1,0 +1,8 @@
+week,day,workout_title,tags,exercise_names,exercise_details
+1,Monday,"Full Body Strength A",Strength,"Squats, Bench Press, Bent Over Rows","3x5 Heavy Squats|3x5 Heavy Bench Press|3x8 Bent Over Rows"
+1,Tuesday,"Endurance Run",Cardio,"45 Minute Zone 2 Run","Run at a conversational pace for 45 minutes straight"
+1,Wednesday,"Rest Day",Rest,"Active Recovery","Light walk or stretching"
+1,Thursday,"Full Body Strength B",Strength,"Overhead Press, Deadlifts, Pull-ups","3x5 Heavy Overhead Press|1x5 Heavy Deadlifts|3xAMRAP Pull-ups"
+1,Friday,"Hyrox Simulation",Cardio,"Simulated Hyrox Event","1km Run|500m SkiErg|1km Run|50 Burpees"
+1,Saturday,"Long Run",Cardio,"90 Minute Zone 2 Run","Run at a conversational pace for 90 minutes straight"
+1,Sunday,"Rest Day",Rest,"Complete Rest","Relax and recover"

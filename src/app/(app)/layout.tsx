@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   LogOut,
   MessageSquare,
+  Shield,
   User,
 } from 'lucide-react';
 
@@ -32,6 +33,7 @@ import {
   SidebarFooter,
   SidebarInset,
   SidebarTrigger,
+  SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/icons';
 
@@ -39,6 +41,10 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/assistant', icon: MessageSquare, label: 'AI Assistant' },
   { href: '/calendar', icon: Calendar, label: 'Calendar' },
+];
+
+const adminNavItems = [
+    { href: '/admin/programs', icon: Shield, label: 'Manage Programs' },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -61,6 +67,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarContent>
           <SidebarMenu>
             {navItems.map((item) => (
+              <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton asChild tooltip={item.label}>
+                  <Link href={item.href}>
+                    <item.icon />
+                    <span>{item.label}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+          <SidebarSeparator />
+           <SidebarMenu>
+            {adminNavItems.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton asChild tooltip={item.label}>
                   <Link href={item.href}>
