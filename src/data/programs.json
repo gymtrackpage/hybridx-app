@@ -1,0 +1,75 @@
+
+[
+    {
+        "id": "intermediate-hybrid-4-days",
+        "name": "Intermediate Hybrid - 4 Days/Week",
+        "description": "A balanced program for intermediate athletes focusing on both strength and endurance, training 4 days a week.",
+        "workouts": [
+            {
+                "day": 1,
+                "title": "Full Body Strength & Power",
+                "exercises": [
+                    { "name": "Back Squats", "details": "5x5 reps" },
+                    { "name": "Bench Press", "details": "5x5 reps" },
+                    { "name": "Deadlifts", "details": "1x5 reps (heavy)" },
+                    { "name": "Kettlebell Swings", "details": "4x15 reps" },
+                    { "name": "Farmer's Walk", "details": "3x50m" }
+                ]
+            },
+            {
+                "day": 2,
+                "title": "Lactate Threshold Run",
+                "exercises": [
+                    { "name": "Warm-up", "details": "10 min easy jog" },
+                    { "name": "Intervals", "details": "4x1000m at Threshold Pace" },
+                    { "name": "Recovery", "details": "3 min jog between intervals" },
+                    { "name": "Cool-down", "details": "10 min easy jog" }
+                ]
+            },
+            {
+                "day": 3,
+                "title": "Rest or Active Recovery",
+                "exercises": [
+                    { "name": "Light Walk or Stretching", "details": "30-45 minutes" }
+                ]
+            },
+            {
+                "day": 4,
+                "title": "HYROX Simulation",
+                "exercises": [
+                    { "name": "Ski Erg", "details": "1000m" },
+                    { "name": "Sled Push", "details": "2x50m" },
+                    { "name": "Sled Pull", "details": "2x50m" },
+                    { "name": "Burpee Broad Jumps", "details": "80m" },
+                    { "name": "Row Erg", "details": "1000m" },
+                    { "name": "Kettlebell Farmer's Carry", "details": "200m" },
+                    { "name": "Sandbag Lunges", "details": "100m" },
+                    { "name": "Wall Balls", "details": "75 reps" }
+                ]
+            },
+            {
+                "day": 5,
+                "title": "Upper Body & Core",
+                "exercises": [
+                    { "name": "Pull-ups / Lat Pulldowns", "details": "4x8-12 reps" },
+                    { "name": "Overhead Press", "details": "4x8 reps" },
+                    { "name": "Dumbbell Rows", "details": "3x10 reps per arm" },
+                    { "name": "Plank", "details": "3x60 seconds" },
+                    { "name": "Russian Twists", "details": "3x20 reps" }
+                ]
+            },
+            {
+                "day": 6,
+                "title": "Long Endurance",
+                "exercises": [
+                    { "name": "Long Run or Bike", "details": "60-90 minutes at a steady, conversational pace" }
+                ]
+            },
+            {
+                "day": 7,
+                "title": "Rest",
+                "exercises": []
+            }
+        ]
+    }
+]
