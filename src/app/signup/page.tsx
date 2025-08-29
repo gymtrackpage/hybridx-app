@@ -1,9 +1,8 @@
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { LoginForm } from '@/components/auth-forms';
+import { SignupForm } from '@/components/auth-forms';
 import { Logo } from '@/components/icons';
 
-export default function LoginPage() {
+export default function SignupPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="container z-40 bg-background">
@@ -13,14 +12,14 @@ export default function LoginPage() {
             <span className="font-bold">HyroxEdgeAI</span>
           </Link>
           <nav>
-            <Button asChild>
-              <Link href="/signup">Get Started</Link>
-            </Button>
+            <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-primary">
+              Already have an account? Sign In
+            </Link>
           </nav>
         </div>
       </header>
       <main className="flex flex-1 flex-col items-center justify-center p-4">
-        <LoginForm />
+        <SignupForm />
       </main>
     </div>
   );
