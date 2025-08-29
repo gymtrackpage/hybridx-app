@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { PlusCircle, MoreHorizontal, Trash2, Edit } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Upload } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -30,15 +30,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { ProgramForm } from '@/components/program-form';
+import { ProgramImportDialog } from '@/components/program-import-dialog';
 
 
 export default function AdminProgramsPage() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const { toast } = useToast();
 
@@ -93,6 +94,12 @@ export default function AdminProgramsPage() {
   
   const handleFormSuccess = () => {
     setIsFormOpen(false);
+    setSelectedProgram(null);
+    fetchPrograms();
+  }
+  
+  const handleImportSuccess = () => {
+    setIsImportOpen(false);
     fetchPrograms();
   }
 
@@ -103,10 +110,16 @@ export default function AdminProgramsPage() {
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Manage Programs</h1>
           <p className="text-muted-foreground">Add, edit, or remove training programs.</p>
         </div>
-        <Button onClick={handleAddNew}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add New Program
-        </Button>
+        <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setIsImportOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                Import from CSV
+            </Button>
+            <Button onClick={handleAddNew}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add New Program
+            </Button>
+        </div>
       </div>
 
       <Card>
@@ -193,6 +206,11 @@ export default function AdminProgramsPage() {
         program={selectedProgram}
         onSuccess={handleFormSuccess}
       />
+      <ProgramImportDialog
+        isOpen={isImportOpen}
+        setIsOpen={setIsImportOpen}
+        onSuccess={handleImportSuccess}
+       />
     </div>
   );
 }
