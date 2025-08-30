@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from '@/components/ui/chart';
+import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, ChartTooltip, CartesianGrid } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { getUser } from '@/services/user-service';
@@ -224,7 +224,7 @@ export default function DashboardPage() {
                         <CartesianGrid vertical={false} />
                         <XAxis dataKey="week" tickLine={false} axisLine={false} tickMargin={8} />
                         <YAxis hide={true} />
-                        <Tooltip cursor={false} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
+                        <ChartTooltip cursor={false} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
                         <Bar dataKey="workouts" fill="hsl(var(--primary))" radius={4} />
                     </RechartsBarChart>
                 </ChartContainer>
