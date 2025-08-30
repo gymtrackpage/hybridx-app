@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { onAuthStateChanged } from 'firebase/auth';
 import { BarChart, Dumbbell, Sparkles, Loader2 } from 'lucide-react';
 
@@ -169,7 +170,9 @@ export default function DashboardPage() {
             )}
           </CardContent>
           <CardFooter>
-            <Button className="w-full" disabled={!todaysWorkout?.workout}>Start / Resume Workout</Button>
+            <Button asChild className="w-full" disabled={!todaysWorkout?.workout}>
+              <Link href="/workout/active">Start / Resume Workout</Link>
+            </Button>
           </CardFooter>
         </Card>
 
@@ -217,7 +220,7 @@ export default function DashboardPage() {
                 <CardDescription>
                     You've completed an average of 3.75 workouts per week this month.
                 </CardDescription>
-            </CardHeader>
+            </Header>
             <CardContent>
                 <ChartContainer config={chartConfig} className="h-40 w-full">
                     <RechartsBarChart data={progressData} margin={{ top: 20, right: 20, bottom: -10, left: -20 }}>

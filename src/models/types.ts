@@ -25,3 +25,14 @@ export interface Exercise {
   name: string;
   details: string;
 }
+
+export interface WorkoutSession {
+    id: string;
+    userId: string;
+    programId: string;
+    workoutDate: Date;
+    startedAt: Date;
+    finishedAt?: Date;
+    isRunning: boolean;
+    completedExercises: { [exerciseName: string]: boolean };
+}
