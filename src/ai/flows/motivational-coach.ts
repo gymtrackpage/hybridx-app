@@ -38,7 +38,7 @@ const prompt = ai.definePrompt({
 
   Workout history: {{{workoutHistory}}}
 
-  Give the user a personalized, encouraging message to stay motivated and consistent with their training. Address the user by their name: {{{userName}}}.',
+  Give the user a personalized, encouraging message to stay motivated and consistent with their training. Address the user by their name: {{{userName}}}.`,
 });
 
 const motivationalCoachFlow = ai.defineFlow(

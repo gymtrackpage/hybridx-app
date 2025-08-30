@@ -9,6 +9,7 @@ import {
   LogOut,
   MessageSquare,
   Shield,
+  BookOpenCheck,
 } from 'lucide-react';
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -36,6 +37,7 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/assistant', icon: MessageSquare, label: 'AI Assistant' },
   { href: '/calendar', icon: Calendar, label: 'Calendar' },
+  { href: '/programs', icon: BookOpenCheck, label: 'Programs' },
 ];
 
 const adminNavItems = [

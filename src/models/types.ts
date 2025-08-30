@@ -4,7 +4,7 @@ export interface User {
   experience: 'beginner' | 'intermediate' | 'advanced';
   frequency: '3' | '4' | '5+';
   goal: 'strength' | 'endurance' | 'hybrid';
-  programId?: string;
+  programId?: string | null;
   startDate?: Date;
 }
 

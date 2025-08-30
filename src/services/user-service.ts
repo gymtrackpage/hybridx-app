@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { User } from '@/models/types';
 
@@ -8,18 +8,41 @@ export async function getUser(userId: string): Promise<User | null> {
     const docRef = doc(usersCollection, userId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as User;
+        const data = docSnap.data();
+        // Convert Firestore Timestamp to JS Date
+        const user: User = {
+            id: docSnap.id,
+            email: data.email,
+            experience: data.experience,
+            frequency: data.frequency,
+            goal: data.goal,
+            programId: data.programId,
+            startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
+        };
+        return user;
     }
     return null;
 }
 
-export async function createUser(userId: string, data: Omit<User, 'id'>): Promise<User> {
+export async function createUser(userId: string, data: Omit<User, 'id' | 'startDate' | 'programId'>): Promise<User> {
     const userRef = doc(usersCollection, userId);
-    await setDoc(userRef, data);
+    const userData = {
+        ...data,
+        programId: null,
+        startDate: null,
+    };
+    await setDoc(userRef, userData);
     return { id: userId, ...data };
 }
 
-export async function updateUser(userId: string, data: Partial<User>): Promise<void> {
+export async function updateUser(userId: string, data: Partial<Omit<User, 'id'>>): Promise<void> {
     const userRef = doc(usersCollection, userId);
-    await updateDoc(userRef, data);
+    const dataToUpdate: { [key: string]: any } = { ...data };
+
+    // Convert JS Date back to Firestore Timestamp if it exists
+    if (data.startDate) {
+        dataToUpdate.startDate = Timestamp.fromDate(data.startDate);
+    }
+    
+    await updateDoc(userRef, dataToUpdate);
 }

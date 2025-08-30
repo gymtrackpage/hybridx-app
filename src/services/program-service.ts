@@ -1,6 +1,7 @@
 import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Program } from '@/models/types';
+import { differenceInDays } from 'date-fns';
 
 const programsCollection = collection(db, 'programs');
 
@@ -40,10 +41,14 @@ export function getWorkoutForDay(program: Program, startDate: Date, targetDate: 
     const target = new Date(targetDate);
     target.setHours(0, 0, 0, 0);
 
-    const diffTime = Math.abs(target.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const dayOfProgram = diffDays + 1;
+    const dayOfProgram = differenceInDays(target, start) + 1;
+    
+    if (dayOfProgram < 1) {
+        return { day: dayOfProgram, workout: null };
+    }
 
-    const workout = program.workouts.find(w => w.day === dayOfProgram) || null;
-    return { day: dayOfProgram, workout };
+    const workoutForDay = program.workouts.find(w => w.day === dayOfProgram);
+
+    // If there's no specific workout for that day number, maybe it's a rest day or not defined
+    return { day: dayOfProgram, workout: workoutForDay || null };
 }
