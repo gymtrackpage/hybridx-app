@@ -47,9 +47,15 @@ export function getWorkoutForDay(program: Program, startDate: Date, targetDate: 
         return { day: dayOfProgram, workout: null };
     }
 
+    // Find the max day number to correctly calculate the cycle length for the modulo.
+    const cycleLength = Math.max(...program.workouts.map(w => w.day), 0);
+    if (cycleLength === 0) {
+        return { day: dayOfProgram, workout: null };
+    }
+    
     // Use modulo to handle repeating weekly schedules
-    const dayIndex = (dayOfProgram - 1) % program.workouts.length;
-    const workoutForDay = program.workouts.find(w => w.day === dayIndex + 1);
+    const dayInCycle = ((dayOfProgram - 1) % cycleLength) + 1;
+    const workoutForDay = program.workouts.find(w => w.day === dayInCycle);
 
     // If there's no specific workout for that day number, it's a rest day or not defined
     return { day: dayOfProgram, workout: workoutForDay || null };
