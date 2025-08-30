@@ -32,6 +32,8 @@ import {
 import { Logo } from '@/components/icons';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { InstallPwaBanner } from '@/components/install-pwa-banner';
+
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -145,6 +147,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="w-full flex-1">
                 {/* Header content can go here, like breadcrumbs */}
             </div>
+            <InstallPwaBanner />
         </header>
         <main className="flex-1 overflow-auto p-4 lg:p-6">{children}</main>
       </SidebarInset>
