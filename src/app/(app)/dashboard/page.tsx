@@ -1,10 +1,11 @@
 // src/app/(app)/dashboard/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState }from 'react';
 import Link from 'next/link';
 import { onAuthStateChanged } from 'firebase/auth';
 import { BarChart, Dumbbell, Sparkles, Loader2 } from 'lucide-react';
+import { subWeeks, startOfWeek, format, isWithinInterval } from 'date-fns';
 
 import { motivationalCoach } from '@/ai/flows/motivational-coach';
 import { Button } from '@/components/ui/button';
@@ -31,14 +32,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { getUser } from '@/services/user-service';
 import { getProgram, getWorkoutForDay } from '@/services/program-service';
+import { getOrCreateWorkoutSession, getAllUserSessions, type WorkoutSession } from '@/services/session-service';
 import type { User, Program, Workout } from '@/models/types';
-
-const progressData = [
-  { week: 'W1', workouts: 3 },
-  { week: 'W2', workouts: 4 },
-  { week: 'W3', workouts: 3 },
-  { week: 'W4', workouts: 5 },
-];
 
 const chartConfig = {
   workouts: {
@@ -51,6 +46,8 @@ export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [program, setProgram] = useState<Program | null>(null);
   const [todaysWorkout, setTodaysWorkout] = useState<{ day: number; workout: Workout | null } | null>(null);
+  const [todaysSession, setTodaysSession] = useState<WorkoutSession | null>(null);
+  const [progressData, setProgressData] = useState<{ week: string, workouts: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [motivation, setMotivation] = useState('');
   const [motivationLoading, setMotivationLoading] = useState(false);
@@ -60,12 +57,23 @@ export default function DashboardPage() {
       if (firebaseUser) {
         const currentUser = await getUser(firebaseUser.uid);
         setUser(currentUser);
+        
+        const sessions = await getAllUserSessions(firebaseUser.uid);
+        generateProgressData(sessions);
+
         if (currentUser?.programId && currentUser.startDate) {
           const currentProgram = await getProgram(currentUser.programId);
           setProgram(currentProgram);
           if (currentProgram) {
             const workoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, new Date());
             setTodaysWorkout(workoutInfo);
+
+            if (workoutInfo.workout) {
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                const session = await getOrCreateWorkoutSession(firebaseUser.uid, currentProgram.id, today, workoutInfo.workout);
+                setTodaysSession(session);
+            }
           }
         }
       } else {
@@ -78,6 +86,27 @@ export default function DashboardPage() {
 
     return () => unsubscribe();
   }, []);
+  
+  const generateProgressData = (sessions: WorkoutSession[]) => {
+      const now = new Date();
+      const weeklyData: { week: string, workouts: number }[] = [];
+      
+      for (let i = 3; i >= 0; i--) {
+          const weekStart = startOfWeek(subWeeks(now, i), { weekStartsOn: 1 });
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekEnd.getDate() + 6);
+          
+          const completedInWeek = sessions.filter(s => 
+              s.finishedAt && isWithinInterval(s.finishedAt, { start: weekStart, end: weekEnd })
+          ).length;
+          
+          weeklyData.push({
+              week: `W${4-i}`,
+              workouts: completedInWeek
+          });
+      }
+      setProgressData(weeklyData);
+  }
 
   const handleGetMotivation = async () => {
     if (!user || !program) return;
@@ -98,7 +127,7 @@ export default function DashboardPage() {
     }
   };
   
-  const completedExercises = 0; // This would need a completion tracking system
+  const completedExercises = todaysSession ? Object.values(todaysSession.completedExercises).filter(Boolean).length : 0;
   const totalExercises = todaysWorkout?.workout?.exercises.length || 0;
   const progressPercentage = totalExercises > 0 ? (completedExercises / totalExercises) * 100 : 0;
   
@@ -218,7 +247,7 @@ export default function DashboardPage() {
                     Weekly Consistency
                 </CardTitle>
                 <CardDescription>
-                    You've completed an average of 3.75 workouts per week this month.
+                    Your completed workouts over the last 4 weeks.
                 </CardDescription>
             </CardHeader>
             <CardContent>

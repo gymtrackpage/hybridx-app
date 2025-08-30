@@ -1,5 +1,5 @@
 // src/services/session-service.ts
-import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit } from 'firebase/firestore';
+import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { WorkoutSession, Workout } from '@/models/types';
 
@@ -18,6 +18,17 @@ function fromFirestore(doc: any): WorkoutSession {
         completedExercises: data.completedExercises,
     };
 }
+
+export async function getAllUserSessions(userId: string): Promise<WorkoutSession[]> {
+    const q = query(
+        sessionsCollection,
+        where('userId', '==', userId),
+        orderBy('workoutDate', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(fromFirestore);
+}
+
 
 export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout): Promise<WorkoutSession> {
     const q = query(
