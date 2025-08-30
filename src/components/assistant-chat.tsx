@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { CornerDownLeft, Loader2, Sparkles } from 'lucide-react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 import { trainingAssistant } from '@/ai/flows/training-assistant';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -16,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Logo } from './icons';
+import { Skeleton } from './ui/skeleton';
 
 interface Message {
   id: string;
@@ -23,9 +26,6 @@ interface Message {
   content: string;
 }
 
-// NOTE: Using a hardcoded user ID for demonstration purposes.
-// In a real application, this would come from your authentication context.
-const TEST_USER_ID = 'test-user-id';
 
 export function AssistantChat() {
   const [messages, setMessages] = useState<Message[]>([
@@ -37,7 +37,21 @@ export function AssistantChat() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+      }
+      setAuthChecked(true);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -51,7 +65,7 @@ export function AssistantChat() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !userId) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -63,7 +77,7 @@ export function AssistantChat() {
     setIsLoading(true);
 
     try {
-      const result = await trainingAssistant({ userId: TEST_USER_ID, question: input });
+      const result = await trainingAssistant({ userId, question: input });
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -82,6 +96,23 @@ export function AssistantChat() {
       setIsLoading(false);
     }
   };
+  
+  if (!authChecked) {
+      return (
+          <Card className="flex flex-1 flex-col">
+              <CardContent className="flex-1 p-6">
+                  <div className="space-y-4">
+                      <Skeleton className="h-10 w-2/3" />
+                      <Skeleton className="h-10 w-1/2 ml-auto" />
+                      <Skeleton className="h-10 w-2/3" />
+                  </div>
+              </CardContent>
+              <CardFooter className='border-t pt-6'>
+                <Skeleton className="h-10 w-full" />
+              </CardFooter>
+          </Card>
+      )
+  }
 
   return (
     <Card className="flex flex-1 flex-col">
@@ -140,15 +171,15 @@ export function AssistantChat() {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="e.g., How can I improve my sled push time?"
+            placeholder={userId ? "e.g., How can I improve my sled push time?" : "Please log in to use the assistant."}
             className="pr-12"
-            disabled={isLoading}
+            disabled={isLoading || !userId}
           />
           <Button
             type="submit"
             size="icon"
             className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || !input.trim() || !userId}
           >
             <CornerDownLeft className="h-4 w-4" />
           </Button>

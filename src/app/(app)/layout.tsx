@@ -11,6 +11,8 @@ import {
   Shield,
   User,
 } from 'lucide-react';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -36,6 +38,7 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/icons';
+import { useToast } from '@/hooks/use-toast';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -49,10 +52,24 @@ const adminNavItems = [
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { toast } = useToast();
 
-  const handleLogout = () => {
-    // Mock logout
-    router.push('/');
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({
+        title: 'Logged Out',
+        description: 'You have been successfully logged out.',
+      });
+      router.push('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to log out. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (

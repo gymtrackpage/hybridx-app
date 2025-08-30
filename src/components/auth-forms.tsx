@@ -7,6 +7,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, AuthErrorCodes } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { createUser } from '@/services/user-service';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -46,15 +49,27 @@ export function LoginForm() {
 
   async function onSubmit(values: z.infer<typeof loginSchema>) {
     setIsLoading(true);
-    // Mock login
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    console.log(values);
-    setIsLoading(false);
-    toast({
-      title: 'Login Successful',
-      description: 'Redirecting to your dashboard...',
-    });
-    router.push('/dashboard');
+    try {
+      await signInWithEmailAndPassword(auth, values.email, values.password);
+      toast({
+        title: 'Login Successful',
+        description: 'Redirecting to your dashboard...',
+      });
+      router.push('/dashboard');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      let description = 'An unexpected error occurred. Please try again.';
+      if (error.code === AuthErrorCodes.INVALID_LOGIN_CREDENTIALS) {
+        description = 'Invalid email or password. Please try again.';
+      }
+      toast({
+        title: 'Login Failed',
+        description,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (
@@ -124,6 +139,9 @@ type SignupData = z.infer<typeof signupSchema>;
 const initialSignupData: Partial<SignupData> = {
   email: '',
   password: '',
+  experience: 'beginner',
+  frequency: '3',
+  goal: 'hybrid',
 };
 
 export function SignupForm() {
@@ -144,16 +162,43 @@ export function SignupForm() {
   
   const handleSubmit = async (data: Partial<SignupData>) => {
     setIsLoading(true);
-    const finalData = { ...formData, ...data };
-    // Mock signup
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    console.log('Final signup data:', finalData);
-    setIsLoading(false);
-    toast({
-        title: "Account Created!",
-        description: "Welcome to HyroxEdgeAI. Redirecting to your dashboard.",
-    });
-    router.push('/dashboard');
+    const finalData = { ...formData, ...data } as SignupData;
+    
+    try {
+      // 1. Create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, finalData.email, finalData.password);
+      const user = userCredential.user;
+
+      // 2. Save user profile data to Firestore
+      await createUser(user.uid, {
+        email: finalData.email,
+        experience: finalData.experience,
+        frequency: finalData.frequency,
+        goal: finalData.goal,
+      });
+
+      toast({
+          title: "Account Created!",
+          description: "Welcome to HyroxEdgeAI. Redirecting to your dashboard.",
+      });
+      router.push('/dashboard');
+
+    } catch (error: any) {
+        console.error('Signup error:', error);
+        let description = "An unexpected error occurred. Please try again.";
+        if (error.code === AuthErrorCodes.EMAIL_EXISTS) {
+            description = "This email address is already in use.";
+        } else if (error.code === AuthErrorCodes.WEAK_PASSWORD) {
+            description = "The password is too weak. Please choose a stronger password.";
+        }
+        toast({
+            title: "Signup Failed",
+            description,
+            variant: "destructive",
+        });
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   return (
