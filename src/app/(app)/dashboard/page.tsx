@@ -220,7 +220,7 @@ export default function DashboardPage() {
                 <CardDescription>
                     You've completed an average of 3.75 workouts per week this month.
                 </CardDescription>
-            </Header>
+            </CardHeader>
             <CardContent>
                 <ChartContainer config={chartConfig} className="h-40 w-full">
                     <RechartsBarChart data={progressData} margin={{ top: 20, right: 20, bottom: -10, left: -20 }}>
