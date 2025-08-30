@@ -48,8 +48,8 @@ export function getWorkoutForDay(program: Program, startDate: Date, targetDate: 
     }
 
     // Use modulo to handle repeating weekly schedules
-    const dayOfWeekIndex = (dayOfProgram - 1) % 7; 
-    const workoutForDay = program.workouts.find(w => (w.day - 1) % 7 === dayOfWeekIndex);
+    const dayIndex = (dayOfProgram - 1) % program.workouts.length;
+    const workoutForDay = program.workouts.find(w => w.day === dayIndex + 1);
 
     // If there's no specific workout for that day number, it's a rest day or not defined
     return { day: dayOfProgram, workout: workoutForDay || null };
