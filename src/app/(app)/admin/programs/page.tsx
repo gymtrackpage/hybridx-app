@@ -30,6 +30,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { ProgramForm } from '@/components/program-form';
 import { ProgramImportDialog } from '@/components/program-import-dialog';
