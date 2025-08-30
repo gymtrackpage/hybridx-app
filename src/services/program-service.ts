@@ -1,6 +1,6 @@
 import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Program } from '@/models/types';
+import type { Program, Workout } from '@/models/types';
 import { differenceInDays } from 'date-fns';
 
 const programsCollection = collection(db, 'programs');
@@ -35,7 +35,7 @@ export async function deleteProgram(programId: string): Promise<void> {
 }
 
 
-export function getWorkoutForDay(program: Program, startDate: Date, targetDate: Date): { day: number; workout: import('@/models/types').Workout | null; } {
+export function getWorkoutForDay(program: Program, startDate: Date, targetDate: Date): { day: number; workout: Workout | null; } {
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const target = new Date(targetDate);
@@ -47,8 +47,10 @@ export function getWorkoutForDay(program: Program, startDate: Date, targetDate: 
         return { day: dayOfProgram, workout: null };
     }
 
-    const workoutForDay = program.workouts.find(w => w.day === dayOfProgram);
+    // Use modulo to handle repeating weekly schedules
+    const dayOfWeekIndex = (dayOfProgram - 1) % 7; 
+    const workoutForDay = program.workouts.find(w => (w.day - 1) % 7 === dayOfWeekIndex);
 
-    // If there's no specific workout for that day number, maybe it's a rest day or not defined
+    // If there's no specific workout for that day number, it's a rest day or not defined
     return { day: dayOfProgram, workout: workoutForDay || null };
 }
