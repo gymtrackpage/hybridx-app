@@ -1,29 +1,20 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Calendar,
-  Dumbbell,
   LayoutDashboard,
   LogOut,
   MessageSquare,
   Shield,
-  User,
 } from 'lucide-react';
-import { signOut } from 'firebase/auth';
+import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   SidebarProvider,
   Sidebar,
@@ -39,6 +30,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/icons';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -53,6 +45,20 @@ const adminNavItems = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { toast } = useToast();
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+      } else {
+        router.push('/');
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, [router]);
 
   const handleLogout = async () => {
     try {
@@ -110,13 +116,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarContent>
         <SidebarFooter>
           <div className="flex w-full items-center justify-between p-2">
-            <div className="flex items-center gap-2 overflow-hidden">
-                <Avatar className="h-8 w-8">
-                    <AvatarImage src="https://picsum.photos/100/100" alt="User Avatar" />
-                    <AvatarFallback>U</AvatarFallback>
-                </Avatar>
-                <span className="truncate text-sm font-medium">User Name</span>
-            </div>
+            {loading ? (
+                <div className="flex items-center gap-2 w-full">
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                    <Skeleton className="h-4 w-24" />
+                </div>
+            ) : user ? (
+                <div className="flex items-center gap-2 overflow-hidden">
+                    <Avatar className="h-8 w-8">
+                        {/* You can add user images later if you store them */}
+                        {/* <AvatarImage src={user.photoURL} alt="User Avatar" /> */}
+                        <AvatarFallback>{user.email?.[0].toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <span className="truncate text-sm font-medium">{user.email}</span>
+                </div>
+            ) : null}
             <Button variant="ghost" size="icon" onClick={handleLogout} className="flex-shrink-0">
                 <LogOut className="h-5 w-5" />
             </Button>
