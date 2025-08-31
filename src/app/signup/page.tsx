@@ -9,7 +9,7 @@ export default function SignupPage() {
         <div className="flex h-20 items-center justify-between py-6">
           <Link href="/" className="flex items-center gap-2">
             <Logo className="h-8 w-8 text-primary" />
-            <span className="font-bold">HyroxEdgeAI</span>
+            <span className="font-bold">HYBRIDX.CLUB</span>
           </Link>
           <nav>
             <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-primary">
