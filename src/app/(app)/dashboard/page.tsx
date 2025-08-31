@@ -52,24 +52,9 @@ export default function DashboardPage() {
   const [motivation, setMotivation] = useState('');
   const [motivationLoading, setMotivationLoading] = useState(false);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        fetchDashboardData(firebaseUser.uid);
-      } else {
-        setUser(null);
-        setProgram(null);
-        setTodaysWorkout(null);
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
   const fetchDashboardData = async (userId: string) => {
+    setLoading(true);
     try {
-      setLoading(true);
       const currentUser = await getUser(userId);
       setUser(currentUser);
 
@@ -100,6 +85,22 @@ export default function DashboardPage() {
         setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        fetchDashboardData(firebaseUser.uid);
+      } else {
+        setUser(null);
+        setProgram(null);
+        setTodaysWorkout(null);
+        setLoading(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   
   const generateProgressData = (sessions: WorkoutSession[]) => {
       const now = new Date();
