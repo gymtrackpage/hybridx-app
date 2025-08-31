@@ -4,7 +4,7 @@
 import { useEffect, useState }from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { BarChart, Dumbbell, Sparkles, Loader2 } from 'lucide-react';
+import { BarChart, Target, Sparkles, Loader2 } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval } from 'date-fns';
 
 import { motivationalCoach } from '@/ai/flows/motivational-coach';
@@ -52,7 +52,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [motivation, setMotivation] = useState('');
   const [motivationLoading, setMotivationLoading] = useState(false);
-
+  const router = useRouter();
+  
   const fetchDashboardData = async (userId: string) => {
     setLoading(true);
     try {
@@ -142,6 +143,12 @@ export default function DashboardPage() {
       setMotivationLoading(false);
     }
   };
+  
+  const handleStartWorkout = () => {
+      if (todaysWorkout?.workout) {
+          router.push('/workout/active');
+      }
+  }
 
   const completedExercises = todaysSession ? Object.values(todaysSession.completedExercises).filter(Boolean).length : 0;
   const totalExercises = todaysWorkout?.workout?.exercises.length || 0;
@@ -182,7 +189,7 @@ export default function DashboardPage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Dumbbell className="h-6 w-6" />
+              <Target className="h-6 w-6" />
               {program && todaysWorkout?.workout ? `Today's Workout (Day ${todaysWorkout.day})` : 'No Workout Assigned'}
             </CardTitle>
             <CardDescription>
@@ -215,9 +222,7 @@ export default function DashboardPage() {
             )}
           </CardContent>
           <CardFooter>
-            <Button className="w-full" disabled={!todaysWorkout?.workout} asChild>
-                <Link href="/workout/active">Start / Resume Workout</Link>
-            </Button>
+            <Button variant="accent" className="w-full" onClick={handleStartWorkout} disabled={!todaysWorkout?.workout}>Start / Resume Workout</Button>
           </CardFooter>
         </Card>
 
