@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Dumbbell, Flag, Loader2, Play, Pause, Square } from 'lucide-react';
+import { Check, Flag, Loader2, Play, Pause, CalendarDays, Clock, Target } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,16 +15,19 @@ import { getProgram, getWorkoutForDay } from '@/services/program-service';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service';
 import type { User, Program, Workout } from '@/models/types';
 import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 function Timer({ startTime, isRunning }: { startTime: Date; isRunning: boolean }) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (!isRunning || !startTime) return;
-
-    // Calculate initial elapsed time
-    const initialElapsed = new Date().getTime() - startTime.getTime();
-    setElapsed(initialElapsed);
+    if (!isRunning || !startTime) {
+        if(startTime) {
+            setElapsed(new Date().getTime() - startTime.getTime());
+        }
+        return;
+    };
 
     const interval = setInterval(() => {
       setElapsed(new Date().getTime() - startTime.getTime());
@@ -41,12 +44,12 @@ function Timer({ startTime, isRunning }: { startTime: Date; isRunning: boolean }
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  return <span className="text-4xl font-bold font-mono">{formatTime(elapsed)}</span>;
+  return <span className="font-mono text-lg">{formatTime(elapsed)}</span>;
 }
 
 export default function ActiveWorkoutPage() {
   const [session, setSession] = useState<WorkoutSession | null>(null);
-  const [workout, setWorkout] = useState<Workout | null>(null);
+  const [workoutInfo, setWorkoutInfo] = useState<{ day: number, workout: Workout | null } | null>(null);
   const [loading, setLoading] = useState(true);
   
   const today = useMemo(() => {
@@ -62,10 +65,10 @@ export default function ActiveWorkoutPage() {
         if (user?.programId && user.startDate) {
           const program = await getProgram(user.programId);
           if (program) {
-            const { workout: todaysWorkout } = getWorkoutForDay(program, user.startDate, today);
-            setWorkout(todaysWorkout);
-            if (todaysWorkout) {
-              const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, todaysWorkout);
+            const currentWorkoutInfo = getWorkoutForDay(program, user.startDate, today);
+            setWorkoutInfo(currentWorkoutInfo);
+            if (currentWorkoutInfo.workout) {
+              const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
               setSession(workoutSession);
             }
           }
@@ -103,69 +106,95 @@ export default function ActiveWorkoutPage() {
   }
 
   if (loading) {
-    return <Skeleton className="h-[600px] w-full" />;
+    return (
+        <div className="space-y-4 max-w-2xl mx-auto">
+            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+        </div>
+    );
   }
   
-  if (!workout || !session) {
+  if (!workoutInfo?.workout || !session) {
       return (
-          <div className="text-center">
-            <h2 className="text-xl font-semibold">No Workout Today</h2>
-            <p className="text-muted-foreground">Enjoy your rest day or check your program schedule.</p>
+          <div className="text-center max-w-2xl mx-auto">
+            <Card>
+                <CardHeader>
+                    <CardTitle>No Workout Today</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-muted-foreground">Enjoy your rest day or check your program schedule.</p>
+                </CardContent>
+            </Card>
           </div>
       )
   }
 
+  const { workout, day } = workoutInfo;
+  const week = Math.ceil(day / 7);
+  const dayOfWeek = day % 7 === 0 ? 7 : day % 7;
   const allExercisesCompleted = workout.exercises.every(ex => session.completedExercises[ex.name]);
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <Card>
-        <CardHeader className="text-center">
-            <CardDescription>{format(today, 'PPP')}</CardDescription>
-          <CardTitle className="text-3xl">{workout.title}</CardTitle>
-          <div className="pt-4">
-            <Timer startTime={session.startedAt} isRunning={session.isRunning} />
-          </div>
-        </CardHeader>
-        <CardContent className="flex justify-center gap-4">
-            <Button variant="outline" size="lg" onClick={handleToggleTimer} disabled={!!session.finishedAt}>
-                {session.isRunning ? <Pause className="mr-2"/> : <Play className="mr-2"/>}
-                {session.isRunning ? 'Pause' : 'Start'}
-            </Button>
-            <Button size="lg" onClick={handleFinishWorkout} disabled={!allExercisesCompleted || !!session.finishedAt}>
-                {session.finishedAt ? <Check className="mr-2" /> : <Flag className="mr-2" />}
-                {session.finishedAt ? 'Workout Completed' : 'Finish Workout'}
-            </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Dumbbell />
-            Exercises
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-4">
+    <div className="space-y-6 max-w-2xl mx-auto">
+        <Card className="bg-accent/20 border-accent">
+            <CardHeader>
+                <div className="flex items-center gap-3">
+                    <Target className="h-8 w-8 text-foreground" />
+                    <div>
+                        <CardTitle className="text-2xl font-bold tracking-tight">Today&apos;s Workout</CardTitle>
+                        <CardDescription className="font-medium text-foreground/80">{workout.title}</CardDescription>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="flex items-center gap-6 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        <Timer startTime={session.startedAt} isRunning={session.isRunning} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4" />
+                        <span>Week {week}, Day {dayOfWeek}</span>
+                    </div>
+                </div>
+                <p className="text-sm text-foreground/90 pt-2">
+                    Build foundational strength. Light introduction to a Hyrox skill. RPE 6-7 for strength.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                    <Button variant="secondary" className="flex-1" onClick={handleToggleTimer} disabled={!!session.finishedAt}>
+                        {session.isRunning ? <Pause className="mr-2"/> : <Play className="mr-2"/>}
+                        {session.isRunning ? 'Pause Timer' : 'Start Timer'}
+                    </Button>
+                    <Button className="flex-1" onClick={handleFinishWorkout} disabled={!allExercisesCompleted || !!session.finishedAt}>
+                        {session.finishedAt ? <Check className="mr-2" /> : <Flag className="mr-2" />}
+                        {session.finishedAt ? 'Workout Completed' : 'Finish Workout'}
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
+        
+        <div className="space-y-4">
+            <h3 className="text-lg font-semibold px-1">Exercises:</h3>
             {workout.exercises.map((exercise) => (
-              <li key={exercise.name} className="flex items-center gap-4 p-4 rounded-md border bg-card has-[[data-state=checked]]:bg-muted">
-                <Checkbox
-                  id={exercise.name}
-                  checked={!!session.completedExercises[exercise.name]}
-                  onCheckedChange={(checked) => handleToggleExercise(exercise.name, !!checked)}
-                  className="h-6 w-6"
-                  disabled={!!session.finishedAt}
-                />
-                <label htmlFor={exercise.name} className="flex-1 cursor-pointer">
-                  <p className="font-semibold">{exercise.name}</p>
-                  <p className="text-sm text-muted-foreground">{exercise.details}</p>
-                </label>
-              </li>
+              <Card key={exercise.name} className="has-[[data-state=checked]]:bg-muted/50">
+                <CardContent className="p-4 flex items-center gap-4">
+                     <Checkbox
+                        id={exercise.name}
+                        checked={!!session.completedExercises[exercise.name]}
+                        onCheckedChange={(checked) => handleToggleExercise(exercise.name, !!checked)}
+                        className="h-6 w-6"
+                        disabled={!!session.finishedAt}
+                        aria-label={`Mark ${exercise.name} as complete`}
+                    />
+                    <label htmlFor={exercise.name} className="flex-1 cursor-pointer">
+                      <p className="font-semibold">{exercise.name}</p>
+                      <p className="text-sm text-muted-foreground">{exercise.details}</p>
+                    </label>
+                </CardContent>
+              </Card>
             ))}
-          </ul>
-        </CardContent>
-      </Card>
+        </div>
     </div>
   );
 }
