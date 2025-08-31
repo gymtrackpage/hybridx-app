@@ -1,4 +1,4 @@
-// src/app/(app)/workout/active/page.tsx
+// src/app/workout/active/page.tsx
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -20,7 +20,11 @@ function Timer({ startTime, isRunning }: { startTime: Date; isRunning: boolean }
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning || !startTime) return;
+
+    // Calculate initial elapsed time
+    const initialElapsed = new Date().getTime() - startTime.getTime();
+    setElapsed(initialElapsed);
 
     const interval = setInterval(() => {
       setElapsed(new Date().getTime() - startTime.getTime());

@@ -1,4 +1,4 @@
-// src/app/(app)/workout/layout.tsx
+// src/app/workout/layout.tsx
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 
