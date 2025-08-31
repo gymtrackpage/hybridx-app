@@ -1,21 +1,32 @@
+// src/app/(app)/calendar/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { getUser } from '@/services/user-service';
-import { getProgram } from '@/services/program-service';
-import type { User, Program } from '@/models/types';
-import { addDays, format } from 'date-fns';
+import { getProgram, getWorkoutForDay } from '@/services/program-service';
+import type { User, Program, Workout } from '@/models/types';
+import { addDays, format, isSameDay } from 'date-fns';
+
+interface WorkoutEvent {
+  date: Date;
+  workout: Workout;
+  completed: boolean;
+}
 
 export default function CalendarPage() {
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [loading, setLoading] = useState(true);
-  const [workoutEvents, setWorkoutEvents] = useState<{ [key: string]: { type: string, completed: boolean } }>({});
+  const [workoutEvents, setWorkoutEvents] = useState<WorkoutEvent[]>([]);
+  
+  const selectedWorkout = workoutEvents.find(event => 
+    selectedDate && isSameDay(event.date, selectedDate)
+  )?.workout;
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -35,27 +46,24 @@ export default function CalendarPage() {
   }, []);
 
   const generateWorkoutEvents = (program: Program, startDate: Date) => {
-    const events: { [key: string]: { type: string, completed: boolean } } = {};
+    const events: WorkoutEvent[] = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    program.workouts.forEach(workout => {
-      // Assuming program runs for a year for simplicity. In a real app, you might have an end date.
-      for (let i = 0; i < 365; i++) {
-        if ((i + 1) % program.workouts.length === workout.day % program.workouts.length) {
-            const workoutDate = addDays(startDate, i);
-            const dateKey = format(workoutDate, 'yyyy-MM-dd');
-            
-            // For now, mark as completed if the date is in the past.
-            const completed = workoutDate < today;
-
-            events[dateKey] = {
-                type: workout.title,
+    // Generate events for a year
+    for (let i = 0; i < 365; i++) {
+        const currentDate = addDays(startDate, i);
+        const { workout } = getWorkoutForDay(program, startDate, currentDate);
+        
+        if (workout) {
+            const completed = currentDate < today;
+            events.push({
+                date: currentDate,
+                workout: workout,
                 completed: completed,
-            };
+            });
         }
-      }
-    });
+    }
     setWorkoutEvents(events);
   };
 
@@ -75,12 +83,12 @@ export default function CalendarPage() {
                 ) : (
                     <Calendar
                         mode="single"
-                        selected={date}
-                        onSelect={setDate}
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
                         className="rounded-md"
                         components={{
                             DayContent: ({ date }) => {
-                                const event = workoutEvents[format(date, 'yyyy-MM-dd')];
+                                const event = workoutEvents.find(e => isSameDay(e.date, date));
                                 if (event) {
                                     return (
                                     <div className="relative h-full w-full flex items-center justify-center">
@@ -99,6 +107,24 @@ export default function CalendarPage() {
                 )}
             </CardContent>
         </Card>
+
+        {selectedWorkout && selectedDate && (
+             <Card>
+                <CardHeader>
+                    <p className="text-sm font-medium text-accent-foreground">{format(selectedDate, "EEEE, MMMM do")}</p>
+                    <CardTitle>{selectedWorkout.title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                     <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                        {selectedWorkout.exercises.map((exercise, index) => (
+                            <li key={index}>
+                                <span className="font-medium text-foreground">{exercise.name}:</span> {exercise.details}
+                            </li>
+                        ))}
+                    </ul>
+                </CardContent>
+            </Card>
+        )}
     </div>
   );
 }
