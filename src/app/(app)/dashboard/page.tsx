@@ -34,6 +34,7 @@ import { getUser } from '@/services/user-service';
 import { getProgram, getWorkoutForDay } from '@/services/program-service';
 import { getOrCreateWorkoutSession, getAllUserSessions, type WorkoutSession } from '@/services/session-service';
 import type { User, Program, Workout } from '@/models/types';
+import Link from 'next/link';
 
 const chartConfig = {
   workouts: {
@@ -51,7 +52,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [motivation, setMotivation] = useState('');
   const [motivationLoading, setMotivationLoading] = useState(false);
-  const router = useRouter();
 
   const fetchDashboardData = async (userId: string) => {
     setLoading(true);
@@ -143,12 +143,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleStartWorkout = () => {
-    if (todaysWorkout?.workout) {
-      router.push('/workout/active');
-    }
-  };
-  
   const completedExercises = todaysSession ? Object.values(todaysSession.completedExercises).filter(Boolean).length : 0;
   const totalExercises = todaysWorkout?.workout?.exercises.length || 0;
   const progressPercentage = totalExercises > 0 ? (completedExercises / totalExercises) * 100 : 0;
@@ -221,8 +215,8 @@ export default function DashboardPage() {
             )}
           </CardContent>
           <CardFooter>
-            <Button className="w-full" disabled={!todaysWorkout?.workout} onClick={handleStartWorkout}>
-              Start / Resume Workout
+            <Button className="w-full" disabled={!todaysWorkout?.workout} asChild>
+                <Link href="/workout/active">Start / Resume Workout</Link>
             </Button>
           </CardFooter>
         </Card>
