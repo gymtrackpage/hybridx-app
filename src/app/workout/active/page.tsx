@@ -22,10 +22,10 @@ function Timer({ startTime, isRunning }: { startTime: Date; isRunning: boolean }
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (!isRunning || !startTime) {
-        if(startTime) {
-            setElapsed(new Date().getTime() - startTime.getTime());
-        }
+    if (!startTime) return;
+
+    if (!isRunning) {
+        setElapsed(new Date().getTime() - startTime.getTime());
         return;
     };
 
@@ -44,7 +44,7 @@ function Timer({ startTime, isRunning }: { startTime: Date; isRunning: boolean }
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  return <span className="font-mono text-lg">{formatTime(elapsed)}</span>;
+  return <span className="font-mono text-lg">{formatTime(elapsed || 0)}</span>;
 }
 
 export default function ActiveWorkoutPage() {
@@ -108,7 +108,7 @@ export default function ActiveWorkoutPage() {
   if (loading) {
     return (
         <div className="space-y-4 max-w-2xl mx-auto">
-            <Skeleton className="h-48 w-full" />
+            <Skeleton className="h-64 w-full" />
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-24 w-full" />
         </div>
@@ -147,7 +147,7 @@ export default function ActiveWorkoutPage() {
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
                 <div className="flex items-center gap-6 text-sm text-muted-foreground">
                     <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4" />
@@ -158,10 +158,35 @@ export default function ActiveWorkoutPage() {
                         <span>Week {week}, Day {dayOfWeek}</span>
                     </div>
                 </div>
-                <p className="text-sm text-foreground/90 pt-2">
+                <p className="text-sm text-foreground/90">
                     Build foundational strength. Light introduction to a Hyrox skill. RPE 6-7 for strength.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                
+                <div>
+                    <h3 className="text-base font-semibold mb-3">Exercises:</h3>
+                    <div className="space-y-3">
+                        {workout.exercises.map((exercise) => (
+                        <Card key={exercise.name} className="has-[[data-state=checked]]:bg-muted/50 transition-colors">
+                            <CardContent className="p-4 flex items-center gap-4">
+                                <div className="flex-1">
+                                <p className="font-semibold">{exercise.name}</p>
+                                <p className="text-sm text-muted-foreground">{exercise.details}</p>
+                                </div>
+                                <Checkbox
+                                    id={exercise.name}
+                                    checked={!!session.completedExercises[exercise.name]}
+                                    onCheckedChange={(checked) => handleToggleExercise(exercise.name, !!checked)}
+                                    className="h-6 w-6"
+                                    disabled={!!session.finishedAt}
+                                    aria-label={`Mark ${exercise.name} as complete`}
+                                />
+                            </CardContent>
+                        </Card>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-4">
                     <Button variant="secondary" className="flex-1" onClick={handleToggleTimer} disabled={!!session.finishedAt}>
                         {session.isRunning ? <Pause className="mr-2"/> : <Play className="mr-2"/>}
                         {session.isRunning ? 'Pause Timer' : 'Start Timer'}
@@ -173,28 +198,6 @@ export default function ActiveWorkoutPage() {
                 </div>
             </CardContent>
         </Card>
-        
-        <div className="space-y-4">
-            <h3 className="text-lg font-semibold px-1">Exercises:</h3>
-            {workout.exercises.map((exercise) => (
-              <Card key={exercise.name} className="has-[[data-state=checked]]:bg-muted/50">
-                <CardContent className="p-4 flex items-center gap-4">
-                     <Checkbox
-                        id={exercise.name}
-                        checked={!!session.completedExercises[exercise.name]}
-                        onCheckedChange={(checked) => handleToggleExercise(exercise.name, !!checked)}
-                        className="h-6 w-6"
-                        disabled={!!session.finishedAt}
-                        aria-label={`Mark ${exercise.name} as complete`}
-                    />
-                    <label htmlFor={exercise.name} className="flex-1 cursor-pointer">
-                      <p className="font-semibold">{exercise.name}</p>
-                      <p className="text-sm text-muted-foreground">{exercise.details}</p>
-                    </label>
-                </CardContent>
-              </Card>
-            ))}
-        </div>
     </div>
   );
 }
