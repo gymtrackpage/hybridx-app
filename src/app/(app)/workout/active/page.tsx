@@ -14,7 +14,7 @@ import { getUser } from '@/services/user-service';
 import { getProgram, getWorkoutForDay } from '@/services/program-service';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service';
 import type { User, Program, Workout } from '@/models/types';
-import { format }s from 'date-fns';
+import { format } from 'date-fns';
 
 function Timer({ startTime, isRunning }: { startTime: Date; isRunning: boolean }) {
   const [elapsed, setElapsed] = useState(0);
