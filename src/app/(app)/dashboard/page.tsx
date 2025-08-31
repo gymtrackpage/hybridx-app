@@ -53,39 +53,66 @@ export default function DashboardPage() {
   const [motivationLoading, setMotivationLoading] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        const currentUser = await getUser(firebaseUser.uid);
-        setUser(currentUser);
-        
-        const sessions = await getAllUserSessions(firebaseUser.uid);
-        generateProgressData(sessions);
-
-        if (currentUser?.programId && currentUser.startDate) {
-          const currentProgram = await getProgram(currentUser.programId);
-          setProgram(currentProgram);
-          if (currentProgram) {
-            const workoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, new Date());
-            setTodaysWorkout(workoutInfo);
-
-            if (workoutInfo.workout) {
-                const today = new Date();
-                today.setHours(0,0,0,0);
-                const session = await getOrCreateWorkoutSession(firebaseUser.uid, currentProgram.id, today, workoutInfo.workout);
-                setTodaysSession(session);
-            }
-          }
-        }
+        console.log('Auth state changed: User found', firebaseUser.uid);
+        fetchDashboardData(firebaseUser.uid);
       } else {
+        console.log('Auth state changed: No user found');
         setUser(null);
         setProgram(null);
         setTodaysWorkout(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
+
+  const fetchDashboardData = async (userId: string) => {
+    try {
+      setLoading(true);
+      console.log('Fetching user data...');
+      const currentUser = await getUser(userId);
+      setUser(currentUser);
+      console.log('User data:', currentUser);
+
+      if (currentUser) {
+        const sessions = await getAllUserSessions(userId);
+        generateProgressData(sessions);
+
+        if (currentUser.programId && currentUser.startDate) {
+          console.log(`Fetching program: ${currentUser.programId}`);
+          const currentProgram = await getProgram(currentUser.programId);
+          setProgram(currentProgram);
+          console.log('Program data:', currentProgram);
+
+          if (currentProgram) {
+            console.log('Calculating today\'s workout...');
+            const workoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, new Date());
+            setTodaysWorkout(workoutInfo);
+            console.log('Workout for today:', workoutInfo);
+
+            if (workoutInfo.workout) {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              console.log('Getting or creating workout session...');
+              const session = await getOrCreateWorkoutSession(userId, currentProgram.id, today, workoutInfo.workout);
+              setTodaysSession(session);
+              console.log('Today\'s session:', session);
+            }
+          }
+        } else {
+            console.log('User has no programId or startDate.');
+        }
+      }
+    } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+    } finally {
+        setLoading(false);
+        console.log('Finished loading dashboard data.');
+    }
+  };
   
   const generateProgressData = (sessions: WorkoutSession[]) => {
       const now = new Date();
@@ -106,6 +133,7 @@ export default function DashboardPage() {
           });
       }
       setProgressData(weeklyData);
+      console.log('Generated weekly progress data:', weeklyData);
   }
 
   const handleGetMotivation = async () => {
@@ -167,7 +195,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Dumbbell className="h-6 w-6" />
-              {program && todaysWorkout ? `Today's Workout (Day ${todaysWorkout.day})` : 'No Workout Assigned'}
+              {program && todaysWorkout?.workout ? `Today's Workout (Day ${todaysWorkout.day})` : 'No Workout Assigned'}
             </CardTitle>
             <CardDescription>
                 {todaysWorkout?.workout ? todaysWorkout.workout.title : 'Assign a program to your profile to see your workout.'}
