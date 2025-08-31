@@ -25,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable} dark`}>
+    <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
       <head>
         <meta name="application-name" content="HYBRIDX.CLUB" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -33,7 +33,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="HYBRIDX.CLUB" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#09090b" />
+        <meta name="theme-color" content="#FFFFFF" />
       </head>
       <body className="font-body antialiased">
         {children}
