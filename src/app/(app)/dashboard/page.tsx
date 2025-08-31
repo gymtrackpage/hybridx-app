@@ -2,10 +2,10 @@
 'use client';
 
 import { useEffect, useState }from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { BarChart, Dumbbell, Sparkles, Loader2 } from 'lucide-react';
-import { subWeeks, startOfWeek, format, isWithinInterval } from 'date-fns';
+import { subWeeks, startOfWeek, isWithinInterval } from 'date-fns';
 
 import { motivationalCoach } from '@/ai/flows/motivational-coach';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [motivation, setMotivation] = useState('');
   const [motivationLoading, setMotivationLoading] = useState(false);
+  const router = useRouter();
 
   const fetchDashboardData = async (userId: string) => {
     setLoading(true);
@@ -141,6 +142,12 @@ export default function DashboardPage() {
       setMotivationLoading(false);
     }
   };
+
+  const handleStartWorkout = () => {
+    if (todaysWorkout?.workout) {
+      router.push('/workout/active');
+    }
+  };
   
   const completedExercises = todaysSession ? Object.values(todaysSession.completedExercises).filter(Boolean).length : 0;
   const totalExercises = todaysWorkout?.workout?.exercises.length || 0;
@@ -214,8 +221,8 @@ export default function DashboardPage() {
             )}
           </CardContent>
           <CardFooter>
-            <Button asChild className="w-full" disabled={!todaysWorkout?.workout}>
-              <Link href="/workout/active">Start / Resume Workout</Link>
+            <Button className="w-full" disabled={!todaysWorkout?.workout} onClick={handleStartWorkout}>
+              Start / Resume Workout
             </Button>
           </CardFooter>
         </Card>
