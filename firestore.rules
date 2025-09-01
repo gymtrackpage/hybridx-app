@@ -1,0 +1,25 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can only read and write to their own user document.
+    match /users/{userId} {
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
+    }
+
+    // Authenticated users can read all programs.
+    // For now, any authenticated user can manage programs for the admin panel to work.
+    match /programs/{programId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null;
+    }
+
+    // Users can only manage their own workout sessions.
+    match /workoutSessions/{sessionId} {
+      allow read, create, update: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}
