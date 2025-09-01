@@ -27,13 +27,6 @@
                 ]
             },
             {
-                "day": 3,
-                "title": "Rest or Active Recovery",
-                "exercises": [
-                    { "name": "Light Walk or Stretching", "details": "30-45 minutes" }
-                ]
-            },
-            {
                 "day": 4,
                 "title": "HYROX Simulation",
                 "exercises": [
@@ -57,19 +50,56 @@
                     { "name": "Plank", "details": "3x60 seconds" },
                     { "name": "Russian Twists", "details": "3x20 reps" }
                 ]
-            },
-            {
-                "day": 6,
-                "title": "Long Endurance",
-                "exercises": [
-                    { "name": "Long Run or Bike", "details": "60-90 minutes at a steady, conversational pace" }
-                ]
-            },
-            {
-                "day": 7,
-                "title": "Rest",
-                "exercises": []
             }
+        ]
+    },
+    {
+        "id": "6-week-intensive-daily",
+        "name": "6-Week Intensive Daily Training",
+        "description": "A comprehensive 6-week program with a workout scheduled every day. Designed for intensive testing and preparation.",
+        "workouts": [
+            { "day": 1, "title": "Full Body Strength A", "exercises": [{ "name": "Squats", "details": "4x8 reps" }, { "name": "Bench Press", "details": "4x8 reps" }, { "name": "Bent Over Rows", "details": "4x10 reps" }] },
+            { "day": 2, "title": "Lactate Threshold Run", "exercises": [{ "name": "Warm-up", "details": "10 min jog" }, { "name": "Intervals", "details": "5x800m at threshold pace" }, { "name": "Cool-down", "details": "10 min jog" }] },
+            { "day": 3, "title": "Active Recovery & Mobility", "exercises": [{ "name": "Light Cycling or Rowing", "details": "20 minutes" }, { "name": "Full Body Stretching", "details": "15 minutes" }] },
+            { "day": 4, "title": "HYROX Skills: Sleds", "exercises": [{ "name": "Sled Push", "details": "6x25m (heavy)" }, { "name": "Sled Pull", "details": "6x25m (heavy)" }, { "name": "Core Work", "details": "3x15 leg raises" }] },
+            { "day": 5, "title": "Full Body Strength B", "exercises": [{ "name": "Deadlifts", "details": "4x6 reps" }, { "name": "Overhead Press", "details": "4x8 reps" }, { "name": "Pull-ups", "details": "4x max reps" }] },
+            { "day": 6, "title": "Long Endurance", "exercises": [{ "name": "Steady State Run", "details": "60 minutes at a conversational pace" }] },
+            { "day": 7, "title": "HYROX Skills: Carries & Lunges", "exercises": [{ "name": "Farmer's Carry", "details": "5x100m" }, { "name": "Sandbag Lunges", "details": "5x50m" }] },
+            { "day": 8, "title": "Full Body Strength A", "exercises": [{ "name": "Squats", "details": "4x8 reps (increase weight)" }, { "name": "Bench Press", "details": "4x8 reps (increase weight)" }, { "name": "Bent Over Rows", "details": "4x10 reps" }] },
+            { "day": 9, "title": "Lactate Threshold Run", "exercises": [{ "name": "Warm-up", "details": "10 min jog" }, { "name": "Intervals", "details": "6x800m at threshold pace" }, { "name": "Cool-down", "details": "10 min jog" }] },
+            { "day": 10, "title": "Active Recovery & Mobility", "exercises": [{ "name": "Swimming or Elliptical", "details": "25 minutes" }, { "name": "Foam Rolling", "details": "15 minutes" }] },
+            { "day": 11, "title": "HYROX Skills: Burpees & Wall Balls", "exercises": [{ "name": "Burpee Broad Jumps", "details": "5x10 reps" }, { "name": "Wall Balls", "details": "5x20 reps" }] },
+            { "day": 12, "title": "Full Body Strength B", "exercises": [{ "name": "Deadlifts", "details": "4x6 reps (increase weight)" }, { "name": "Overhead Press", "details": "4x8 reps (increase weight)" }, { "name": "Pull-ups", "details": "4x max reps" }] },
+            { "day": 13, "title": "Long Endurance", "exercises": [{ "name": "Steady State Run", "details": "65 minutes at a conversational pace" }] },
+            { "day": 14, "title": "Mini HYROX Simulation", "exercises": [{ "name": "Run", "details": "1km" }, { "name": "50 Wall Balls", "details": "" }, { "name": "Run", "details": "1km" }, { "name": "50 Burpee Broad Jumps", "details": "" }] },
+            { "day": 15, "title": "Full Body Strength A", "exercises": [{ "name": "Front Squats", "details": "4x10 reps" }, { "name": "Incline Bench Press", "details": "4x10 reps" }, { "name": "Dumbbell Rows", "details": "4x12 reps" }] },
+            { "day": 16, "title": "Tempo Run", "exercises": [{ "name": "Warm-up", "details": "10 min jog" }, { "name": "Run", "details": "25 minutes at tempo pace" }, { "name": "Cool-down", "details": "10 min jog" }] },
+            { "day": 17, "title": "Active Recovery & Mobility", "exercises": [{ "name": "Yoga or Dynamic Stretching", "details": "30 minutes" }] },
+            { "day": 18, "title": "HYROX Skills: Ergs", "exercises": [{ "name": "Ski Erg", "details": "5x500m intervals" }, { "name": "Row Erg", "details": "5x500m intervals" }] },
+            { "day": 19, "title": "Full Body Strength B", "exercises": [{ "name": "Sumo Deadlifts", "details": "4x8 reps" }, { "name": "Push Press", "details": "4x10 reps" }, { "name": "Lat Pulldowns", "details": "4x12 reps" }] },
+            { "day": 20, "title": "Long Endurance", "exercises": [{ "name": "Steady State Run", "details": "70 minutes at a conversational pace" }] },
+            { "day": 21, "title": "Rest Day Simulation", "exercises": [{ "name": "Very light activity", "details": "e.g., a long walk" }] },
+            { "day": 22, "title": "Full Body Strength A", "exercises": [{ "name": "Squats", "details": "5x5 reps" }, { "name": "Bench Press", "details": "5x5 reps" }, { "name": "Bent Over Rows", "details": "5x8 reps" }] },
+            { "day": 23, "title": "Lactate Threshold Run", "exercises": [{ "name": "Warm-up", "details": "10 min jog" }, { "name": "Intervals", "details": "4x1200m at threshold pace" }, { "name": "Cool-down", "details": "10 min jog" }] },
+            { "day": 24, "title": "Active Recovery & Mobility", "exercises": [{ "name": "Light Row", "details": "20 minutes" }, { "name": "Hip Mobility Drills", "details": "15 minutes" }] },
+            { "day": 25, "title": "HYROX Chipper", "exercises": [{ "name": "For Time:", "details": "500m Ski, 40m Sled Push, 30 Burpees, 20 Sandbag Lunges, 10 Wall Balls" }] },
+            { "day": 26, "title": "Full Body Strength B", "exercises": [{ "name": "Deadlifts", "details": "5x4 reps" }, { "name": "Overhead Press", "details": "5x5 reps" }, { "name": "Weighted Pull-ups", "details": "5x5 reps" }] },
+            { "day": 27, "title": "Long Endurance", "exercises": [{ "name": "Steady State Run", "details": "75 minutes at a conversational pace" }] },
+            { "day": 28, "title": "HYROX Pacing Practice", "exercises": [{ "name": "Run", "details": "8x400m at race pace" }, { "name": "Rest", "details": "60 seconds between each" }] },
+            { "day": 29, "title": "Full Body Strength A", "exercises": [{ "name": "Squats", "details": "3x10 reps" }, { "name": "Bench Press", "details": "3x10 reps" }, { "name": "Bent Over Rows", "details": "3x12 reps" }] },
+            { "day": 30, "title": "Fartlek Run", "exercises": [{ "name": "Run", "details": "30 minutes: 1 min hard, 2 mins easy, repeat" }] },
+            { "day": 31, "title": "Active Recovery & Mobility", "exercises": [{ "name": "Gentle Swim", "details": "30 minutes" }, { "name": "Full Body Stretch", "details": "10 minutes" }] },
+            { "day": 32, "title": "HYROX Strength Endurance", "exercises": [{ "name": "EMOM 20 mins:", "details": "Min 1: 10 Wall Balls, Min 2: 15m Sled Push" }] },
+            { "day": 33, "title": "Full Body Strength B", "exercises": [{ "name": "Deadlifts", "details": "3x8 reps" }, { "name": "Overhead Press", "details": "3x10 reps" }, { "name": "Pull-ups", "details": "3x max reps" }] },
+            { "day": 34, "title": "Long Endurance", "exercises": [{ "name": "Steady State Run", "details": "80 minutes at a conversational pace" }] },
+            { "day": 35, "title": "Full HYROX Simulation (Test)", "exercises": [{ "name": "Complete a full HYROX simulation", "details": "Record your time for all stations and runs" }] },
+            { "day": 36, "title": "Deload Strength A", "exercises": [{ "name": "Squats", "details": "3x5 reps (light)" }, { "name": "Bench Press", "details": "3x5 reps (light)" }] },
+            { "day": 37, "title": "Easy Run", "exercises": [{ "name": "Jog", "details": "30 minutes, very easy pace" }] },
+            { "day": 38, "title": "Active Recovery & Mobility", "exercises": [{ "name": "Walk", "details": "45 minutes" }, { "name": "Stretching", "details": "15 minutes" }] },
+            { "day": 39, "title": "Light Skills Practice", "exercises": [{ "name": "Wall Balls", "details": "3x10 (form focus)" }, { "name": "Rowing", "details": "1000m (easy technique focus)" }] },
+            { "day": 40, "title": "Deload Strength B", "exercises": [{ "name": "Romanian Deadlifts", "details": "3x8 reps (light)" }, { "name": "Light Overhead Press", "details": "3x8 reps (light)" }] },
+            { "day": 41, "title": "Short Shakeout Run", "exercises": [{ "name": "Jog", "details": "20 minutes with a few 30-second strides" }] },
+            { "day": 42, "title": "Full Rest", "exercises": [{ "name": "Complete rest", "details": "Prepare for what's next!" }] }
         ]
     }
 ]
