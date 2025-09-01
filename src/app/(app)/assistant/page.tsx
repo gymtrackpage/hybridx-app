@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { AssistantChat } from '@/components/assistant-chat';
 
 export const metadata: Metadata = {
-    title: 'AI Assistant | HyroxEdgeAI',
+    title: 'AI Assistant | HYBRIDX.CLUB',
 };
 
 export default function AssistantPage() {

@@ -74,7 +74,7 @@ export function InstallPwaBanner() {
                 </Button>
             </AlertTitle>
             <AlertDescription className="pr-8">
-                Get the full experience. Install HyroxEdgeAI on your device.
+                Get the full experience. Install HYBRIDX.CLUB on your device.
             </AlertDescription>
             <div className="mt-4 flex justify-end">
                 <Button onClick={handleInstallClick}>

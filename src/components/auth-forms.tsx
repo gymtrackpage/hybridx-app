@@ -179,7 +179,7 @@ export function SignupForm() {
 
       toast({
           title: "Account Created!",
-          description: "Welcome to HyroxEdgeAI. Redirecting to your dashboard.",
+          description: "Welcome. Redirecting to your dashboard.",
       });
       router.push('/dashboard');
 
@@ -221,7 +221,7 @@ function Step1({ onNext, defaultValues }: any) {
       <form onSubmit={form.handleSubmit(onNext)}>
         <CardHeader>
           <CardTitle>Create your account</CardTitle>
-          <CardDescription>Start your journey with HyroxEdgeAI.</CardDescription>
+          <CardDescription>Start your journey with HYBRIDX.CLUB.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <FormField control={form.control} name="email" render={({ field }) => (
