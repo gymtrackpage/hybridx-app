@@ -14,12 +14,7 @@ const firebaseConfig = {
 };
 
 // A more robust way to initialize Firebase
-let app: FirebaseApp;
-if (!getApps().length) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApp();
-}
+const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 const db = getFirestore(app);
 const auth = getAuth(app);
