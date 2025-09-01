@@ -75,6 +75,7 @@ export default function DashboardPage() {
             if (workoutInfo.workout) {
               const today = new Date();
               today.setHours(0, 0, 0, 0);
+              // We get the session here to calculate progress, but don't use it to disable the button
               const session = await getOrCreateWorkoutSession(userId, currentProgram.id, today, workoutInfo.workout);
               setTodaysSession(session);
             }
