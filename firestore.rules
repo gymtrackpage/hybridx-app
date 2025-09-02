@@ -1,25 +1,25 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users can only read and write to their own user document.
+    // Users can only read/update their own document. Any authenticated user can create a user document.
     match /users/{userId} {
       allow read, update: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null;
     }
 
-    // Authenticated users can read all programs.
-    // For now, any authenticated user can manage programs for the admin panel to work.
+    // Any authenticated user can read programs. For now, any user can manage programs to enable the admin panel.
+    // In a production app, you'd restrict write access to admin roles.
     match /programs/{programId} {
       allow read: if request.auth != null;
       allow create, update, delete: if request.auth != null;
     }
-
-    // Users can only manage their own workout sessions.
+    
+    // Users can only read, create, update, or delete their own workout sessions.
     match /workoutSessions/{sessionId} {
-      allow read, create, update: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create, update: if request.auth != null && request.resource.data.userId == request.auth.uid;
     }
   }
 }
