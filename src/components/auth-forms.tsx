@@ -129,6 +129,8 @@ export function LoginForm() {
 const signupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
+  firstName: z.string().min(1, 'First name is required.'),
+  lastName: z.string().min(1, 'Last name is required.'),
   experience: z.enum(['beginner', 'intermediate', 'advanced']),
   frequency: z.enum(['3', '4', '5+']),
   goal: z.enum(['strength', 'endurance', 'hybrid']),
@@ -139,6 +141,8 @@ type SignupData = z.infer<typeof signupSchema>;
 const initialSignupData: Partial<SignupData> = {
   email: '',
   password: '',
+  firstName: '',
+  lastName: '',
   experience: 'beginner',
   frequency: '3',
   goal: 'hybrid',
@@ -172,6 +176,8 @@ export function SignupForm() {
       // 2. Save user profile data to Firestore
       await createUser(user.uid, {
         email: finalData.email,
+        firstName: finalData.firstName,
+        lastName: finalData.lastName,
         experience: finalData.experience,
         frequency: finalData.frequency,
         goal: finalData.goal,
@@ -206,7 +212,8 @@ export function SignupForm() {
       {step === 1 && <Step1 onNext={handleNext} defaultValues={formData} />}
       {step === 2 && <Step2 onNext={handleNext} onPrev={handlePrev} defaultValues={formData} />}
       {step === 3 && <Step3 onNext={handleNext} onPrev={handlePrev} defaultValues={formData} />}
-      {step === 4 && <Step4 onSubmit={handleSubmit} onPrev={handlePrev} defaultValues={formData} isLoading={isLoading} />}
+      {step === 4 && <Step4 onNext={handleNext} onPrev={handlePrev} defaultValues={formData} />}
+      {step === 5 && <Step5 onSubmit={handleSubmit} onPrev={handlePrev} defaultValues={formData} isLoading={isLoading} />}
     </Card>
   );
 }
@@ -241,6 +248,35 @@ function Step1({ onNext, defaultValues }: any) {
 
 function Step2({ onNext, onPrev, defaultValues }: any) {
   const form = useForm({
+    resolver: zodResolver(signupSchema.pick({ firstName: true, lastName: true })),
+    defaultValues,
+  });
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onNext)}>
+        <CardHeader>
+          <CardTitle>Tell us your name</CardTitle>
+          <CardDescription>Let's get personal.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <FormField control={form.control} name="firstName" render={({ field }) => (
+            <FormItem><FormLabel>First Name</FormLabel><FormControl><Input placeholder="Jane" {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
+          <FormField control={form.control} name="lastName" render={({ field }) => (
+            <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input placeholder="Doe" {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
+        </CardContent>
+        <CardFooter className="justify-between">
+          <Button type="button" variant="ghost" onClick={onPrev}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
+          <Button type="submit">Next <ArrowRight className="ml-2 h-4 w-4" /></Button>
+        </CardFooter>
+      </form>
+    </Form>
+  );
+}
+
+function Step3({ onNext, onPrev, defaultValues }: any) {
+  const form = useForm({
     resolver: zodResolver(signupSchema.pick({ experience: true })),
     defaultValues,
   });
@@ -266,7 +302,7 @@ function Step2({ onNext, onPrev, defaultValues }: any) {
   );
 }
 
-function Step3({ onNext, onPrev, defaultValues }: any) {
+function Step4({ onNext, onPrev, defaultValues }: any) {
   const form = useForm({
     resolver: zodResolver(signupSchema.pick({ frequency: true })),
     defaultValues,
@@ -293,7 +329,7 @@ function Step3({ onNext, onPrev, defaultValues }: any) {
   );
 }
 
-function Step4({ onSubmit, onPrev, defaultValues, isLoading }: any) {
+function Step5({ onSubmit, onPrev, defaultValues, isLoading }: any) {
   const form = useForm({
     resolver: zodResolver(signupSchema.pick({ goal: true })),
     defaultValues,

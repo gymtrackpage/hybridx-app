@@ -133,7 +133,7 @@ export default function DashboardPage() {
       // Create a simple workout history summary for the AI
       const workoutHistory = `User has completed ${todaysWorkout?.day || 0} days of the "${program.name}" program.`;
       const result = await motivationalCoach({
-        userName: user.email.split('@')[0], // Use the first part of the email as a name
+        userName: user.firstName,
         workoutHistory,
       });
       setMotivation(result.message);
@@ -181,7 +181,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-          Welcome back, {user ? user.email.split('@')[0] : 'Athlete'}!
+          Welcome back, {user ? user.firstName : 'Athlete'}!
         </h1>
         <p className="text-muted-foreground">Here&apos;s your plan for today. Let&apos;s get it done.</p>
       </div>

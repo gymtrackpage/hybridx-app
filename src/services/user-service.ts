@@ -13,6 +13,8 @@ export async function getUser(userId: string): Promise<User | null> {
         const user: User = {
             id: docSnap.id,
             email: data.email,
+            firstName: data.firstName,
+            lastName: data.lastName,
             experience: data.experience,
             frequency: data.frequency,
             goal: data.goal,

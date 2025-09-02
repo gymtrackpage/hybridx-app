@@ -1,6 +1,8 @@
 export interface User {
   id: string;
   email: string;
+  firstName: string;
+  lastName: string;
   experience: 'beginner' | 'intermediate' | 'advanced';
   frequency: '3' | '4' | '5+';
   goal: 'strength' | 'endurance' | 'hybrid';

@@ -17,7 +17,7 @@ const MotivationalCoachInputSchema = z.object({
     .describe(
       'A summary of the user workout history, including workout types, frequency, and progress.'
     ),
-  userName: z.string().describe('The name of the user.'),
+  userName: z.string().describe('The first name of the user.'),
 });
 export type MotivationalCoachInput = z.infer<typeof MotivationalCoachInputSchema>;
 
@@ -38,7 +38,7 @@ const prompt = ai.definePrompt({
 
   Workout history: {{{workoutHistory}}}
 
-  Give the user a personalized, encouraging message to stay motivated and consistent with their training. Address the user by their name: {{{userName}}}.`,
+  Give the user a personalized, encouraging message to stay motivated and consistent with their training. Address the user by their first name: {{{userName}}}.`,
 });
 
 const motivationalCoachFlow = ai.defineFlow(
