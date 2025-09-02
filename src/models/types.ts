@@ -1,3 +1,13 @@
+export interface PersonalRecords {
+  backSquat?: string;
+  deadlift?: string;
+  benchPress?: string;
+  run1k?: string;
+  run5k?: string;
+  run10k?: string;
+  [key: string]: string | undefined; // For flexible additional records
+}
+
 export interface User {
   id: string;
   email: string;
@@ -8,6 +18,7 @@ export interface User {
   goal: 'strength' | 'endurance' | 'hybrid';
   programId?: string | null;
   startDate?: Date;
+  personalRecords?: PersonalRecords;
 }
 
 export interface Program {

@@ -20,22 +20,30 @@ export async function getUser(userId: string): Promise<User | null> {
             goal: data.goal,
             programId: data.programId,
             startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
+            personalRecords: data.personalRecords || {},
         };
         return user;
     }
     return null;
 }
 
-export async function createUser(userId: string, data: Omit<User, 'id' | 'startDate' | 'programId'>): Promise<User> {
+export async function createUser(userId: string, data: Omit<User, 'id' | 'startDate' | 'programId' | 'personalRecords'>): Promise<User> {
     const userRef = doc(usersCollection, userId);
     const userData = {
         ...data,
         programId: null,
         startDate: null,
+        personalRecords: {}, // Initialize with an empty object
     };
     await setDoc(userRef, userData);
-    return { id: userId, ...data };
+    const createdUser: User = { 
+        id: userId, 
+        ...data, 
+        personalRecords: {}
+    };
+    return createdUser;
 }
+
 
 export async function updateUser(userId: string, data: Partial<Omit<User, 'id'>>): Promise<void> {
     const userRef = doc(usersCollection, userId);
