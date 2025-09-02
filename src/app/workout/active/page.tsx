@@ -1,22 +1,21 @@
 // src/app/workout/active/page.tsx
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Check, Flag, Loader2, Play, Pause, CalendarDays, Clock, Target } from 'lucide-react';
+import { useDebouncedCallback } from 'use-debounce';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { auth } from '@/lib/firebase';
-import { getUser } from '@/services/user-service';
 import { getProgram, getWorkoutForDay } from '@/services/program-service';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service';
-import type { User, Program, Workout } from '@/models/types';
-import { format } from 'date-fns';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import type { Workout } from '@/models/types';
 
 function Timer({ startTime, isRunning }: { startTime: Date; isRunning: boolean }) {
   const [elapsed, setElapsed] = useState(0);
@@ -51,6 +50,7 @@ export default function ActiveWorkoutPage() {
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [workoutInfo, setWorkoutInfo] = useState<{ day: number, workout: Workout | null } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notes, setNotes] = useState('');
   
   const today = useMemo(() => {
       const d = new Date();
@@ -70,6 +70,7 @@ export default function ActiveWorkoutPage() {
             if (currentWorkoutInfo.workout) {
               const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
               setSession(workoutSession);
+              setNotes(workoutSession.notes || '');
             }
           }
         }
@@ -79,6 +80,16 @@ export default function ActiveWorkoutPage() {
 
     return () => unsubscribe();
   }, [today]);
+
+  const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
+    if (!session) return;
+    await updateWorkoutSession(session.id, { notes: value });
+  }, 1500); // Save 1.5 seconds after user stops typing
+
+  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setNotes(e.target.value);
+    debouncedSaveNotes(e.target.value);
+  };
 
   const handleToggleExercise = async (exerciseName: string, completed: boolean) => {
     if (!session) return;
@@ -98,11 +109,13 @@ export default function ActiveWorkoutPage() {
   
   const handleFinishWorkout = async () => {
       if(!session) return;
+      // Final save of notes before finishing
+      debouncedSaveNotes.flush();
       const finishedAt = new Date();
       const isRunning = false;
-      const updatedSession = {...session, isRunning, finishedAt};
+      const updatedSession = {...session, isRunning, finishedAt, notes};
       setSession(updatedSession);
-      await updateWorkoutSession(session.id, { isRunning, finishedAt });
+      await updateWorkoutSession(session.id, { isRunning, finishedAt, notes });
   }
 
   if (loading) {
@@ -158,9 +171,6 @@ export default function ActiveWorkoutPage() {
                         <span>Week {week}, Day {dayOfWeek}</span>
                     </div>
                 </div>
-                <p className="text-sm text-foreground/90">
-                    Build foundational strength. Light introduction to a Hyrox skill. RPE 6-7 for strength.
-                </p>
                 
                 <div>
                     <h3 className="text-base font-semibold mb-3">Exercises:</h3>
@@ -184,6 +194,18 @@ export default function ActiveWorkoutPage() {
                         </Card>
                         ))}
                     </div>
+                </div>
+
+                <div className="space-y-2">
+                    <Label htmlFor="workout-notes" className="text-base font-semibold">Workout Notes</Label>
+                    <Textarea
+                        id="workout-notes"
+                        placeholder="How did the workout feel? Any PRs? Aches or pains?"
+                        value={notes}
+                        onChange={handleNotesChange}
+                        disabled={!!session.finishedAt}
+                        rows={4}
+                    />
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 pt-4">

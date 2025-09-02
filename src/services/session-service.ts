@@ -16,6 +16,7 @@ function fromFirestore(doc: any): WorkoutSession {
         finishedAt: data.finishedAt ? data.finishedAt.toDate() : undefined,
         isRunning: data.isRunning,
         completedExercises: data.completedExercises,
+        notes: data.notes || '',
     };
 }
 
@@ -58,6 +59,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         isRunning: false,
         completedExercises: initialCompleted,
         finishedAt: null,
+        notes: '',
     };
 
     const docRef = await addDoc(sessionsCollection, newSessionData);
@@ -70,6 +72,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         startedAt: new Date(),
         isRunning: false,
         completedExercises: initialCompleted,
+        notes: '',
     };
 }
 

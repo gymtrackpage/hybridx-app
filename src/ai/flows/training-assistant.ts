@@ -11,17 +11,19 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { getUser } from '@/services/user-service';
 import { getProgram, getWorkoutForDay } from '@/services/program-service';
-import { User } from '@/models/types';
+import { getOrCreateWorkoutSession } from '@/services/session-service';
+import { User, WorkoutSession } from '@/models/types';
 
 const getUserWorkoutDataTool = ai.defineTool(
     {
         name: 'getUserWorkoutData',
-        description: 'Get the user\'s current workout data, including their profile, assigned program, and today\'s workout.',
+        description: 'Get the user\'s current workout data, including their profile, assigned program, and today\'s workout session with notes.',
         inputSchema: z.object({ userId: z.string().describe('The ID of the user.') }),
         outputSchema: z.object({
             user: z.custom<User>(),
             program: z.any().optional(),
             todaysWorkout: z.any().optional(),
+            todaysSession: z.custom<WorkoutSession>().optional(),
         }),
     },
     async ({ userId }) => {
@@ -32,7 +34,13 @@ const getUserWorkoutDataTool = ai.defineTool(
         if (user.programId && user.startDate) {
             const program = await getProgram(user.programId);
             if(program) {
-                const { workout } = getWorkoutForDay(program, user.startDate, new Date());
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                const { workout } = getWorkoutForDay(program, user.startDate, today);
+                if (workout) {
+                    const session = await getOrCreateWorkoutSession(userId, program.id, today, workout);
+                    return { user, program, todaysWorkout: workout, todaysSession: session };
+                }
                 return { user, program, todaysWorkout: workout };
             }
         }
@@ -61,7 +69,7 @@ const prompt = ai.definePrompt({
   input: {schema: TrainingAssistantInputSchema},
   output: {schema: TrainingAssistantOutputSchema},
   tools: [getUserWorkoutDataTool],
-  prompt: `You are a virtual AI training assistant. Use the available tools to get the user's workout data to answer their question and offer advice.
+  prompt: `You are a virtual AI training assistant. Use the available tools to get the user's workout data to answer their question and offer advice. Pay special attention to any notes the user may have left on their workout session.
 
 Question: {{{question}}}`,
 });
@@ -74,7 +82,7 @@ const trainingAssistantFlow = ai.defineFlow(
   },
   async (input) => {
     const llmResponse = await ai.generate({
-        prompt: `You are a virtual AI training assistant. Use the available tools to get the user's workout data to answer their question and offer advice.
+        prompt: `You are a virtual AI training assistant. Use the available tools to get the user's workout data to answer their question and offer advice. Pay special attention to any notes the user may have left on their workout session.
 
         Question: ${input.question}`,
         tools: [getUserWorkoutDataTool],
@@ -97,7 +105,7 @@ const trainingAssistantFlow = ai.defineFlow(
         
         User Data: ${JSON.stringify(toolResponse.output)}
 
-        Provide a helpful and encouraging answer.`,
+        Provide a helpful and encouraging answer. If the user provided notes, incorporate them into your response.`,
         output: { schema: TrainingAssistantOutputSchema }
     });
 
