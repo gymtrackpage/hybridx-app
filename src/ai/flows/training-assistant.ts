@@ -8,12 +8,11 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {z, generate} from 'genkit';
 import { getUser } from '@/services/user-service';
 import { getProgram, getWorkoutForDay } from '@/services/program-service';
 import { getOrCreateWorkoutSession } from '@/services/session-service';
-import { User, WorkoutSession } from '@/models/types';
-import {generate} from 'genkit/generate';
+import type { User, WorkoutSession } from '@/models/types';
 
 const getUserWorkoutDataTool = ai.defineTool(
     {
