@@ -1,13 +1,14 @@
 // src/services/user-service.ts
 'use server';
 
-import { collection, doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
-import { adminDb } from '@/lib/firebase-admin'; // Use Admin SDK for server-side
+import { collection, doc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin'; // Use Admin SDK for server-side
 import { db } from '@/lib/firebase'; // Keep client SDK for client-side
 import type { User } from '@/models/types';
 
 // SERVER-SIDE function using Admin SDK
 export async function getUser(userId: string): Promise<User | null> {
+    const adminDb = getAdminDb();
     const usersCollection = adminDb.collection('users');
     const docRef = usersCollection.doc(userId);
     const docSnap = await docRef.get();

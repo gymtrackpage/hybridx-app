@@ -3,7 +3,7 @@
 
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { adminDb } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
 import type { WorkoutSession, Workout } from '@/models/types';
 
 function fromFirestore(doc: any): WorkoutSession {
@@ -23,6 +23,7 @@ function fromFirestore(doc: any): WorkoutSession {
 
 // SERVER-SIDE function using Admin SDK
 async function getOrCreateWorkoutSessionAdmin(userId: string, programId: string, workoutDate: Date, workout: Workout): Promise<WorkoutSession> {
+    const adminDb = getAdminDb();
     const sessionsCollectionAdmin = adminDb.collection('workoutSessions');
     const q = sessionsCollectionAdmin
         .where('userId', '==', userId)

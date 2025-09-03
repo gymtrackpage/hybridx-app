@@ -2,30 +2,39 @@
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-let adminApp: App;
+let adminApp: App | undefined = undefined;
+let adminDb: ReturnType<typeof getFirestore> | undefined = undefined;
 
-if (!getApps().length) {
-    // When deployed to a Google Cloud environment (like Firebase App Hosting),
-    // the SDK automatically discovers the service account credentials.
-    // For local development, you need to set the GOOGLE_APPLICATION_CREDENTIALS
-    // environment variable to point to your service account key file.
-    const serviceAccount = process.env.GOOGLE_APPLICATION_CREDENTIALS
-        ? JSON.parse(Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'base64').toString('utf-8'))
-        : undefined;
-
-    if (serviceAccount) {
+if (getApps().length) {
+    adminApp = getApps()[0];
+} else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.log('Initializing Firebase Admin SDK with service account.');
+    try {
+        const serviceAccount = JSON.parse(
+            Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'base64').toString('utf-8')
+        );
         adminApp = initializeApp({
             credential: cert(serviceAccount)
         });
-    } else {
-        // Initialize without explicit credentials, relying on the environment.
-        console.log('Initializing Firebase Admin SDK without explicit credentials.');
-        adminApp = initializeApp();
+    } catch (e: any) {
+        console.error('Failed to parse GOOGLE_APPLICATION_CREDENTIALS:', e.message);
     }
 } else {
-    adminApp = getApps()[0];
+    console.warn(
+      'Firebase Admin SDK not initialized. GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.'
+    );
 }
 
-const adminDb = getFirestore(adminApp);
+if (adminApp) {
+    adminDb = getFirestore(adminApp);
+}
 
-export { adminApp, adminDb };
+// Export a function that throws an error if the db is not initialized
+const getAdminDb = () => {
+    if (!adminDb) {
+        throw new Error('Firebase Admin has not been initialized. Check server logs for details.');
+    }
+    return adminDb;
+}
+
+export { adminApp, getAdminDb };

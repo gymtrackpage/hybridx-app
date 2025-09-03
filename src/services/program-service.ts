@@ -3,12 +3,13 @@
 
 import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { adminDb } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
 import type { Program, Workout } from '@/models/types';
 import { differenceInDays } from 'date-fns';
 
 // SERVER-SIDE function using Admin SDK
 export async function getProgram(programId: string): Promise<Program | null> {
+    const adminDb = getAdminDb();
     const programsCollection = adminDb.collection('programs');
     const docRef = programsCollection.doc(programId);
     const docSnap = await docRef.get();
