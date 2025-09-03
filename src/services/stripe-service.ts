@@ -30,46 +30,58 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
     try {
         const user = await getUser(userId);
         if (!user) {
-            throw new Error('User not found.');
+            throw new Error(`User with ID ${userId} not found.`);
         }
 
         let customerId = user.stripeCustomerId;
 
         // Create a new Stripe customer if one doesn't exist
         if (!customerId) {
-            const customer = await stripe.customers.create({
-                email: user.email,
-                name: `${user.firstName} ${user.lastName}`,
-                metadata: {
-                    firebaseUID: userId,
-                },
-            });
-            customerId = customer.id;
-            // Use the new server-side function to update the user
-            await updateUserAdmin(userId, { stripeCustomerId: customerId });
+            try {
+                const customer = await stripe.customers.create({
+                    email: user.email,
+                    name: `${user.firstName} ${user.lastName}`,
+                    metadata: {
+                        firebaseUID: userId,
+                    },
+                });
+                customerId = customer.id;
+                // Use the new server-side function to update the user
+                await updateUserAdmin(userId, { stripeCustomerId: customerId });
+            } catch (err: any) {
+                console.error('Error creating Stripe customer:', err);
+                throw new Error(`Failed to create Stripe customer: ${err.message}`);
+            }
         }
         
         const priceId = process.env.STRIPE_PRICE_ID;
         const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            mode: 'subscription',
-            customer: customerId,
-            line_items: [
-                {
-                    price: priceId,
-                    quantity: 1,
-                },
-            ],
-            success_url: `${appUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${appUrl}/subscription`,
-        });
+        try {
+            const session = await stripe.checkout.sessions.create({
+                payment_method_types: ['card'],
+                mode: 'subscription',
+                customer: customerId,
+                line_items: [
+                    {
+                        price: priceId,
+                        quantity: 1,
+                    },
+                ],
+                success_url: `${appUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+                cancel_url: `${appUrl}/subscription`,
+            });
 
-        return { url: session.url };
+            return { url: session.url };
+        } catch (err: any) {
+            console.error('Error creating Stripe checkout session:', err);
+            throw new Error(`Failed to create Stripe checkout session: ${err.message}`);
+        }
 
-    } catch (error) {
-        console.error('Error creating checkout session:', error);
-        throw new Error('Failed to create Stripe checkout session.');
+    } catch (error: any) {
+        // This outer catch will now catch the more specific errors thrown from the inner blocks.
+        console.error('An error occurred in createCheckoutSession:', error);
+        // Re-throw the specific error message
+        throw new Error(error.message);
     }
 }
