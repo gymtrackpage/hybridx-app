@@ -27,6 +27,11 @@ export async function getUser(userId: string): Promise<User | null> {
             programId: data.programId,
             startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
             personalRecords: data.personalRecords || {},
+            isAdmin: data.isAdmin || false,
+            subscriptionStatus: data.subscriptionStatus || 'trial',
+            stripeCustomerId: data.stripeCustomerId,
+            subscriptionId: data.subscriptionId,
+            trialStartDate: data.trialStartDate instanceof Timestamp ? data.trialStartDate.toDate() : undefined,
         };
         return user;
     }

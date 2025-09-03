@@ -14,6 +14,9 @@ if (!process.env.STRIPE_SECRET_KEY) {
 if (!process.env.NEXT_PUBLIC_APP_URL) {
     throw new Error('NEXT_PUBLIC_APP_URL is not set in environment variables.');
 }
+if (!process.env.STRIPE_PRICE_ID) {
+    throw new Error('STRIPE_PRICE_ID is not set in environment variables.');
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: '2024-06-20',
@@ -43,13 +46,13 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
                 },
             });
             customerId = customer.id;
+            // This is a client-side function, but it's safe to call from a server action.
+            // It correctly updates the user document in Firestore.
             await updateUser(userId, { stripeCustomerId: customerId });
         }
         
         const priceId = process.env.STRIPE_PRICE_ID;
-        if (!priceId) {
-            throw new Error('STRIPE_PRICE_ID is not set.');
-        }
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -61,8 +64,8 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
                     quantity: 1,
                 },
             ],
-            success_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/subscription`,
+            success_url: `${appUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${appUrl}/subscription`,
         });
 
         return { url: session.url };
