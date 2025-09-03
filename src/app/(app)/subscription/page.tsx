@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { differenceInDays, addDays, format } from 'date-fns';
+import { differenceInDays, addMonths, format } from 'date-fns';
 import { Loader2, CheckCircle, ShieldCheck, Star } from 'lucide-react';
 
 import { auth } from '@/lib/firebase';
@@ -88,8 +88,9 @@ export default function SubscriptionPage() {
 
     const status = user?.subscriptionStatus || 'trial';
     const trialStart = user?.trialStartDate;
-    const daysLeft = trialStart ? 30 - differenceInDays(new Date(), trialStart) : 0;
-    const trialEndDate = trialStart ? format(addDays(trialStart, 30), 'MMMM do, yyyy') : '';
+    const trialEndDate = trialStart ? addMonths(trialStart, 1) : new Date();
+    const daysLeft = trialStart ? differenceInDays(trialEndDate, new Date()) : 0;
+    const trialEndDateFormatted = trialStart ? format(trialEndDate, 'MMMM do, yyyy') : '';
 
     return (
         <div className="space-y-6">
@@ -125,7 +126,7 @@ export default function SubscriptionPage() {
                         {daysLeft > 0 ? (
                             <p className="text-muted-foreground">
                                 You have <span className="font-bold text-foreground">{daysLeft} day{daysLeft !== 1 ? 's' : ''}</span> left in your free trial.
-                                Your trial will end on <span className="font-bold text-foreground">{trialEndDate}</span>.
+                                Your trial will end on <span className="font-bold text-foreground">{trialEndDateFormatted}</span>.
                             </p>
                         ) : (
                             <p className="text-destructive">Your free trial has ended. Please subscribe to continue.</p>

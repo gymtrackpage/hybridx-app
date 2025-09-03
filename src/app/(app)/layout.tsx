@@ -36,7 +36,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { InstallPwaBanner } from '@/components/install-pwa-banner';
 import { getUserClient } from '@/services/user-service-client';
-import { differenceInDays } from 'date-fns';
+import { addMonths, isAfter } from 'date-fns';
 
 
 const navItems = [
@@ -68,7 +68,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         if (appUser && !appUser.isAdmin && pathname !== '/subscription') {
             const status = appUser.subscriptionStatus || 'trial';
             const trialStart = appUser.trialStartDate;
-            const trialEnded = trialStart ? differenceInDays(new Date(), trialStart) > 30 : true;
+            const trialEnded = trialStart ? isAfter(new Date(), addMonths(trialStart, 1)) : true;
 
             if (status === 'trial' && trialEnded) {
                 router.push('/subscription');
