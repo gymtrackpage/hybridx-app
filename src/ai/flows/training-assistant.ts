@@ -8,7 +8,7 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z, generate} from 'genkit';
+import {z} from 'genkit';
 import { getUser } from '@/services/user-service';
 import { getProgram, getWorkoutForDay } from '@/services/program-service';
 import { getOrCreateWorkoutSession } from '@/services/session-service';
@@ -72,7 +72,7 @@ const trainingAssistantFlow = ai.defineFlow(
   },
   async (input) => {
     // Initial generation request with the tool
-    const llmResponse = await generate({
+    const llmResponse = await ai.generate({
         prompt: `You are a virtual AI training assistant. Use the available tools to get the user's workout data to answer their question and offer advice. Pay special attention to any notes the user may have left on their workout session.
 
         Question: ${input.question}`,
@@ -93,7 +93,7 @@ const trainingAssistantFlow = ai.defineFlow(
         const toolResponse = await llmResponse.toolRequest.execute();
 
         // Send the tool's output back to the model to get a final answer
-        const finalResponse = await generate({
+        const finalResponse = await ai.generate({
             prompt: `You are an expert HYROX coach. You are answering a question from a user. Here is their question and their data that you requested.
         
             Question: ${input.question}
