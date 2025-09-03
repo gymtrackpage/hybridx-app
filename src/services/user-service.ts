@@ -1,4 +1,6 @@
 // src/services/user-service.ts
+'use server';
+
 import { collection, doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { adminDb } from '@/lib/firebase-admin'; // Use Admin SDK for server-side
 import { db } from '@/lib/firebase'; // Keep client SDK for client-side
