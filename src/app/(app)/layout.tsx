@@ -90,7 +90,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarHeader className="p-4">
           <Link href="/dashboard" className="flex items-center gap-2">
             <Logo className="h-8 w-8 text-primary" />
-            <span className="text-lg font-semibold">HYBRIDX.CLUB</span>
+            <span className="text-lg font-semibold font-headline">HYBRIDX.CLUB</span>
           </Link>
         </SidebarHeader>
         <SidebarContent>
