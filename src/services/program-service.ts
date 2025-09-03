@@ -4,8 +4,7 @@
 import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getAdminDb } from '@/lib/firebase-admin';
-import type { Program, Workout } from '@/models/types';
-import { differenceInDays } from 'date-fns';
+import type { Program } from '@/models/types';
 
 // SERVER-SIDE function using Admin SDK
 export async function getProgram(programId: string): Promise<Program | null> {
@@ -16,8 +15,6 @@ export async function getProgram(programId: string): Promise<Program | null> {
     if (docSnap.exists) {
         const data = docSnap.data();
         if (data) {
-            // Firestore Admin SDK might not automatically convert Timestamps in nested arrays.
-            // Let's assume for now it does, but this can be a point of failure if dates are wrong.
             return { id: docSnap.id, ...data } as Program;
         }
     }
@@ -56,28 +53,4 @@ export async function updateProgram(programId: string, data: Partial<Program>): 
 export async function deleteProgram(programId: string): Promise<void> {
     const docRef = doc(programsCollectionClient, programId);
     await deleteDoc(docRef);
-}
-
-// This is a pure function, doesn't need to be client or server specific but must be async due to 'use server'
-export async function getWorkoutForDay(program: Program, startDate: Date, targetDate: Date): Promise<{ day: number; workout: Workout | null; }> {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const target = new Date(targetDate);
-    target.setHours(0, 0, 0, 0);
-
-    const dayOfProgram = differenceInDays(target, start) + 1;
-    
-    if (dayOfProgram < 1) {
-        return { day: dayOfProgram, workout: null };
-    }
-
-    const cycleLength = Math.max(...program.workouts.map(w => w.day), 0);
-    if (cycleLength === 0) {
-        return { day: dayOfProgram, workout: null };
-    }
-    
-    const dayInCycle = ((dayOfProgram - 1) % cycleLength) + 1;
-    const workoutForDay = program.workouts.find(w => w.day === dayInCycle);
-
-    return { day: dayOfProgram, workout: workoutForDay || null };
 }

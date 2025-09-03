@@ -20,7 +20,8 @@ import { cn } from '@/lib/utils';
 import { Logo } from './icons';
 import { Skeleton } from './ui/skeleton';
 import { getUserClient } from '@/services/user-service';
-import { getProgramClient, getWorkoutForDay } from '@/services/program-service';
+import { getProgramClient } from '@/services/program-service';
+import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getOrCreateWorkoutSession, getAllUserSessions } from '@/services/session-service';
 
 interface Message {
@@ -43,7 +44,7 @@ const getUserWorkoutData = async (userId: string) => {
         if(program) {
             const today = new Date();
             today.setHours(0,0,0,0);
-            const { workout } = await getWorkoutForDay(program, user.startDate, today);
+            const { workout } = getWorkoutForDay(program, user.startDate, today);
             if (workout) {
                 const session = await getOrCreateWorkoutSession(userId, program.id, today, workout);
                 return { user, program, todaysWorkout: workout, todaysSession: session, allSessions: sessions };

@@ -31,7 +31,8 @@ import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, ChartT
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { getUser } from '@/services/user-service';
-import { getProgram, getWorkoutForDay } from '@/services/program-service';
+import { getProgram } from '@/services/program-service';
+import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getOrCreateWorkoutSession, getAllUserSessions, type WorkoutSession } from '@/services/session-service';
 import type { User, Program, Workout } from '@/models/types';
 import Link from 'next/link';

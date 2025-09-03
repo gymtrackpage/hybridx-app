@@ -14,7 +14,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { auth } from '@/lib/firebase';
 import { getUser } from '@/services/user-service';
-import { getProgram, getWorkoutForDay } from '@/services/program-service';
+import { getProgram } from '@/services/program-service';
+import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service';
 import type { Workout } from '@/models/types';
 
