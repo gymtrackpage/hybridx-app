@@ -131,8 +131,8 @@ export function AssistantChat() {
                 )}
               >
                 {message.role === 'assistant' && (
-                  <Avatar className="h-8 w-8 border bg-primary text-primary-foreground">
-                    <Logo className="p-1" />
+                  <Avatar className="h-8 w-8 border bg-primary text-primary-foreground flex items-center justify-center">
+                    <Logo className="h-6 w-6" />
                   </Avatar>
                 )}
                 <div
@@ -154,8 +154,8 @@ export function AssistantChat() {
             ))}
             {isLoading && (
                  <div className='flex items-start gap-3 justify-start'>
-                    <Avatar className="h-8 w-8 border bg-primary text-primary-foreground">
-                        <Logo className="p-1" />
+                    <Avatar className="h-8 w-8 border bg-primary text-primary-foreground flex items-center justify-center">
+                        <Logo className="h-6 w-6" />
                     </Avatar>
                     <div className='max-w-md rounded-lg p-3 bg-muted flex items-center gap-2'>
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />

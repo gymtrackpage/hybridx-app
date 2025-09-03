@@ -27,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${spaceGrotesk.variable}`}>
       <head>
+        <link rel="icon" href="/icon-logo.png" sizes="any" />
         <meta name="application-name" content="HYBRIDX.CLUB" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
