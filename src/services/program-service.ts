@@ -1,6 +1,7 @@
+// src/services/program-service.ts
 'use server';
 
-import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { adminDb } from '@/lib/firebase-admin';
 import type { Program, Workout } from '@/models/types';
@@ -12,7 +13,12 @@ export async function getProgram(programId: string): Promise<Program | null> {
     const docRef = programsCollection.doc(programId);
     const docSnap = await docRef.get();
     if (docSnap.exists) {
-        return { id: docSnap.id, ...docSnap.data() } as Program;
+        const data = docSnap.data();
+        if (data) {
+            // Firestore Admin SDK might not automatically convert Timestamps in nested arrays.
+            // Let's assume for now it does, but this can be a point of failure if dates are wrong.
+            return { id: docSnap.id, ...data } as Program;
+        }
     }
     return null;
 }
@@ -41,8 +47,8 @@ export async function deleteProgram(programId: string): Promise<void> {
     await deleteDoc(docRef);
 }
 
-// This is a pure function, doesn't need to be client or server specific
-export function getWorkoutForDay(program: Program, startDate: Date, targetDate: Date): { day: number; workout: Workout | null; } {
+// This is a pure function, doesn't need to be client or server specific but must be async due to 'use server'
+export async function getWorkoutForDay(program: Program, startDate: Date, targetDate: Date): Promise<{ day: number; workout: Workout | null; }> {
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const target = new Date(targetDate);
