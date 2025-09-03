@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { CornerDownLeft, Loader2, Sparkles } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
 import { trainingAssistant } from '@/ai/flows/training-assistant';
@@ -19,12 +19,40 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Logo } from './icons';
 import { Skeleton } from './ui/skeleton';
+import { getUser } from '@/services/user-service';
+import { getProgram, getWorkoutForDay } from '@/services/program-service';
+import { getOrCreateWorkoutSession, getAllUserSessions } from '@/services/session-service';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
 }
+
+// Helper function to fetch all necessary data on the client
+const getUserWorkoutData = async (userId: string) => {
+    const user = await getUser(userId);
+    if (!user) {
+        return { user: null };
+    }
+
+    const sessions = await getAllUserSessions(userId);
+
+    if (user.programId && user.startDate) {
+        const program = await getProgram(user.programId);
+        if(program) {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const { workout } = await getWorkoutForDay(program, user.startDate, today);
+            if (workout) {
+                const session = await getOrCreateWorkoutSession(userId, program.id, today, workout);
+                return { user, program, todaysWorkout: workout, todaysSession: session, allSessions: sessions };
+            }
+            return { user, program, allSessions: sessions, todaysWorkout: null };
+        }
+    }
+    return { user, allSessions: sessions };
+};
 
 
 export function AssistantChat() {
@@ -37,16 +65,16 @@ export function AssistantChat() {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        setUserId(user.uid);
+        setCurrentUser(user);
       } else {
-        setUserId(null);
+        setCurrentUser(null);
       }
       setAuthChecked(true);
     });
@@ -65,7 +93,7 @@ export function AssistantChat() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || !userId) return;
+    if (!input.trim() || isLoading || !currentUser) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -77,7 +105,15 @@ export function AssistantChat() {
     setIsLoading(true);
 
     try {
-      const result = await trainingAssistant({ userId, question: input });
+      // 1. Fetch data on the client-side
+      const userData = await getUserWorkoutData(currentUser.uid);
+      
+      // 2. Pass the fetched data to the AI flow
+      const result = await trainingAssistant({ 
+          question: input,
+          userData: JSON.stringify(userData) // Pass data as a string
+      });
+
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -147,7 +183,7 @@ export function AssistantChat() {
                 </div>
                 {message.role === 'user' && (
                   <Avatar className="h-8 w-8 border">
-                    <AvatarFallback>U</AvatarFallback>
+                    <AvatarFallback>{currentUser?.email?.[0].toUpperCase() || 'U'}</AvatarFallback>
                   </Avatar>
                 )}
               </div>
@@ -171,15 +207,15 @@ export function AssistantChat() {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={userId ? "e.g., How can I improve my sled push time?" : "Please log in to use the assistant."}
+            placeholder={currentUser ? "e.g., How can I improve my sled push time?" : "Please log in to use the assistant."}
             className="pr-12"
-            disabled={isLoading || !userId}
+            disabled={isLoading || !currentUser}
           />
           <Button
             type="submit"
             size="icon"
             className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-            disabled={isLoading || !input.trim() || !userId}
+            disabled={isLoading || !input.trim() || !currentUser}
           >
             <CornerDownLeft className="h-4 w-4" />
           </Button>
