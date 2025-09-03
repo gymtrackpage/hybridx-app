@@ -13,6 +13,7 @@ import { getUser } from '@/services/user-service';
 import { getProgram, getWorkoutForDay } from '@/services/program-service';
 import { getOrCreateWorkoutSession } from '@/services/session-service';
 import { User, WorkoutSession } from '@/models/types';
+import {generate} from 'genkit/generate';
 
 const getUserWorkoutDataTool = ai.defineTool(
     {
@@ -64,16 +65,6 @@ export async function trainingAssistant(input: TrainingAssistantInput): Promise<
   return trainingAssistantFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'trainingAssistantPrompt',
-  input: {schema: TrainingAssistantInputSchema},
-  output: {schema: TrainingAssistantOutputSchema},
-  tools: [getUserWorkoutDataTool],
-  prompt: `You are a virtual AI training assistant. Use the available tools to get the user's workout data to answer their question and offer advice. Pay special attention to any notes the user may have left on their workout session.
-
-Question: {{{question}}}`,
-});
-
 const trainingAssistantFlow = ai.defineFlow(
   {
     name: 'trainingAssistantFlow',
@@ -81,34 +72,45 @@ const trainingAssistantFlow = ai.defineFlow(
     outputSchema: TrainingAssistantOutputSchema,
   },
   async (input) => {
-    const llmResponse = await ai.generate({
+    // Initial generation request with the tool
+    const llmResponse = await generate({
         prompt: `You are a virtual AI training assistant. Use the available tools to get the user's workout data to answer their question and offer advice. Pay special attention to any notes the user may have left on their workout session.
 
         Question: ${input.question}`,
         tools: [getUserWorkoutDataTool],
         toolConfig: {
-            usage: 'force',
-            options: {
-                getUserWorkoutData: {
-                    userId: input.userId
-                }
-            }
-        }
+          usage: 'force',
+          options: {
+              getUserWorkoutData: {
+                  userId: input.userId
+              }
+          }
+      }
     });
 
-    const toolResponse = await llmResponse.toolRequest!.execute();
+    // Check if the model decided to use the tool
+    if (llmResponse.toolRequest) {
+        // Execute the tool and get the result
+        const toolResponse = await llmResponse.toolRequest.execute();
 
-    const finalResponse = await ai.generate({
-        prompt: `You are an expert HYROX coach. You are answering a question from a user. Here is their question and their data.
+        // Send the tool's output back to the model to get a final answer
+        const finalResponse = await generate({
+            prompt: `You are an expert HYROX coach. You are answering a question from a user. Here is their question and their data that you requested.
         
-        Question: ${input.question}
+            Question: ${input.question}
+            
+            User Data (from your tool call): ${JSON.stringify(toolResponse.output)}
+    
+            Provide a helpful and encouraging answer based on this data. If the user provided notes, incorporate them into your response.`,
+            output: { schema: TrainingAssistantOutputSchema }
+        });
         
-        User Data: ${JSON.stringify(toolResponse.output)}
+        return finalResponse.output!;
 
-        Provide a helpful and encouraging answer. If the user provided notes, incorporate them into your response.`,
-        output: { schema: TrainingAssistantOutputSchema }
-    });
-
-    return finalResponse.output!;
+    } else {
+        // If the model didn't use the tool, it might have answered directly.
+        // We will return that answer, formatted correctly.
+        return { answer: llmResponse.text };
+    }
   }
 );
