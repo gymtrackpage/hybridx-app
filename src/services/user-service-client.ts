@@ -22,6 +22,11 @@ export async function getUserClient(userId: string): Promise<User | null> {
             programId: data.programId,
             startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
             personalRecords: data.personalRecords || {},
+            isAdmin: data.isAdmin || false,
+            subscriptionStatus: data.subscriptionStatus || 'trial',
+            stripeCustomerId: data.stripeCustomerId,
+            subscriptionId: data.subscriptionId,
+            trialStartDate: data.trialStartDate instanceof Timestamp ? data.trialStartDate.toDate() : undefined,
         };
         return user;
     }
@@ -31,17 +36,24 @@ export async function getUserClient(userId: string): Promise<User | null> {
 export async function createUser(userId: string, data: Omit<User, 'id' | 'startDate' | 'programId' | 'personalRecords'>): Promise<User> {
     const usersCollection = collection(db, 'users');
     const userRef = doc(usersCollection, userId);
+    const trialStartDate = new Date();
     const userData = {
         ...data,
         programId: null,
         startDate: null,
         personalRecords: {},
+        isAdmin: false,
+        subscriptionStatus: 'trial',
+        trialStartDate: Timestamp.fromDate(trialStartDate),
     };
     await setDoc(userRef, userData);
     const createdUser: User = { 
         id: userId, 
         ...data, 
-        personalRecords: {}
+        personalRecords: {},
+        isAdmin: false,
+        subscriptionStatus: 'trial',
+        trialStartDate: trialStartDate,
     };
     return createdUser;
 }
@@ -53,6 +65,9 @@ export async function updateUser(userId: string, data: Partial<Omit<User, 'id'>>
 
     if (data.startDate) {
         dataToUpdate.startDate = Timestamp.fromDate(data.startDate);
+    }
+    if (data.trialStartDate) {
+        dataToUpdate.trialStartDate = Timestamp.fromDate(data.trialStartDate);
     }
     
     await updateDoc(userRef, dataToUpdate);

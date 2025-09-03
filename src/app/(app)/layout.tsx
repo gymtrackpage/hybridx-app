@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Calendar,
   LayoutDashboard,
@@ -11,11 +11,12 @@ import {
   Shield,
   BookOpenCheck,
   User as UserIcon,
+  CreditCard,
 } from 'lucide-react';
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   SidebarProvider,
@@ -34,6 +35,8 @@ import { Logo } from '@/components/icons';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { InstallPwaBanner } from '@/components/install-pwa-banner';
+import { getUserClient } from '@/services/user-service-client';
+import { differenceInDays } from 'date-fns';
 
 
 const navItems = [
@@ -42,6 +45,7 @@ const navItems = [
   { href: '/calendar', icon: Calendar, label: 'Calendar' },
   { href: '/programs', icon: BookOpenCheck, label: 'Programs' },
   { href: '/profile', icon: UserIcon, label: 'Profile' },
+  { href: '/subscription', icon: CreditCard, label: 'Subscription' },
 ];
 
 const adminNavItems = [
@@ -50,21 +54,36 @@ const adminNavItems = [
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { toast } = useToast();
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
+        // Subscription check logic
+        const appUser = await getUserClient(currentUser.uid);
+        if (appUser && !appUser.isAdmin && pathname !== '/subscription') {
+            const status = appUser.subscriptionStatus || 'trial';
+            const trialStart = appUser.trialStartDate;
+            const trialEnded = trialStart ? differenceInDays(new Date(), trialStart) > 30 : true;
+
+            if (status === 'trial' && trialEnded) {
+                router.push('/subscription');
+            } else if (!['trial', 'active'].includes(status)) {
+                router.push('/subscription');
+            }
+        }
+
       } else {
         router.push('/');
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [router]);
+  }, [router, pathname]);
 
   const handleLogout = async () => {
     try {
@@ -130,8 +149,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             ) : user ? (
                 <div className="flex items-center gap-2 overflow-hidden">
                     <Avatar className="h-8 w-8">
-                        {/* You can add user images later if you store them */}
-                        {/* <AvatarImage src={user.photoURL} alt="User Avatar" /> */}
                         <AvatarFallback>{user.email?.[0].toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <span className="truncate text-sm font-medium">{user.email}</span>
