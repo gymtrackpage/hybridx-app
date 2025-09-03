@@ -14,39 +14,28 @@ import { getProgram, getWorkoutForDay } from '@/services/program-service';
 import { getOrCreateWorkoutSession } from '@/services/session-service';
 import type { User, WorkoutSession } from '@/models/types';
 
-const getUserWorkoutDataTool = ai.defineTool(
-    {
-        name: 'getUserWorkoutData',
-        description: 'Get the user\'s current workout data, including their profile, assigned program, and today\'s workout session with notes.',
-        inputSchema: z.object({ userId: z.string().describe('The ID of the user.') }),
-        outputSchema: z.object({
-            user: z.custom<User>(),
-            program: z.any().optional(),
-            todaysWorkout: z.any().optional(),
-            todaysSession: z.custom<WorkoutSession>().optional(),
-        }),
-    },
-    async ({ userId }) => {
-        const user = await getUser(userId);
-        if (!user) {
-            throw new Error('User not found');
-        }
-        if (user.programId && user.startDate) {
-            const program = await getProgram(user.programId);
-            if(program) {
-                const today = new Date();
-                today.setHours(0,0,0,0);
-                const { workout } = getWorkoutForDay(program, user.startDate, today);
-                if (workout) {
-                    const session = await getOrCreateWorkoutSession(userId, program.id, today, workout);
-                    return { user, program, todaysWorkout: workout, todaysSession: session };
-                }
-                return { user, program, todaysWorkout: workout };
-            }
-        }
-        return { user };
+// This is a plain TypeScript function, not a formal Genkit tool,
+// as we will call it directly from our flow logic.
+const getUserWorkoutData = async (userId: string) => {
+    const user = await getUser(userId);
+    if (!user) {
+        throw new Error('User not found');
     }
-);
+    if (user.programId && user.startDate) {
+        const program = await getProgram(user.programId);
+        if(program) {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const { workout } = getWorkoutForDay(program, user.startDate, today);
+            if (workout) {
+                const session = await getOrCreateWorkoutSession(userId, program.id, today, workout);
+                return { user, program, todaysWorkout: workout, todaysSession: session };
+            }
+            return { user, program, todaysWorkout: workout };
+        }
+    }
+    return { user };
+};
 
 
 const TrainingAssistantInputSchema = z.object({
@@ -71,45 +60,21 @@ const trainingAssistantFlow = ai.defineFlow(
     outputSchema: TrainingAssistantOutputSchema,
   },
   async (input) => {
-    // Initial generation request with the tool
+    // Step 1: Directly fetch the user's data using their ID.
+    const userData = await getUserWorkoutData(input.userId);
+
+    // Step 2: Pass the fetched data directly into the prompt context.
     const llmResponse = await ai.generate({
-        prompt: `You are a virtual AI training assistant. Use the available tools to get the user's workout data to answer their question and offer advice. Pay special attention to any notes the user may have left on their workout session.
-
-        Question: ${input.question}`,
-        tools: [getUserWorkoutDataTool],
-        toolConfig: {
-          usage: 'force',
-          options: {
-              getUserWorkoutData: {
-                  userId: input.userId
-              }
-          }
-      }
-    });
-
-    // Check if the model decided to use the tool
-    if (llmResponse.toolRequest) {
-        // Execute the tool and get the result
-        const toolResponse = await llmResponse.toolRequest.execute();
-
-        // Send the tool's output back to the model to get a final answer
-        const finalResponse = await ai.generate({
-            prompt: `You are an expert HYROX coach. You are answering a question from a user. Here is their question and their data that you requested.
-        
-            Question: ${input.question}
-            
-            User Data (from your tool call): ${JSON.stringify(toolResponse.output)}
+        prompt: `You are an expert HYROX coach. You are answering a question from a user. You have been provided with their data.
     
-            Provide a helpful and encouraging answer based on this data. If the user provided notes, incorporate them into your response.`,
-            output: { schema: TrainingAssistantOutputSchema }
-        });
+        Question: ${input.question}
         
-        return finalResponse.output!;
+        User Data: ${JSON.stringify(userData)}
 
-    } else {
-        // If the model didn't use the tool, it might have answered directly.
-        // We will return that answer, formatted correctly.
-        return { answer: llmResponse.text };
-    }
+        Provide a helpful and encouraging answer based on this data. If the user provided notes in their session, incorporate them into your response.`,
+        output: { schema: TrainingAssistantOutputSchema }
+    });
+    
+    return llmResponse.output!;
   }
 );

@@ -1,24 +1,25 @@
-
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Users can only read/write their own data, but any authenticated user can read.
+  
+    // Users can only read/update their own profile.
     match /users/{userId} {
-      allow read: if request.auth.uid != null;
-      allow create, update: if request.auth.uid == userId;
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
     }
     
-    // All authenticated users can read programs. Writes are disallowed from clients.
+    // Any authenticated user can read the list of programs.
+    // Writes are denied from the client.
     match /programs/{programId} {
-      allow read: if request.auth.uid != null;
-      allow write: if false; // Protect against client-side writes
+      allow read: if request.auth != null;
+      allow write: if false; 
     }
     
-    // Users can only manage their own workout sessions.
+    // Users can only create, read, and update their own workout sessions.
     match /workoutSessions/{sessionId} {
-      allow read, update: if request.auth.uid == resource.data.userId;
-      allow create: if request.auth.uid == request.resource.data.userId;
+      allow read, update: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
     }
   }
 }
