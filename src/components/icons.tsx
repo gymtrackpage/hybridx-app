@@ -6,7 +6,7 @@ export function Logo({ className }: { className?: string }) {
   // The component itself doesn't apply sizing, it relies on the passed className.
   return (
     <Image 
-      src="/full-logo.png" 
+      src="/icon-logo.png" 
       alt="HYBRIDX.CLUB Logo" 
       width={100} // Intrinsic width, actual size controlled by className
       height={100} // Intrinsic height, actual size controlled by className
