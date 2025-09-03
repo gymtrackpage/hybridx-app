@@ -75,7 +75,7 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
-        <CardTitle>Welcome Back</CardTitle>
+        <CardTitle className="font-headline">Welcome Back</CardTitle>
         <CardDescription>Enter your credentials to access your dashboard.</CardDescription>
       </CardHeader>
       <Form {...form}>
