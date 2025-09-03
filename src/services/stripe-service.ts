@@ -4,8 +4,7 @@
 
 import Stripe from 'stripe';
 import { headers } from 'next/headers';
-import { getUser } from './user-service';
-import { updateUser } from './user-service-client';
+import { getUser, updateUserAdmin } from './user-service';
 
 // Ensure environment variables are loaded
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -46,9 +45,8 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
                 },
             });
             customerId = customer.id;
-            // This is a client-side function, but it's safe to call from a server action.
-            // It correctly updates the user document in Firestore.
-            await updateUser(userId, { stripeCustomerId: customerId });
+            // Use the new server-side function to update the user
+            await updateUserAdmin(userId, { stripeCustomerId: customerId });
         }
         
         const priceId = process.env.STRIPE_PRICE_ID;

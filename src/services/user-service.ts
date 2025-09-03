@@ -37,3 +37,19 @@ export async function getUser(userId: string): Promise<User | null> {
     }
     return null;
 }
+
+// SERVER-SIDE update function
+export async function updateUserAdmin(userId: string, data: Partial<Omit<User, 'id'>>): Promise<void> {
+    const adminDb = getAdminDb();
+    const userRef = adminDb.collection('users').doc(userId);
+    const dataToUpdate: { [key: string]: any } = { ...data };
+
+    if (data.startDate) {
+        dataToUpdate.startDate = Timestamp.fromDate(data.startDate);
+    }
+    if (data.trialStartDate) {
+        dataToUpdate.trialStartDate = Timestamp.fromDate(data.trialStartDate);
+    }
+
+    await userRef.update(dataToUpdate);
+}
