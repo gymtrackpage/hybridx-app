@@ -1,7 +1,7 @@
 // src/services/user-service.ts
 'use server';
 
-import { collection, doc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { getAdminDb } from '@/lib/firebase-admin'; // Use Admin SDK for server-side
 import { db } from '@/lib/firebase'; // Keep client SDK for client-side
 import type { User } from '@/models/types';
@@ -17,6 +17,30 @@ export async function getUser(userId: string): Promise<User | null> {
         const data = docSnap.data();
         if (!data) return null;
         
+        const user: User = {
+            id: docSnap.id,
+            email: data.email,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            experience: data.experience,
+            frequency: data.frequency,
+            goal: data.goal,
+            programId: data.programId,
+            startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
+            personalRecords: data.personalRecords || {},
+        };
+        return user;
+    }
+    return null;
+}
+
+// CLIENT-SIDE function using Client SDK
+export async function getUserClient(userId: string): Promise<User | null> {
+    const docRef = doc(db, 'users', userId);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+        const data = docSnap.data();
         const user: User = {
             id: docSnap.id,
             email: data.email,

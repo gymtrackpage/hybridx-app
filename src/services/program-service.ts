@@ -1,7 +1,7 @@
 // src/services/program-service.ts
 'use server';
 
-import { collection, doc, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Program, Workout } from '@/models/types';
@@ -20,6 +20,16 @@ export async function getProgram(programId: string): Promise<Program | null> {
             // Let's assume for now it does, but this can be a point of failure if dates are wrong.
             return { id: docSnap.id, ...data } as Program;
         }
+    }
+    return null;
+}
+
+// CLIENT-SIDE function using Client SDK
+export async function getProgramClient(programId: string): Promise<Program | null> {
+    const docRef = doc(db, 'programs', programId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as Program;
     }
     return null;
 }

@@ -19,8 +19,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Logo } from './icons';
 import { Skeleton } from './ui/skeleton';
-import { getUser } from '@/services/user-service';
-import { getProgram, getWorkoutForDay } from '@/services/program-service';
+import { getUserClient } from '@/services/user-service';
+import { getProgramClient, getWorkoutForDay } from '@/services/program-service';
 import { getOrCreateWorkoutSession, getAllUserSessions } from '@/services/session-service';
 
 interface Message {
@@ -29,9 +29,9 @@ interface Message {
   content: string;
 }
 
-// Helper function to fetch all necessary data on the client
+// Helper function to fetch all necessary data on the client, using client-side SDK functions
 const getUserWorkoutData = async (userId: string) => {
-    const user = await getUser(userId);
+    const user = await getUserClient(userId);
     if (!user) {
         return { user: null };
     }
@@ -39,7 +39,7 @@ const getUserWorkoutData = async (userId: string) => {
     const sessions = await getAllUserSessions(userId);
 
     if (user.programId && user.startDate) {
-        const program = await getProgram(user.programId);
+        const program = await getProgramClient(user.programId);
         if(program) {
             const today = new Date();
             today.setHours(0,0,0,0);
