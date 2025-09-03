@@ -17,38 +17,45 @@ interface BeforeInstallPromptEvent extends Event {
 export function InstallPwaBanner() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [isIos, setIsIos] = useState(false);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      // Check if the app is already installed
-      if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
-          return;
-      }
       setInstallPrompt(e as BeforeInstallPromptEvent);
-      setIsVisible(true);
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    const isRunningStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+
+    if (!isRunningStandalone) {
+        setIsIos(isIosDevice);
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        // Show banner for iOS or if the prompt event is available
+        if (isIosDevice || installPrompt) {
+            setIsVisible(true);
+        }
+    }
+    
+    // Show banner immediately if prompt is already available
+    if(installPrompt && !isRunningStandalone) {
+        setIsVisible(true);
+    }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, []);
-  
-  // Register service worker
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then(registration => console.log('Service Worker registered with scope:', registration.scope))
-        .catch(error => console.error('Service Worker registration failed:', error));
-    }
-  }, []);
+  }, [installPrompt]);
+
 
   const handleInstallClick = async () => {
-    if (!installPrompt) return;
-    const { outcome } = await installPrompt.prompt();
+    if (!installPrompt) {
+        // This case is for iOS where we just show instructions
+        alert("To install, tap the Share button and then 'Add to Home Screen'.");
+        return;
+    };
+    await installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
     if (outcome === 'accepted') {
       console.log('User accepted the A2HS prompt');
     } else {
@@ -74,12 +81,15 @@ export function InstallPwaBanner() {
                 </Button>
             </AlertTitle>
             <AlertDescription className="pr-8">
-                Get the full experience. Install HYBRIDX.CLUB on your device.
+                {isIos 
+                    ? "Get the full experience. Add this app to your home screen."
+                    : "Get the full experience. Install HYBRIDX.CLUB on your device."
+                }
             </AlertDescription>
             <div className="mt-4 flex justify-end">
-                <Button onClick={handleInstallClick}>
+                <Button onClick={handleInstallClick} disabled={!installPrompt && !isIos}>
                     <Download className="mr-2 h-4 w-4" />
-                    Install
+                    {isIos ? "Show me how" : "Install"}
                 </Button>
             </div>
         </Alert>
