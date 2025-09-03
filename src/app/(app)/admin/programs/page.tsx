@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getAllPrograms, deleteProgram } from '@/services/program-service';
+import { getAllPrograms, deleteProgram } from '@/services/program-service-client';
 import type { Program } from '@/models/types';
 import { useToast } from '@/hooks/use-toast';
 import {

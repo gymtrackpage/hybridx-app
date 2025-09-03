@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Program, Workout, Exercise } from '@/models/types';
-import { createProgram } from '@/services/program-service';
+import { createProgram } from '@/services/program-service-client';
 
 interface ProgramImportDialogProps {
   isOpen: boolean;

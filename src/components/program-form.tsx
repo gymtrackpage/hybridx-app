@@ -24,7 +24,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
 import type { Program } from '@/models/types';
-import { createProgram, updateProgram } from '@/services/program-service';
+import { createProgram, updateProgram } from '@/services/program-service-client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from './ui/scroll-area';
 

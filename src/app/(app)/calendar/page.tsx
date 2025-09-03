@@ -8,10 +8,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
-import { getUser } from '@/services/user-service';
-import { getProgram } from '@/services/program-service';
+import { getUserClient } from '@/services/user-service-client';
+import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getAllUserSessions } from '@/services/session-service';
+import { getAllUserSessions } from '@/services/session-service-client';
 import type { User, Program, Workout, WorkoutSession } from '@/models/types';
 import { addDays, format, isSameDay } from 'date-fns';
 
@@ -33,9 +33,9 @@ export default function CalendarPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const user = await getUser(firebaseUser.uid);
+        const user = await getUserClient(firebaseUser.uid);
         if (user?.programId && user.startDate) {
-          const program = await getProgram(user.programId);
+          const program = await getProgramClient(user.programId);
           const sessions = await getAllUserSessions(firebaseUser.uid);
           if (program) {
             generateWorkoutEvents(program, user.startDate, sessions);

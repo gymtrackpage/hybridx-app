@@ -9,7 +9,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, AuthErrorCodes } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { createUser } from '@/services/user-service';
+import { createUser } from '@/services/user-service-client';
 
 import { Button } from '@/components/ui/button';
 import {

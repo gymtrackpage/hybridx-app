@@ -13,10 +13,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { auth } from '@/lib/firebase';
-import { getUser } from '@/services/user-service';
-import { getProgram } from '@/services/program-service';
+import { getUserClient } from '@/services/user-service-client';
+import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service';
+import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
 import type { Workout } from '@/models/types';
 
 function Timer({ startTime, isRunning }: { startTime: Date; isRunning: boolean }) {
@@ -63,9 +63,9 @@ export default function ActiveWorkoutPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const user = await getUser(firebaseUser.uid);
+        const user = await getUserClient(firebaseUser.uid);
         if (user?.programId && user.startDate) {
-          const program = await getProgram(user.programId);
+          const program = await getProgramClient(user.programId);
           if (program) {
             const currentWorkoutInfo = getWorkoutForDay(program, user.startDate, today);
             setWorkoutInfo(currentWorkoutInfo);

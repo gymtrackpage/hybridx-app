@@ -5,8 +5,8 @@ import { CheckCircle, Clock, Loader2, Dumbbell } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getAllPrograms } from '@/services/program-service';
-import { getUser, updateUser } from '@/services/user-service';
+import { getAllPrograms } from '@/services/program-service-client';
+import { getUserClient, updateUser } from '@/services/user-service-client';
 import type { Program, User } from '@/models/types';
 import { ProgramScheduleDialog } from '@/components/program-schedule-dialog';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -31,7 +31,7 @@ export default function ProgramsPage() {
 
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
           if (firebaseUser) {
-            const currentUser = await getUser(firebaseUser.uid);
+            const currentUser = await getUserClient(firebaseUser.uid);
             setUser(currentUser);
           }
           setLoading(false);

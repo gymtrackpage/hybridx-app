@@ -16,7 +16,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
-import { getUser, updateUser } from '@/services/user-service';
+import { getUserClient, updateUser } from '@/services/user-service-client';
 import type { User, PersonalRecords } from '@/models/types';
 
 const profileFormSchema = z.object({
@@ -53,7 +53,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const currentUser = await getUser(firebaseUser.uid);
+        const currentUser = await getUserClient(firebaseUser.uid);
         setUser(currentUser);
         if (currentUser) {
           profileForm.reset({

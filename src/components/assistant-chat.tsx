@@ -19,10 +19,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { Logo } from './icons';
 import { Skeleton } from './ui/skeleton';
-import { getUserClient } from '@/services/user-service';
-import { getProgramClient } from '@/services/program-service';
+import { getUserClient } from '@/services/user-service-client';
+import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getOrCreateWorkoutSession, getAllUserSessions } from '@/services/session-service';
+import { getOrCreateWorkoutSession, getAllUserSessions } from '@/services/session-service-client';
 
 interface Message {
   id: string;
