@@ -7,22 +7,16 @@ let adminDb: ReturnType<typeof getFirestore> | undefined = undefined;
 
 if (getApps().length) {
     adminApp = getApps()[0];
-} else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    console.log('Initializing Firebase Admin SDK with service account.');
-    try {
-        const serviceAccount = JSON.parse(
-            Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'base64').toString('utf-8')
-        );
-        adminApp = initializeApp({
-            credential: cert(serviceAccount)
-        });
-    } catch (e: any) {
-        console.error('Failed to parse GOOGLE_APPLICATION_CREDENTIALS:', e.message);
-    }
 } else {
-    console.warn(
-      'Firebase Admin SDK not initialized. GOOGLE_APPLICATION_CREDENTIALS environment variable is not set.'
-    );
+    // In a managed Google Cloud environment (like App Hosting, Cloud Functions, Cloud Run, GKE, etc.),
+    // the SDK will automatically discover the service account credentials.
+    // We don't need to manually parse GOOGLE_APPLICATION_CREDENTIALS.
+    try {
+        console.log('Initializing Firebase Admin SDK with default credentials.');
+        adminApp = initializeApp();
+    } catch (e: any) {
+        console.error('Failed to initialize Firebase Admin SDK. This can happen when GOOGLE_APPLICATION_CREDENTIALS are not set for local development or when permissions are insufficient.', e.message);
+    }
 }
 
 if (adminApp) {
