@@ -28,6 +28,14 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
  */
 export async function createCheckoutSession(userId: string): Promise<{ url: string | null }> {
     try {
+        // Configuration validation
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+        if (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') || process.env.STRIPE_SECRET_KEY.startsWith('rk_live_')) {
+            if (appUrl.includes('localhost')) {
+                throw new Error('Configuration error: You are using a live Stripe key with a localhost URL. NEXT_PUBLIC_APP_URL must be set to your public production URL in a live environment.');
+            }
+        }
+        
         const user = await getUser(userId);
         if (!user) {
             throw new Error(`User with ID ${userId} not found.`);
@@ -46,7 +54,6 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
                     },
                 });
                 customerId = customer.id;
-                // Use the new server-side function to update the user
                 await updateUserAdmin(userId, { stripeCustomerId: customerId });
             } catch (err: any) {
                 console.error('Error creating Stripe customer:', err);
@@ -55,7 +62,6 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
         }
         
         const priceId = process.env.STRIPE_PRICE_ID;
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
         try {
             const session = await stripe.checkout.sessions.create({
