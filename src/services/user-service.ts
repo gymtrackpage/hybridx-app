@@ -1,15 +1,19 @@
+// src/services/user-service.ts
 import { collection, doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { adminDb } from '@/lib/firebase-admin'; // Use Admin SDK for server-side
+import { db } from '@/lib/firebase'; // Keep client SDK for client-side
 import type { User } from '@/models/types';
 
-const usersCollection = collection(db, 'users');
-
+// SERVER-SIDE function using Admin SDK
 export async function getUser(userId: string): Promise<User | null> {
-    const docRef = doc(usersCollection, userId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
+    const usersCollection = adminDb.collection('users');
+    const docRef = usersCollection.doc(userId);
+    const docSnap = await docRef.get();
+
+    if (docSnap.exists) {
         const data = docSnap.data();
-        // Convert Firestore Timestamp to JS Date
+        if (!data) return null;
+        
         const user: User = {
             id: docSnap.id,
             email: data.email,
@@ -27,13 +31,15 @@ export async function getUser(userId: string): Promise<User | null> {
     return null;
 }
 
+// CLIENT-SIDE function using Client SDK
 export async function createUser(userId: string, data: Omit<User, 'id' | 'startDate' | 'programId' | 'personalRecords'>): Promise<User> {
+    const usersCollection = collection(db, 'users');
     const userRef = doc(usersCollection, userId);
     const userData = {
         ...data,
         programId: null,
         startDate: null,
-        personalRecords: {}, // Initialize with an empty object
+        personalRecords: {},
     };
     await setDoc(userRef, userData);
     const createdUser: User = { 
@@ -44,12 +50,12 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'startD
     return createdUser;
 }
 
-
+// CLIENT-SIDE function using Client SDK
 export async function updateUser(userId: string, data: Partial<Omit<User, 'id'>>): Promise<void> {
+    const usersCollection = collection(db, 'users');
     const userRef = doc(usersCollection, userId);
     const dataToUpdate: { [key: string]: any } = { ...data };
 
-    // Convert JS Date back to Firestore Timestamp if it exists
     if (data.startDate) {
         dataToUpdate.startDate = Timestamp.fromDate(data.startDate);
     }

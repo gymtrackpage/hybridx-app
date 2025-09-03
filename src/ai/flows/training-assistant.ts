@@ -60,7 +60,7 @@ const trainingAssistantFlow = ai.defineFlow(
     outputSchema: TrainingAssistantOutputSchema,
   },
   async (input) => {
-    // Step 1: Directly fetch the user's data using their ID.
+    // Step 1: Directly fetch the user's data using their ID. This now uses the Admin SDK.
     const userData = await getUserWorkoutData(input.userId);
 
     // Step 2: Pass the fetched data directly into the prompt context.
