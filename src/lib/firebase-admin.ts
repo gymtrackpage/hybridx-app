@@ -5,38 +5,44 @@ import { getFirestore } from 'firebase-admin/firestore';
 let adminApp: App | undefined = undefined;
 let adminDb: ReturnType<typeof getFirestore> | undefined = undefined;
 
-const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-  ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-  : undefined;
+function initializeAdminApp() {
+    if (getApps().length > 0) {
+        adminApp = getApps()[0];
+        adminDb = getFirestore(adminApp);
+        return;
+    }
 
-if (getApps().length) {
-    adminApp = getApps()[0];
-} else if (serviceAccount) {
-    // If a service account key is provided via environment variable, use it.
-    console.log('Initializing Firebase Admin SDK with service account credentials.');
-    adminApp = initializeApp({
-        credential: cert(serviceAccount)
-    });
-} else {
-    // In a managed Google Cloud environment (like App Hosting, Cloud Functions, Cloud Run),
-    // the SDK will automatically discover the service account credentials if not provided.
-    try {
-        console.log('Initializing Firebase Admin SDK with default credentials.');
-        adminApp = initializeApp();
-    } catch (e: any) {
-        console.error('Failed to initialize Firebase Admin SDK with default credentials. This can happen when service account permissions are insufficient.', e.message);
+    const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+    if (serviceAccountString) {
+        try {
+            const serviceAccount = JSON.parse(serviceAccountString);
+            console.log('Initializing Firebase Admin SDK with service account credentials.');
+            adminApp = initializeApp({
+                credential: cert(serviceAccount)
+            });
+            adminDb = getFirestore(adminApp);
+        } catch (e: any) {
+             console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Ensure it is a valid JSON string.', e.message);
+        }
+    } else {
+         try {
+            console.log('Initializing Firebase Admin SDK with default credentials.');
+            adminApp = initializeApp();
+            adminDb = getFirestore(adminApp);
+        } catch (e: any) {
+            console.error('Failed to initialize Firebase Admin SDK with default credentials. This can happen when service account permissions are insufficient.', e.message);
+        }
     }
 }
 
-
-if (adminApp) {
-    adminDb = getFirestore(adminApp);
-}
+// Call initialization
+initializeAdminApp();
 
 // Export a function that throws an error if the db is not initialized
 const getAdminDb = () => {
     if (!adminDb) {
-        throw new Error('Firebase Admin has not been initialized. Check server logs for details.');
+        throw new Error('Firebase Admin has not been initialized. Check server logs for initialization errors.');
     }
     return adminDb;
 }

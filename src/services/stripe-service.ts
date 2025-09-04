@@ -32,39 +32,14 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
  */
 export async function createCheckoutSession(userId: string): Promise<{ url: string | null }> {
     try {
-        // Configuration validation
         const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-        if (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') || process.env.STRIPE_SECRET_KEY.startsWith('rk_live_')) {
-            if (appUrl.includes('localhost')) {
-                throw new Error('Configuration error: You are using a live Stripe key with a localhost URL. NEXT_PUBLIC_APP_URL must be set to your public production URL in a live environment.');
-            }
+        
+        // Configuration validation
+        if (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') && appUrl.includes('localhost')) {
+           throw new Error('Configuration error: You are using a live Stripe key with a localhost URL. NEXT_PUBLIC_APP_URL must be set to your public production URL in a live environment.');
         }
         
-        // This is a more robust way to ensure the user document exists.
-        const adminDb = getAdminDb();
-        const userRef = adminDb.collection('users').doc(userId);
-        let userSnap = await userRef.get();
-        
-        if (!userSnap.exists) {
-            console.warn(`User document for ${userId} not found. Creating it now.`);
-            const authUser = await getAuth().getUser(userId);
-            if (!authUser.email) throw new Error('User email not found in Firebase Auth.');
-
-            const newUser: Omit<User, 'id'> = {
-                email: authUser.email,
-                firstName: '',
-                lastName: '',
-                experience: 'beginner',
-                frequency: '3',
-                goal: 'hybrid',
-                trialStartDate: new Date(),
-                subscriptionStatus: 'trial',
-            };
-            await userRef.set(newUser);
-            userSnap = await userRef.get(); // Re-fetch the snapshot after creation
-        }
-
-        const user = { id: userSnap.id, ...userSnap.data() } as User;
+        const user = await getUser(userId);
         
         if (!user) {
             throw new Error(`User with ID ${userId} could not be found or created.`);
@@ -114,15 +89,12 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
         }
 
     } catch (error: any) {
-        // This outer catch will now catch the more specific errors thrown from the inner blocks.
         console.error('An error occurred in createCheckoutSession:', error);
         
-        // Add specific check for the access token error
         if (error.message && error.message.includes('Could not refresh access token')) {
             throw new Error('Could not authenticate with Firebase. Please check server permissions.');
         }
 
-        // Re-throw the specific error message
         throw new Error(error.message);
     }
 }
