@@ -32,14 +32,14 @@ export async function POST(req: NextRequest) {
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted':
         const subscription = event.data.object as Stripe.Subscription;
-        await handleSubscriptionChange(subscription);
+        await handleSubscriptionChange(subscription, event.type);
         break;
 
       case 'invoice.payment_succeeded':
         const invoice = event.data.object as Stripe.Invoice;
         if (invoice.subscription) {
             const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
-            await handleSubscriptionChange(subscription);
+            await handleSubscriptionChange(subscription, 'invoice.payment_succeeded');
         }
         break;
       
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
           const failedInvoice = event.data.object as Stripe.Invoice;
           if (failedInvoice.subscription) {
               const subscription = await stripe.subscriptions.retrieve(failedInvoice.subscription as string);
-              await handleSubscriptionChange(subscription);
+              await handleSubscriptionChange(subscription, 'invoice.payment_failed');
           }
         break;
       
@@ -62,13 +62,12 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function handleSubscriptionChange(subscription: Stripe.Subscription) {
+async function handleSubscriptionChange(subscription: Stripe.Subscription, eventType: string) {
     const customerId = subscription.customer as string;
     
     console.log(`[Stripe Webhook] Handling subscription change for Stripe Customer ID: ${customerId}`);
     console.log(`[Stripe Webhook] Subscription status: ${subscription.status}`);
     console.log(`[Stripe Webhook] Subscription ID: ${subscription.id}`);
-
 
     const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
     const firebaseUID = customer.metadata.firebaseUID;
@@ -85,20 +84,25 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     
     const newStatus = subscription.status as SubscriptionStatus;
     
-    // Stripe uses 'canceled' for subscriptions that are terminated at the end of the period.
     const userData: Partial<User> = {
         subscriptionId: subscription.id,
-        subscriptionStatus: newStatus === 'canceled' ? 'expired' : newStatus, // Map 'canceled' to our 'expired' state
+        subscriptionStatus: newStatus,
         cancel_at_period_end: subscription.cancel_at_period_end,
     };
     
-    // If the subscription is active but collection is paused, set status to 'paused'
+    // If the subscription is active but collection is paused, set our internal status to 'paused'
     if (subscription.status === 'active' && subscription.pause_collection) {
         userData.subscriptionStatus = 'paused';
     }
 
-    // When a subscription is truly deleted/cancelled immediately
-    if (event.type === 'customer.subscription.deleted') {
+    // Stripe uses 'canceled' for subscriptions that are terminated (e.g., after non-payment).
+    // We will map this to our 'expired' state.
+    if (subscription.status === 'canceled') {
+        userData.subscriptionStatus = 'expired';
+    }
+
+    // When a subscription is truly deleted/cancelled immediately (rare)
+    if (eventType === 'customer.subscription.deleted') {
         userData.subscriptionStatus = 'expired';
         userData.subscriptionId = null;
     }
