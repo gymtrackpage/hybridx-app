@@ -87,6 +87,12 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
     } catch (error: any) {
         // This outer catch will now catch the more specific errors thrown from the inner blocks.
         console.error('An error occurred in createCheckoutSession:', error);
+        
+        // Add specific check for the access token error
+        if (error.message && error.message.includes('Could not refresh access token')) {
+            throw new Error('Could not authenticate with Firebase. Please check server permissions.');
+        }
+
         // Re-throw the specific error message
         throw new Error(error.message);
     }
