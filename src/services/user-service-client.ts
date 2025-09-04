@@ -11,6 +11,11 @@ export async function getUserClient(userId: string): Promise<User | null> {
 
     if (docSnap.exists()) {
         const data = docSnap.data();
+        // Fallback for trial start date if it's missing
+        const trialStartDate = data.trialStartDate instanceof Timestamp 
+            ? data.trialStartDate.toDate() 
+            : new Date();
+
         const user: User = {
             id: docSnap.id,
             email: data.email,
@@ -23,10 +28,11 @@ export async function getUserClient(userId: string): Promise<User | null> {
             startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
             personalRecords: data.personalRecords || {},
             isAdmin: data.isAdmin || false,
+            // Fallback for subscription status if it's missing
             subscriptionStatus: data.subscriptionStatus || 'trial',
             stripeCustomerId: data.stripeCustomerId,
             subscriptionId: data.subscriptionId,
-            trialStartDate: data.trialStartDate instanceof Timestamp ? data.trialStartDate.toDate() : undefined,
+            trialStartDate: trialStartDate,
         };
         return user;
     }
@@ -37,19 +43,26 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'startD
     const usersCollection = collection(db, 'users');
     const userRef = doc(usersCollection, userId);
     const trialStartDate = new Date();
-    const userData = {
+    
+    // This is the data that will be saved to Firestore.
+    // It correctly includes the subscription status and trial start date.
+    const userDataToSet = {
         ...data,
         programId: null,
         startDate: null,
         personalRecords: {},
         isAdmin: false,
         subscriptionStatus: 'trial',
+        stripeCustomerId: null,
+        subscriptionId: null,
         trialStartDate: Timestamp.fromDate(trialStartDate),
     };
-    await setDoc(userRef, userData);
-    const createdUser: User = { 
-        id: userId, 
-        ...data, 
+    await setDoc(userRef, userDataToSet);
+
+    // This is the user object returned to the application after creation.
+    const createdUser: User = {
+        id: userId,
+        ...data,
         personalRecords: {},
         isAdmin: false,
         subscriptionStatus: 'trial',
