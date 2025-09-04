@@ -66,6 +66,9 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     const customerId = subscription.customer as string;
     
     console.log(`[Stripe Webhook] Handling subscription change for Stripe Customer ID: ${customerId}`);
+    console.log(`[Stripe Webhook] Subscription status: ${subscription.status}`);
+    console.log(`[Stripe Webhook] Subscription ID: ${subscription.id}`);
+
 
     const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
     const firebaseUID = customer.metadata.firebaseUID;
@@ -82,16 +85,25 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     
     const newStatus = subscription.status as SubscriptionStatus;
     
+    // Stripe uses 'canceled' for subscriptions that are terminated at the end of the period.
     const userData: Partial<User> = {
         subscriptionId: subscription.id,
-        subscriptionStatus: newStatus,
+        subscriptionStatus: newStatus === 'canceled' ? 'expired' : newStatus, // Map 'canceled' to our 'expired' state
+        cancel_at_period_end: subscription.cancel_at_period_end,
     };
     
-    // For new subscriptions, ensure the trial status is overridden.
-    if (subscription.status === 'active') {
-        userData.subscriptionStatus = 'active';
+    // If the subscription is active but collection is paused, set status to 'paused'
+    if (subscription.status === 'active' && subscription.pause_collection) {
+        userData.subscriptionStatus = 'paused';
     }
 
+    // When a subscription is truly deleted/cancelled immediately
+    if (event.type === 'customer.subscription.deleted') {
+        userData.subscriptionStatus = 'expired';
+        userData.subscriptionId = null;
+    }
+
+
     await userRef.update(userData as { [key: string]: any });
-    console.log(`[Stripe Webhook] Successfully updated subscription for user ${firebaseUID} to status ${newStatus}`);
+    console.log(`[Stripe Webhook] Successfully updated subscription for user ${firebaseUID} to status ${userData.subscriptionStatus}`);
 }

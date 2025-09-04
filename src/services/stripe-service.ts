@@ -34,15 +34,31 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
     try {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL;
         
-        // Configuration validation
-        if (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') && appUrl.includes('localhost')) {
+        if (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') && (appUrl.includes('localhost') || appUrl.includes('127.0.0.1'))) {
            throw new Error('Configuration error: You are using a live Stripe key with a localhost URL. NEXT_PUBLIC_APP_URL must be set to your public production URL in a live environment.');
         }
         
-        const user = await getUser(userId);
+        let user = await getUser(userId);
         
         if (!user) {
-            throw new Error(`User with ID ${userId} could not be found or created.`);
+             const authUser = await getAuth().getUser(userId);
+             if (!authUser || !authUser.email) {
+                 throw new Error(`User with ID ${userId} could not be found in Firebase Auth.`);
+             }
+             const trialStartDate = new Date();
+             const newUser: Omit<User, 'id'> = {
+                email: authUser.email,
+                firstName: '',
+                lastName: '',
+                experience: 'beginner',
+                frequency: '3',
+                goal: 'hybrid',
+                subscriptionStatus: 'trial',
+                trialStartDate,
+             };
+             await getAdminDb().collection('users').doc(userId).set(newUser);
+             user = { id: userId, ...newUser };
+             console.log(`Created missing Firestore document for user ${userId} during checkout.`);
         }
 
         let customerId = user.stripeCustomerId;
@@ -96,5 +112,51 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
         }
 
         throw new Error(error.message);
+    }
+}
+
+/**
+ * Pauses a user's subscription.
+ * @param userId - The ID of the user in Firebase.
+ */
+export async function pauseSubscription(userId: string): Promise<void> {
+    const user = await getUser(userId);
+    if (!user || !user.subscriptionId) {
+        throw new Error('User or subscription not found.');
+    }
+    try {
+        await stripe.subscriptions.update(user.subscriptionId, {
+            pause_collection: {
+                behavior: 'void',
+            },
+        });
+        await updateUserAdmin(userId, { subscriptionStatus: 'paused' });
+    } catch (error: any) {
+        console.error(`Failed to pause subscription for user ${userId}:`, error);
+        throw new Error('Could not pause subscription. Please try again.');
+    }
+}
+
+/**
+ * Cancels a user's subscription at the end of the current billing period.
+ * @param userId - The ID of the user in Firebase.
+ */
+export async function cancelSubscription(userId: string): Promise<void> {
+    const user = await getUser(userId);
+    if (!user || !user.subscriptionId) {
+        throw new Error('User or subscription not found.');
+    }
+    try {
+        const subscription = await stripe.subscriptions.update(user.subscriptionId, {
+            cancel_at_period_end: true,
+        });
+        await updateUserAdmin(userId, { 
+            subscriptionStatus: 'canceled', 
+            cancel_at_period_end: true,
+            cancellation_effective_date: new Date(subscription.cancel_at * 1000)
+        });
+    } catch (error: any) {
+        console.error(`Failed to cancel subscription for user ${userId}:`, error);
+        throw new Error('Could not cancel subscription. Please try again.');
     }
 }

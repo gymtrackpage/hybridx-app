@@ -4,30 +4,46 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { differenceInDays, addMonths, format } from 'date-fns';
-import { Loader2, CheckCircle, ShieldCheck, Star } from 'lucide-react';
+import { Loader2, CheckCircle, ShieldCheck, Star, PauseCircle, XCircle } from 'lucide-react';
 
 import { auth } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
-import { createCheckoutSession } from '@/services/stripe-service';
+import { createCheckoutSession, pauseSubscription, cancelSubscription } from '@/services/stripe-service';
 import type { User } from '@/models/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function SubscriptionPage() {
     const [user, setUser] = useState<User | null>(null);
     const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [isRedirecting, setIsRedirecting] = useState(false);
+    const [isManaging, setIsManaging] = useState(false);
     const { toast } = useToast();
+
+    const fetchUserData = async (fbUser: FirebaseUser) => {
+        const appUser = await getUserClient(fbUser.uid);
+        setUser(appUser);
+    }
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
             if (fbUser) {
                 setFirebaseUser(fbUser);
-                const appUser = await getUserClient(fbUser.uid);
-                setUser(appUser);
+                await fetchUserData(fbUser);
             }
             setLoading(false);
         });
@@ -47,12 +63,40 @@ export default function SubscriptionPage() {
             } else {
                 throw new Error('Could not create checkout session.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Subscription error:', error);
-            toast({ title: 'Error', description: 'Could not redirect to payment page. Please try again.', variant: 'destructive' });
+            toast({ title: 'Error', description: error.message || 'Could not redirect to payment page.', variant: 'destructive' });
             setIsRedirecting(false);
         }
     };
+    
+    const handlePause = async () => {
+        if (!user?.subscriptionId) return;
+        setIsManaging(true);
+        try {
+            await pauseSubscription(user.id);
+            toast({ title: 'Success', description: 'Your subscription has been paused.'});
+            if (firebaseUser) await fetchUserData(firebaseUser);
+        } catch (error: any) {
+            toast({ title: 'Error', description: error.message, variant: 'destructive' });
+        } finally {
+            setIsManaging(false);
+        }
+    }
+
+    const handleCancel = async () => {
+        if (!user?.subscriptionId) return;
+        setIsManaging(true);
+        try {
+            await cancelSubscription(user.id);
+            toast({ title: 'Success', description: 'Your subscription will be cancelled at the end of the current billing period.'});
+            if (firebaseUser) await fetchUserData(firebaseUser);
+        } catch (error: any) {
+            toast({ title: 'Error', description: error.message, variant: 'destructive' });
+        } finally {
+            setIsManaging(false);
+        }
+    }
     
     if (loading) {
         return (
@@ -109,8 +153,69 @@ export default function SubscriptionPage() {
                     </CardHeader>
                     <CardContent>
                         <p className="text-muted-foreground">Thank you for being a member! You have full access to all features.</p>
-                        {/* Add link to Stripe Customer Portal here in the future */}
                     </CardContent>
+                    <CardFooter className="flex-col sm:flex-row gap-2 items-start">
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="outline" disabled={isManaging}>
+                                    {isManaging && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Pause Subscription
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Pause your subscription?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This will pause your payments. You can resume anytime. Your current access will continue until the end of this billing period.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handlePause}>Confirm Pause</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                         <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" disabled={isManaging}>
+                                     {isManaging && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Cancel Subscription
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure you want to cancel?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                       Your subscription will be cancelled at the end of the current billing period. You will lose access to all features at that time.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Keep Subscription</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleCancel}>Confirm Cancellation</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </CardFooter>
+                </Card>
+            )}
+
+            {status === 'paused' && (
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <PauseCircle className="h-6 w-6 text-yellow-500" />
+                            Subscription Paused
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground">Your subscription is currently paused. To regain access, please re-subscribe.</p>
+                    </CardContent>
+                     <CardFooter>
+                        <Button onClick={handleSubscribe} disabled={isRedirecting}>
+                            {isRedirecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                             Resume Subscription (£5/month)
+                        </Button>
+                    </CardFooter>
                 </Card>
             )}
 
@@ -141,15 +246,21 @@ export default function SubscriptionPage() {
                 </Card>
             )}
 
-            {['expired', 'cancelled', 'incomplete'].includes(status) && (
+            {['expired', 'canceled', 'incomplete'].includes(status) && (
                 <Card className="border-destructive/50 bg-destructive/5">
                      <CardHeader>
-                        <CardTitle className="text-destructive">
+                        <CardTitle className="text-destructive flex items-center gap-2">
+                            <XCircle className="h-6 w-6" />
                            {status === 'expired' && 'Subscription Expired'}
-                           {status === 'cancelled' && 'Subscription Cancelled'}
+                           {status === 'canceled' && 'Subscription Cancelled'}
                            {status === 'incomplete' && 'Action Required'}
                         </CardTitle>
-                        <CardDescription>Your access is currently limited. Please subscribe to regain full access.</CardDescription>
+                        <CardDescription>
+                            {user?.cancel_at_period_end 
+                                ? `Your subscription is set to cancel at the end of the current period. Your access will continue until then.`
+                                : `Your access is currently limited. Please subscribe to regain full access.`
+                            }
+                        </CardDescription>
                     </CardHeader>
                     <CardFooter>
                         <Button onClick={handleSubscribe} disabled={isRedirecting}>
@@ -159,7 +270,6 @@ export default function SubscriptionPage() {
                     </CardFooter>
                 </Card>
             )}
-
         </div>
     )
 }

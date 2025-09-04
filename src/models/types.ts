@@ -8,7 +8,7 @@ export interface PersonalRecords {
   [key: string]: string | undefined; // For flexible additional records
 }
 
-export type SubscriptionStatus = 'trial' | 'active' | 'cancelled' | 'expired' | 'incomplete';
+export type SubscriptionStatus = 'trial' | 'active' | 'canceled' | 'expired' | 'incomplete' | 'paused';
 
 export interface User {
   id: string;
@@ -27,6 +27,8 @@ export interface User {
   stripeCustomerId?: string;
   subscriptionId?: string | null;
   trialStartDate?: Date;
+  cancel_at_period_end?: boolean;
+  cancellation_effective_date?: Date;
 }
 
 export interface Program {
