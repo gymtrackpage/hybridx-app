@@ -5,6 +5,10 @@
 import Stripe from 'stripe';
 import { headers } from 'next/headers';
 import { getUser, updateUserAdmin } from './user-service';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { getAuth } from 'firebase-admin/auth';
+import type { User } from '@/models/types';
+
 
 // Ensure environment variables are loaded
 if (!process.env.STRIPE_SECRET_KEY) {
@@ -36,9 +40,34 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
             }
         }
         
-        const user = await getUser(userId);
+        // This is a more robust way to ensure the user document exists.
+        const adminDb = getAdminDb();
+        const userRef = adminDb.collection('users').doc(userId);
+        let userSnap = await userRef.get();
+        
+        if (!userSnap.exists) {
+            console.warn(`User document for ${userId} not found. Creating it now.`);
+            const authUser = await getAuth().getUser(userId);
+            if (!authUser.email) throw new Error('User email not found in Firebase Auth.');
+
+            const newUser: Omit<User, 'id'> = {
+                email: authUser.email,
+                firstName: '',
+                lastName: '',
+                experience: 'beginner',
+                frequency: '3',
+                goal: 'hybrid',
+                trialStartDate: new Date(),
+                subscriptionStatus: 'trial',
+            };
+            await userRef.set(newUser);
+            userSnap = await userRef.get(); // Re-fetch the snapshot after creation
+        }
+
+        const user = { id: userSnap.id, ...userSnap.data() } as User;
+        
         if (!user) {
-            throw new Error(`User with ID ${userId} not found.`);
+            throw new Error(`User with ID ${userId} could not be found or created.`);
         }
 
         let customerId = user.stripeCustomerId;
