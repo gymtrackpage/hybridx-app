@@ -3,6 +3,7 @@
 
 import { Timestamp } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin'; // Use Admin SDK for server-side
+import { getAuth } from 'firebase-admin/auth';
 import type { User } from '@/models/types';
 
 // SERVER-SIDE function using Admin SDK
@@ -34,8 +35,45 @@ export async function getUser(userId: string): Promise<User | null> {
             trialStartDate: data.trialStartDate instanceof Timestamp ? data.trialStartDate.toDate() : undefined,
         };
         return user;
+    } else {
+        // The user exists in Auth but not in Firestore. Let's create their document.
+        console.warn(`User document not found for UID: ${userId}. Creating one now.`);
+        try {
+            const authUser = await getAuth().getUser(userId);
+            if (!authUser.email) {
+                console.error(`User ${userId} does not have an email in Firebase Auth.`);
+                return null;
+            }
+
+            const trialStartDate = new Date();
+            const newUser: Omit<User, 'id'> = {
+                email: authUser.email,
+                firstName: '', // Default value, user can update in profile
+                lastName: '',  // Default value, user can update in profile
+                experience: 'beginner',
+                frequency: '3',
+                goal: 'hybrid',
+                programId: null,
+                startDate: undefined,
+                personalRecords: {},
+                isAdmin: false,
+                subscriptionStatus: 'trial',
+                trialStartDate: trialStartDate,
+            };
+
+            await docRef.set(newUser);
+            console.log(`Successfully created Firestore document for user ${userId}`);
+            
+            return {
+                id: userId,
+                ...newUser,
+            };
+
+        } catch (error) {
+            console.error(`Failed to create Firestore document for user ${userId}:`, error);
+            return null;
+        }
     }
-    return null;
 }
 
 // SERVER-SIDE update function
