@@ -5,7 +5,6 @@ import Stripe from 'stripe';
 import { headers } from 'next/headers';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { User, SubscriptionStatus } from '@/models/types';
-import { Timestamp } from 'firebase-admin/firestore';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20',
@@ -21,8 +20,9 @@ export async function POST(req: NextRequest) {
 
   try {
     event = stripe.webhooks.constructEvent(buf, sig, webhookSecret);
+    console.log(`[Stripe Webhook] Received event: ${event.type}`);
   } catch (err: any) {
-    console.error(`Webhook signature verification failed: ${err.message}`);
+    console.error(`[Stripe Webhook] Signature verification failed: ${err.message}`);
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
@@ -37,7 +37,6 @@ export async function POST(req: NextRequest) {
 
       case 'invoice.payment_succeeded':
         const invoice = event.data.object as Stripe.Invoice;
-        // Only handle for subscriptions, not one-off payments
         if (invoice.subscription) {
             const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
             await handleSubscriptionChange(subscription);
@@ -53,26 +52,31 @@ export async function POST(req: NextRequest) {
         break;
       
       default:
-        // console.log(`Unhandled event type: ${event.type}`);
+        // console.log(`[Stripe Webhook] Unhandled event type: ${event.type}`);
     }
 
     return new NextResponse(JSON.stringify({ received: true }), { status: 200 });
-  } catch (error) {
-    console.error('Error processing webhook:', error);
+  } catch (error: any) {
+    console.error(`[Stripe Webhook] Error processing webhook for event ${event.type}:`, error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
 
 async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     const customerId = subscription.customer as string;
+    
+    console.log(`[Stripe Webhook] Handling subscription change for Stripe Customer ID: ${customerId}`);
+
     const customer = await stripe.customers.retrieve(customerId) as Stripe.Customer;
     const firebaseUID = customer.metadata.firebaseUID;
 
     if (!firebaseUID) {
-        console.error(`No firebaseUID found for customer ${customerId}`);
+        console.error(`[Stripe Webhook] No firebaseUID found in metadata for customer ${customerId}`);
         return;
     }
     
+    console.log(`[Stripe Webhook] Found Firebase UID: ${firebaseUID}`);
+
     const adminDb = getAdminDb();
     const userRef = adminDb.collection('users').doc(firebaseUID);
     
@@ -89,5 +93,5 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     }
 
     await userRef.update(userData as { [key: string]: any });
-    console.log(`Updated subscription for user ${firebaseUID} to status ${newStatus}`);
+    console.log(`[Stripe Webhook] Successfully updated subscription for user ${firebaseUID} to status ${newStatus}`);
 }
