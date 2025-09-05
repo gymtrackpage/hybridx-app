@@ -5,7 +5,7 @@ import { Logo } from '@/components/icons';
 
 export default function WelcomePage() {
   return (
-    <div className="relative flex min-h-screen flex-col">
+    <div className="relative flex min-h-screen flex-col items-center justify-center">
       <Image
         src="/coverimage.jpg"
         alt="Athletes training"
@@ -16,13 +16,13 @@ export default function WelcomePage() {
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent" />
 
-      <div className="relative z-10 mt-auto flex flex-col items-center justify-end p-8 text-center text-white">
+      <div className="relative z-10 flex flex-col items-center justify-center p-8 text-center text-white">
         <Logo className="mb-4 h-16 w-16 invert" />
         <h1 className="font-headline text-4xl font-bold md:text-5xl">
           Unlock Your Peak Performance
         </h1>
         <p className="mt-4 max-w-lg text-lg text-white/90">
-          Your AI-powered partner for peak HYROX performance. Personalized training plans, expert coaching, and progress tracking.
+          Advnaced training plans for all abilities, expert coaching, and progress tracking with AI assistance.
         </p>
         <div className="mt-8 flex w-full max-w-xs flex-col gap-4">
           <Button asChild size="lg">
