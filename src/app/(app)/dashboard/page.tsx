@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, ChartTooltip, CartesianGrid } from '@/components/ui/chart';
+import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, ChartTooltip, CartesianGrid, ChartTooltipContent } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { auth } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
@@ -323,12 +323,28 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
                 <ChartContainer config={chartConfig} className="h-40 w-full">
-                    <RechartsBarChart data={progressData} margin={{ top: 20, right: 20, bottom: -10, left: -20 }}>
+                    <RechartsBarChart 
+                        accessibilityLayer
+                        data={progressData} 
+                        margin={{ top: 20, right: 10, left: 0, bottom: 0 }}
+                    >
                         <CartesianGrid vertical={false} />
-                        <XAxis dataKey="week" tickLine={false} axisLine={false} tickMargin={8} />
-                        <YAxis hide={true} />
-                        <ChartTooltip cursor={false} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
-                        <Bar dataKey="workouts" fill="hsl(var(--primary))" radius={4} />
+                        <XAxis 
+                            dataKey="week" 
+                            tickLine={false} 
+                            axisLine={false} 
+                            tickMargin={8}
+                            tickFormatter={(value) => value.slice(0, 3)}
+                        />
+                        <ChartTooltip 
+                            cursor={false} 
+                            content={<ChartTooltipContent indicator="dot" />} 
+                        />
+                        <Bar 
+                            dataKey="workouts" 
+                            fill="hsl(var(--primary))" 
+                            radius={8} 
+                        />
                     </RechartsBarChart>
                 </ChartContainer>
             </CardContent>
