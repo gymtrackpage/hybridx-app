@@ -9,6 +9,7 @@ import { subWeeks, startOfWeek, isWithinInterval } from 'date-fns';
 
 import { motivationalCoach } from '@/ai/flows/motivational-coach';
 import { dashboardSummary } from '@/ai/flows/dashboard-summary';
+import { workoutSummary } from '@/ai/flows/workout-summary';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -56,11 +57,14 @@ export default function DashboardPage() {
   const [motivationLoading, setMotivationLoading] = useState(false);
   const [summary, setSummary] = useState("Here's your plan for today. Let's get it done.");
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [workoutSummaryText, setWorkoutSummaryText] = useState("Assign a program to your profile to see your workout.");
+  const [workoutSummaryLoading, setWorkoutSummaryLoading] = useState(true);
   const router = useRouter();
   
   const fetchDashboardData = async (userId: string) => {
     setLoading(true);
     setSummaryLoading(true);
+    setWorkoutSummaryLoading(true);
     try {
       const currentUser = await getUserClient(userId);
       setUser(currentUser);
@@ -83,9 +87,27 @@ export default function DashboardPage() {
               today.setHours(0, 0, 0, 0);
               const session = await getOrCreateWorkoutSession(userId, currentProgram.id, today, workoutInfo.workout);
               setTodaysSession(session);
+              
+              // Generate AI workout summary
+              try {
+                  const workoutResult = await workoutSummary({
+                      userName: currentUser.firstName,
+                      workoutTitle: workoutInfo.workout.title,
+                      exercises: workoutInfo.workout.exercises.map(e => e.name).join(', '),
+                  });
+                  setWorkoutSummaryText(workoutResult.summary);
+              } catch (aiError) {
+                  console.error("Failed to generate AI workout summary:", aiError);
+                  setWorkoutSummaryText(workoutInfo.workout.title); // Fallback to title
+              } finally {
+                  setWorkoutSummaryLoading(false);
+              }
+
+            } else {
+                setWorkoutSummaryLoading(false);
             }
             
-            // Generate AI summary
+            // Generate AI dashboard summary
             try {
                 const summaryResult = await dashboardSummary({
                     userName: currentUser.firstName,
@@ -100,6 +122,8 @@ export default function DashboardPage() {
                 setSummary("Here's your plan for today. Let's get it done.");
             }
           }
+        } else {
+             setWorkoutSummaryLoading(false);
         }
       }
     } catch (error) {
@@ -219,7 +243,7 @@ export default function DashboardPage() {
               {program && todaysWorkout?.workout ? `Today's Workout (Day ${todaysWorkout.day})` : 'No Workout Assigned'}
             </CardTitle>
             <CardDescription>
-                {todaysWorkout?.workout ? todaysWorkout.workout.title : 'Assign a program to your profile to see your workout.'}
+                {workoutSummaryLoading ? <Skeleton className="h-5 w-full" /> : workoutSummaryText}
             </CardDescription>
           </CardHeader>
           <CardContent>
