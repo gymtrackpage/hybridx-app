@@ -8,6 +8,7 @@ import { BarChart, Target, Sparkles, Loader2 } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval } from 'date-fns';
 
 import { motivationalCoach } from '@/ai/flows/motivational-coach';
+import { dashboardSummary } from '@/ai/flows/dashboard-summary';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -53,17 +54,21 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [motivation, setMotivation] = useState('');
   const [motivationLoading, setMotivationLoading] = useState(false);
+  const [summary, setSummary] = useState("Here's your plan for today. Let's get it done.");
+  const [summaryLoading, setSummaryLoading] = useState(true);
   const router = useRouter();
   
   const fetchDashboardData = async (userId: string) => {
     setLoading(true);
+    setSummaryLoading(true);
     try {
       const currentUser = await getUserClient(userId);
       setUser(currentUser);
 
       if (currentUser) {
         const sessions = await getAllUserSessions(userId);
-        generateProgressData(sessions);
+        const weeklyProgress = generateProgressData(sessions);
+        setProgressData(weeklyProgress);
 
         if (currentUser.programId && currentUser.startDate) {
           const currentProgram = await getProgramClient(currentUser.programId);
@@ -76,9 +81,23 @@ export default function DashboardPage() {
             if (workoutInfo.workout) {
               const today = new Date();
               today.setHours(0, 0, 0, 0);
-              // We get the session here to calculate progress, but don't use it to disable the button
               const session = await getOrCreateWorkoutSession(userId, currentProgram.id, today, workoutInfo.workout);
               setTodaysSession(session);
+            }
+            
+            // Generate AI summary
+            try {
+                const summaryResult = await dashboardSummary({
+                    userName: currentUser.firstName,
+                    programName: currentProgram.name,
+                    daysCompleted: workoutInfo.day > 0 ? workoutInfo.day : 0,
+                    weeklyConsistency: `${weeklyProgress[3]?.workouts || 0} workouts completed in the last week.`
+                });
+                setSummary(summaryResult.summary);
+            } catch (aiError) {
+                console.error("Failed to generate AI summary:", aiError);
+                // Fallback to default message on error
+                setSummary("Here's your plan for today. Let's get it done.");
             }
           }
         }
@@ -87,6 +106,7 @@ export default function DashboardPage() {
         console.error("Error fetching dashboard data:", error);
     } finally {
         setLoading(false);
+        setSummaryLoading(false);
     }
   };
 
@@ -124,7 +144,7 @@ export default function DashboardPage() {
               workouts: completedInWeek
           });
       }
-      setProgressData(weeklyData);
+      return weeklyData;
   }
 
   const handleGetMotivation = async () => {
@@ -184,7 +204,11 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
           Welcome back, {user?.firstName || 'Athlete'}!
         </h1>
-        <p className="text-muted-foreground">Here&apos;s your plan for today. Let&apos;s get it done.</p>
+        {summaryLoading ? (
+            <Skeleton className="h-5 w-2/3" />
+        ) : (
+            <p className="text-muted-foreground">{summary}</p>
+        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
