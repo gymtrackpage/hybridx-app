@@ -1,31 +1,31 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if a user is an admin
+    // Improved admin check with error handling
     function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
     }
 
-    // Users can read and write to their own user document
     match /users/{userId} {
       allow read, update: if request.auth != null && request.auth.uid == userId;
-      // Allow create for new users
       allow create: if request.auth != null;
     }
 
-    // Any authenticated user can read programs. Only admins can write.
     match /programs/{programId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && isAdmin();
     }
 
-    // Users can only read and write their own workout sessions
     match /workoutSessions/{sessionId} {
-      allow read, write: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // For read operations, we check the existing resource on the server
+      allow get, list: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      // For write operations, we check the incoming resource from the client
+      allow create, update, delete: if request.auth != null && request.resource.data.userId == request.auth.uid;
     }
   }
 }
