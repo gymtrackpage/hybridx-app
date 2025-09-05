@@ -17,7 +17,7 @@ export default function WelcomePage() {
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent" />
 
       <div className="relative z-10 mt-auto flex flex-col items-center justify-end p-8 text-center text-white">
-        <Logo className="mb-4 h-16 w-16" />
+        <Logo className="mb-4 h-16 w-16 invert" />
         <h1 className="font-headline text-4xl font-bold md:text-5xl">
           Unlock Your Peak Performance
         </h1>
