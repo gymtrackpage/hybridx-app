@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -166,9 +167,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="w-full flex-1">
                 {/* Header content can go here, like breadcrumbs */}
             </div>
-            <InstallPwaBanner />
         </header>
-        <main className="flex-1 overflow-auto p-4 lg:p-6">{children}</main>
+        <main className="flex-1 overflow-auto p-4 lg:p-6 pb-28">{children}</main>
+        <InstallPwaBanner />
       </SidebarInset>
     </SidebarProvider>
   );
