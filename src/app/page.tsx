@@ -1,27 +1,38 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { LoginForm } from '@/components/auth-forms';
 import { Logo } from '@/components/icons';
 
-export default function LoginPage() {
+export default function WelcomePage() {
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="container z-40 bg-background">
-        <div className="flex h-20 items-center justify-between py-6">
-          <Link href="/" className="flex items-center gap-2">
-            <Logo className="h-8 w-8 text-primary" />
-            <span className="font-bold font-headline">HYBRIDX.CLUB</span>
-          </Link>
-          <nav>
-            <Button asChild>
-              <Link href="/signup">Get Started</Link>
-            </Button>
-          </nav>
+    <div className="relative flex min-h-screen flex-col">
+      <Image
+        src="/coverimage.jpg"
+        alt="Athletes training"
+        fill
+        className="object-cover"
+        priority
+        data-ai-hint="fitness running"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent" />
+
+      <div className="relative z-10 mt-auto flex flex-col items-center justify-end p-8 text-center text-white">
+        <Logo className="mb-4 h-16 w-16" />
+        <h1 className="font-headline text-4xl font-bold md:text-5xl">
+          Unlock Your Peak Performance
+        </h1>
+        <p className="mt-4 max-w-lg text-lg text-white/90">
+          Your AI-powered partner for peak HYROX performance. Personalized training plans, expert coaching, and progress tracking.
+        </p>
+        <div className="mt-8 flex w-full max-w-xs flex-col gap-4">
+          <Button asChild size="lg">
+            <Link href="/signup">Get Started</Link>
+          </Button>
+          <Button asChild variant="secondary" size="lg">
+            <Link href="/login">I'm Already a Member</Link>
+          </Button>
         </div>
-      </header>
-      <main className="flex flex-1 flex-col items-center justify-center p-4">
-        <LoginForm />
-      </main>
+      </div>
     </div>
   );
 }

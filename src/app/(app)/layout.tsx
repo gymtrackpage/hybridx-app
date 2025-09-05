@@ -78,7 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
 
       } else {
-        router.push('/');
+        router.push('/login');
       }
       setLoading(false);
     });
@@ -92,7 +92,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         title: 'Logged Out',
         description: 'You have been successfully logged out.',
       });
-      router.push('/');
+      router.push('/login');
     } catch (error) {
       console.error('Logout error:', error);
       toast({

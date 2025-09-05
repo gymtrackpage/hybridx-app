@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { SignupForm } from '@/components/auth-forms';
+import { Button } from '@/components/ui/button';
+import { LoginForm } from '@/components/auth-forms';
 import { Logo } from '@/components/icons';
 
-export default function SignupPage() {
+export default function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="container z-40 bg-background">
@@ -12,14 +13,14 @@ export default function SignupPage() {
             <span className="font-bold font-headline">HYBRIDX.CLUB</span>
           </Link>
           <nav>
-            <Link href="/login" className="text-sm font-medium text-muted-foreground hover:text-primary">
-              Already have an account? Sign In
-            </Link>
+            <Button asChild variant="ghost">
+              <Link href="/signup">Sign Up</Link>
+            </Button>
           </nav>
         </div>
       </header>
       <main className="flex flex-1 flex-col items-center justify-center p-4">
-        <SignupForm />
+        <LoginForm />
       </main>
     </div>
   );
