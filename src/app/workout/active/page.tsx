@@ -6,6 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Check, Flag, Loader2, Play, Pause, CalendarDays, Clock, Target } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
+import { workoutSummary } from '@/ai/flows/workout-summary';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -53,6 +54,8 @@ export default function ActiveWorkoutPage() {
   const [workoutInfo, setWorkoutInfo] = useState<{ day: number, workout: Workout | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState('');
+  const [summaryText, setSummaryText] = useState('');
+  const [summaryLoading, setSummaryLoading] = useState(true);
   
   const today = useMemo(() => {
       const d = new Date();
@@ -73,6 +76,23 @@ export default function ActiveWorkoutPage() {
               const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
               setSession(workoutSession);
               setNotes(workoutSession.notes || '');
+
+              // Fetch AI summary
+              try {
+                const summaryResult = await workoutSummary({
+                  userName: user.firstName,
+                  workoutTitle: currentWorkoutInfo.workout.title,
+                  exercises: currentWorkoutInfo.workout.exercises.map(e => e.name).join(', '),
+                });
+                setSummaryText(summaryResult.summary);
+              } catch (error) {
+                console.error("Failed to generate AI workout summary:", error);
+                setSummaryText(currentWorkoutInfo.workout.title); // Fallback
+              } finally {
+                setSummaryLoading(false);
+              }
+            } else {
+                setSummaryLoading(false);
             }
           }
         }
@@ -157,8 +177,10 @@ export default function ActiveWorkoutPage() {
                 <div className="flex items-center gap-3">
                     <Target className="h-8 w-8 text-foreground" />
                     <div>
-                        <CardTitle className="text-2xl font-bold tracking-tight">Today&apos;s Workout</CardTitle>
-                        <CardDescription className="font-medium text-foreground/80">{workout.title}</CardDescription>
+                        <CardTitle className="text-2xl font-bold tracking-tight">{workout.title}</CardTitle>
+                        <CardDescription className="font-medium text-foreground/80">
+                            {summaryLoading ? <Skeleton className="h-5 w-full mt-1" /> : summaryText}
+                        </CardDescription>
                     </div>
                 </div>
             </CardHeader>
