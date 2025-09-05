@@ -77,11 +77,6 @@ export default function ProgramsPage() {
         setIsScheduling(false);
     }
   };
-  
-  const getWorkoutFrequency = (program: Program) => {
-      const workoutDays = new Set(program.workouts.map(w => w.day % 7)).size;
-      return workoutDays;
-  }
 
   if (loading) {
     return (
@@ -123,10 +118,6 @@ export default function ProgramsPage() {
                                 <div className="flex items-center gap-1.5">
                                     <Dumbbell className="h-4 w-4" />
                                     <span>{program.workouts.length} workouts</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <Clock className="h-4 w-4" />
-                                    <span>{getWorkoutFrequency(program)} days/week</span>
                                 </div>
                             </div>
                         </CardContent>
