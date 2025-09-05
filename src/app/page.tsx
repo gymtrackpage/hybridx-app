@@ -5,7 +5,7 @@ import { Logo } from '@/components/icons';
 
 export default function WelcomePage() {
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center">
+    <div className="relative flex min-h-screen flex-col items-center justify-center p-4">
       <Image
         src="/coverimage.jpg"
         alt="Athletes training"
@@ -25,7 +25,7 @@ export default function WelcomePage() {
           Advnaced training plans for all abilities, expert coaching, and progress tracking with AI assistance.
         </p>
         <div className="mt-8 flex w-full max-w-xs flex-col gap-4">
-          <Button asChild size="lg">
+          <Button asChild size="lg" variant="accent">
             <Link href="/signup">Get Started</Link>
           </Button>
           <Button asChild variant="secondary" size="lg">
