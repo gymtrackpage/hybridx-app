@@ -29,7 +29,7 @@ export default function ProgramViewPage({ params }: { params: { programId: strin
   
   useEffect(() => {
     const fetchData = async () => {
-      const { programId } = params;
+      const programId = params.programId;
       if (!programId) {
         router.push('/programs');
         return;
