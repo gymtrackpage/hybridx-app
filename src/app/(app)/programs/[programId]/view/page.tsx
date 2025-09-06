@@ -75,114 +75,196 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
   const handleDownloadPDF = async () => {
     if (!program) return;
     setIsDownloading(true);
+
     try {
-      toast({ title: 'Generating PDF...', description: 'Please wait while we create your training calendar.' });
-      
-      const element = document.querySelector('.print-container');
-      if (!element) return;
-  
-      // Create a temporary clone for PDF generation with optimized styles
-      const clone = element.cloneNode(true) as HTMLElement;
-      clone.style.position = 'absolute';
-      clone.style.left = '-9999px';
-      clone.style.top = '0';
-      clone.style.width = '1200px'; // Fixed width for consistency
-      clone.style.background = 'white';
-      clone.style.padding = '20px';
-      clone.style.fontFamily = 'Arial, sans-serif';
-      
-      // Apply PDF-specific styles to the clone
-      const style = document.createElement('style');
-      style.textContent = `
-        .pdf-clone h1 { font-size: 18px !important; margin-bottom: 8px !important; }
-        .pdf-clone p { font-size: 12px !important; margin-bottom: 15px !important; }
-        .pdf-clone h2 { font-size: 14px !important; margin: 10px 0 8px 0 !important; }
-        .pdf-clone .day-cell { 
-          min-height: 100px !important; 
-          padding: 6px !important;
-          border: 1px solid #333 !important;
-          font-size: 9px !important;
-          margin-bottom: 2px !important;
+        toast({ title: 'Generating PDF...', description: 'Please wait while we create your training calendar.' });
+
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: 'a4',
+            compress: true,
+        });
+
+        const pageWidth = 297;
+        const pageHeight = 210;
+        const margin = 10;
+        const contentWidth = pageWidth - (margin * 2);
+
+        const workoutsByDay = new Map(program.workouts.map(w => [w.day, w]));
+        const maxDay = program.workouts.reduce((max, w) => Math.max(max, w.day), 0);
+        const totalWeeks = Math.ceil(maxDay / 7);
+
+        // Calculate weeks per page (approximately 2-3 weeks fit well on landscape A4)
+        const weeksPerPage = 2;
+        const totalPages = Math.ceil(totalWeeks / weeksPerPage);
+
+        for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+            if (pageIndex > 0) pdf.addPage();
+
+            const startWeek = pageIndex * weeksPerPage;
+            const endWeek = Math.min(startWeek + weeksPerPage, totalWeeks);
+
+            // Create a temporary container for this page's content
+            const pageContainer = document.createElement('div');
+            pageContainer.style.width = '1200px';
+            pageContainer.style.background = 'white';
+            pageContainer.style.padding = '20px';
+            pageContainer.style.fontFamily = 'Arial, sans-serif';
+            pageContainer.style.position = 'absolute';
+            pageContainer.style.left = '-9999px';
+            pageContainer.style.top = '0';
+
+            // Add header only on first page
+            if (pageIndex === 0) {
+                const header = document.createElement('div');
+                header.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                    <div>
+                    <h1 style="font-size: 18px; margin: 0; font-weight: bold;">${program.name}</h1>
+                    <p style="font-size: 11px; margin: 4px 0 0 0; color: #666; max-width: 600px;">${program.description}</p>
+                    </div>
+                    <div style="font-size: 14px; font-weight: bold; white-space: nowrap;">HYBRIDX.CLUB</div>
+                </div>
+                `;
+                pageContainer.appendChild(header);
+            }
+
+            // Add weeks for this page
+            for (let weekIndex = startWeek; weekIndex < endWeek; weekIndex++) {
+                const weekDiv = document.createElement('div');
+                weekDiv.style.marginBottom = '10px';
+                
+                const weekHeader = document.createElement('h2');
+                weekHeader.textContent = `Week ${weekIndex + 1}`;
+                weekHeader.style.fontSize = '14px';
+                weekHeader.style.margin = '0 0 8px 0';
+                weekHeader.style.fontWeight = 'bold';
+                weekDiv.appendChild(weekHeader);
+
+                const gridDiv = document.createElement('div');
+                gridDiv.style.display = 'grid';
+                gridDiv.style.gridTemplateColumns = 'repeat(7, 1fr)';
+                gridDiv.style.gap = '2px';
+
+                for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+                    const currentDay = weekIndex * 7 + dayIndex + 1;
+                    const workout = currentDay <= maxDay ? workoutsByDay.get(currentDay) : null;
+
+                    const dayCell = document.createElement('div');
+                    dayCell.style.cssText = `
+                        border: 1px solid #ccc;
+                        padding: 6px;
+                        min-height: 90px;
+                        background: #fff;
+                        font-size: 8px;
+                        display: flex;
+                        flex-direction: column;
+                        border-radius: 4px;
+                    `;
+
+                    const dayNumber = document.createElement('div');
+                    dayNumber.textContent = (currentDay).toString();
+                    dayNumber.style.cssText = `
+                        background: #f4f4f5;
+                        color: #71717a;
+                        border-radius: 4px;
+                        padding: 2px 4px;
+                        font-size: 8px;
+                        font-weight: 500;
+                        margin-bottom: 4px;
+                        align-self: flex-end;
+                    `;
+                    dayCell.appendChild(dayNumber);
+
+                    if (workout) {
+                        const isRestDay = workout.title.toLowerCase().includes('rest') || 
+                                        workout.title.toLowerCase().includes('recovery');
+
+                        if (isRestDay) {
+                            const restText = document.createElement('div');
+                            restText.textContent = workout.title;
+                            restText.style.cssText = `
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                flex-grow: 1;
+                                font-size: 9px;
+                                font-weight: 500;
+                                color: #a1a1aa;
+                                text-align: center;
+                            `;
+                            dayCell.appendChild(restText);
+                        } else {
+                            const workoutTitle = document.createElement('div');
+                            workoutTitle.textContent = workout.title;
+                            workoutTitle.style.cssText = `
+                                font-size: 9px;
+                                font-weight: bold;
+                                margin-bottom: 4px;
+                                color: #008080;
+                            `;
+                            dayCell.appendChild(workoutTitle);
+
+                            const exerciseList = document.createElement('ul');
+                            exerciseList.style.cssText = `
+                                margin: 0;
+                                padding: 0;
+                                list-style-position: inside;
+                            `;
+                            workout.exercises.forEach(exercise => {
+                                const exerciseItem = document.createElement('li');
+                                exerciseItem.innerHTML = `<strong style="color: #18181b;">${exercise.name}:</strong> ${exercise.details}`;
+                                exerciseItem.style.cssText = `
+                                font-size: 8px;
+                                line-height: 1.3;
+                                margin-bottom: 2px;
+                                color: #52525b;
+                                `;
+                                exerciseList.appendChild(exerciseItem);
+                            });
+                            dayCell.appendChild(exerciseList);
+                        }
+                    }
+                    gridDiv.appendChild(dayCell);
+                }
+                weekDiv.appendChild(gridDiv);
+                pageContainer.appendChild(weekDiv);
+            }
+
+            document.body.appendChild(pageContainer);
+
+            // Generate canvas for this page
+            const canvas = await html2canvas(pageContainer, {
+                scale: 1.5,
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff',
+            });
+
+            document.body.removeChild(pageContainer);
+
+            const imgData = canvas.toDataURL('image/png', 0.95);
+            const imgHeight = (canvas.height * contentWidth) / canvas.width;
+
+            pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, imgHeight > contentHeight ? contentHeight : imgHeight);
         }
-        .pdf-clone .day-cell h3 { font-size: 10px !important; margin-bottom: 4px !important; }
-        .pdf-clone .day-cell li { 
-          font-size: 8px !important; 
-          line-height: 1.2 !important;
-          margin-bottom: 1px !important;
-        }
-        .pdf-clone .day-cell strong { font-size: 8px !important; }
-        .pdf-clone .grid { gap: 1px !important; }
-        .pdf-clone .badge { font-size: 8px !important; padding: 2px 4px !important; }
-        .pdf-clone .text-sm { font-size: 8px !important; }
-        .pdf-clone .text-xs { font-size: 7px !important; }
-      `;
-      
-      clone.className += ' pdf-clone';
-      document.head.appendChild(style);
-      document.body.appendChild(clone);
-  
-      // Generate canvas with higher quality settings
-      const canvas = await html2canvas(clone, {
-        scale: 1.5,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        width: 1200,
-        height: clone.scrollHeight,
-      });
-  
-      // Clean up
-      document.body.removeChild(clone);
-      document.head.removeChild(style);
-  
-      const imgData = canvas.toDataURL('image/png', 0.95);
-      
-      // Create PDF with optimized settings
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4',
-        compress: true,
-      });
-  
-      const pageWidth = 297; // A4 landscape width
-      const pageHeight = 210; // A4 landscape height
-      const margin = 10;
-      const imgWidth = pageWidth - (margin * 2);
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-  
-      let position = margin;
-      let remainingHeight = imgHeight;
-      let pageCount = 1;
-  
-      // Add first page
-      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
-  
-      // Add additional pages if content is too long
-      while (remainingHeight > (pageHeight - margin * 2)) {
-        remainingHeight -= (pageHeight - margin * 2);
-        pdf.addPage();
-        pageCount++;
+
+        const fileName = `${program.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_training_calendar.pdf`;
+        pdf.save(fileName);
         
-        const yOffset = -(pageCount - 1) * (pageHeight - margin * 2);
-        pdf.addImage(imgData, 'PNG', margin, yOffset + margin, imgWidth, imgHeight);
-      }
-  
-      const fileName = `${program.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_training_calendar.pdf`;
-      pdf.save(fileName);
-      
-      toast({ title: 'PDF Downloaded!', description: `Your ${pageCount}-page training calendar has been saved.` });
+        toast({ title: 'PDF Downloaded!', description: `Your ${totalPages}-page training calendar has been saved.` });
     } catch (error) {
-      console.error('PDF generation failed:', error);
-      toast({ 
-        title: 'Error', 
-        description: 'Failed to generate PDF. Please try the print option instead.',
-        variant: 'destructive' 
-      });
+        console.error('PDF generation failed:', error);
+        toast({ 
+            title: 'Error', 
+            description: 'Failed to generate PDF. Please try again.',
+            variant: 'destructive' 
+        });
     } finally {
         setIsDownloading(false);
     }
-  };
+};
   
   const handleScheduleProgram = async (programId: string, startDate: Date) => {
     if (!user) {
