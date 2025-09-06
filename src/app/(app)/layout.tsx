@@ -31,6 +31,7 @@ import {
   SidebarInset,
   SidebarTrigger,
   SidebarSeparator,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { Logo } from '@/components/icons';
 import { useToast } from '@/hooks/use-toast';
@@ -52,6 +53,45 @@ const navItems = [
 const adminNavItems = [
     { href: '/admin/programs', icon: Shield, label: 'Manage Programs' },
 ];
+
+function NavMenu() {
+    const { setOpenMobile } = useSidebar();
+    const pathname = usePathname();
+
+    const handleLinkClick = () => {
+        setOpenMobile(false);
+    };
+
+    return (
+        <>
+            <SidebarMenu>
+                {navItems.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                        <SidebarMenuButton asChild tooltip={item.label} isActive={pathname.startsWith(item.href)}>
+                            <Link href={item.href} onClick={handleLinkClick}>
+                                <item.icon />
+                                <span>{item.label}</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                ))}
+            </SidebarMenu>
+            <SidebarSeparator />
+            <SidebarMenu>
+                {adminNavItems.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                        <SidebarMenuButton asChild tooltip={item.label} isActive={pathname.startsWith(item.href)}>
+                            <Link href={item.href} onClick={handleLinkClick}>
+                                <item.icon />
+                                <span>{item.label}</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
+                ))}
+            </SidebarMenu>
+        </>
+    );
+}
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -114,31 +154,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
         </SidebarHeader>
         <SidebarContent>
-          <SidebarMenu>
-            {navItems.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton asChild tooltip={item.label}>
-                  <Link href={item.href}>
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
-          <SidebarSeparator />
-           <SidebarMenu>
-            {adminNavItems.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton asChild tooltip={item.label}>
-                  <Link href={item.href}>
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
+            <NavMenu />
         </SidebarContent>
         <SidebarFooter>
           <div className="flex w-full items-center justify-between p-2">
