@@ -138,7 +138,6 @@ export default function ActiveWorkoutPage() {
         <Card className="bg-accent/20 border-accent">
             <CardHeader>
                 <div className="flex items-center gap-3">
-                    <Target className="h-8 w-8 text-foreground" />
                     <div>
                         <CardTitle className="text-2xl font-bold tracking-tight">{workout.title}</CardTitle>
                         <CardDescription className="font-medium text-foreground/80">
