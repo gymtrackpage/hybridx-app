@@ -18,7 +18,7 @@ export function ProgramCalendarView({ program }: ProgramCalendarViewProps) {
   const totalWeeks = totalDays / 7;
 
   return (
-    <div className="bg-background text-foreground font-sans p-4 sm:p-8 rounded-lg border shadow-sm">
+    <div className="print-container bg-background text-foreground font-sans p-4 sm:p-8 rounded-lg border shadow-sm">
       <style jsx global>{`
         @media print {
           body {
@@ -40,7 +40,7 @@ export function ProgramCalendarView({ program }: ProgramCalendarViewProps) {
           }
         }
       `}</style>
-      <div className="print-container">
+      <div>
         <header className="mb-6 flex flex-col sm:flex-row justify-between items-start gap-4">
           <div>
             <h1 className="text-3xl font-bold font-headline">{program.name}</h1>
