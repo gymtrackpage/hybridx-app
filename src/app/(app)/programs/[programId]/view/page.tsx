@@ -1,7 +1,7 @@
 // src/app/(app)/programs/[programId]/view/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ProgramCalendarView } from '@/components/program-calendar-view';
 import { ProgramScheduleDialog } from '@/components/program-schedule-dialog';
 
-export default function ProgramViewPage({ params }: { params: { programId: string } }) {
+export default function ProgramViewPage({ params }: { params: Promise<{ programId: string }> }) {
   const [program, setProgram] = useState<Program | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,7 +26,9 @@ export default function ProgramViewPage({ params }: { params: { programId: strin
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const { programId } = params;
+  
+  // Unwrap the params Promise
+  const { programId } = use(params);
   
   useEffect(() => {
     const fetchData = async (id: string) => {
@@ -61,8 +63,9 @@ export default function ProgramViewPage({ params }: { params: { programId: strin
         setLoading(false);
       }
     };
+    
     if (programId) {
-        fetchData(programId as string);
+      fetchData(programId);
     }
   }, [programId, router, toast]);
 
