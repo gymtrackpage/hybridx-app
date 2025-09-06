@@ -124,7 +124,10 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                     <h1 style="font-size: 18px; margin: 0; font-weight: bold; color: #008080;">${program.name}</h1>
                     <p style="font-size: 11px; margin: 4px 0 0 0; color: #666; max-width: 600px;">${program.description}</p>
                     </div>
-                    <div style="font-size: 14px; font-weight: bold; white-space: nowrap;">HYBRIDX.CLUB</div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <img src="/icon-logo.png" style="width: 24px; height: 24px;" />
+                      <div style="font-size: 14px; font-weight: bold; white-space: nowrap;">HYBRIDX.CLUB</div>
+                    </div>
                 </div>
                 `;
                 pageContainer.appendChild(header);
