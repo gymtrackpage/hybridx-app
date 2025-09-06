@@ -38,6 +38,7 @@ import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getOrCreateWorkoutSession, getAllUserSessions, type WorkoutSession } from '@/services/session-service-client';
 import type { User, Program, Workout } from '@/models/types';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 const chartConfig = {
   workouts: {
@@ -242,8 +243,14 @@ export default function DashboardPage() {
               <Target className="h-6 w-6" />
               {program && todaysWorkout?.workout ? `Today's Workout (Day ${todaysWorkout.day})` : 'No Workout Assigned'}
             </CardTitle>
-            <CardDescription>
-                {workoutSummaryLoading ? <Skeleton className="h-5 w-full" /> : workoutSummaryText}
+            <CardDescription asChild>
+                <div className={cn("mt-2 p-3 bg-accent/20 border border-accent/50 rounded-md transform -rotate-1 shadow-sm", {
+                    "animate-pulse": workoutSummaryLoading
+                })}>
+                     <p className="rotate-1 text-accent-foreground/90 italic">
+                        {workoutSummaryLoading ? "Generating your daily tip..." : workoutSummaryText}
+                    </p>
+                </div>
             </CardDescription>
           </CardHeader>
           <CardContent>
