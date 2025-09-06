@@ -26,17 +26,18 @@ export default function ProgramViewPage({ params }: { params: { programId: strin
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const { programId } = params;
   
   useEffect(() => {
-    const fetchData = async (programId: string) => {
-      if (!programId) {
+    const fetchData = async (id: string) => {
+      if (!id) {
         router.push('/programs');
         return;
       }
 
       try {
         const [fetchedProgram, unsubscribeAuth] = await Promise.all([
-          getProgramClient(programId),
+          getProgramClient(id),
           onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
               const currentUser = await getUserClient(firebaseUser.uid);
@@ -60,10 +61,10 @@ export default function ProgramViewPage({ params }: { params: { programId: strin
         setLoading(false);
       }
     };
-    if (params.programId) {
-        fetchData(params.programId as string);
+    if (programId) {
+        fetchData(programId as string);
     }
-  }, [params.programId, router, toast]);
+  }, [programId, router, toast]);
 
   const handlePrint = () => {
     window.print();
