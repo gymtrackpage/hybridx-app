@@ -16,6 +16,13 @@ import { getUserClient, updateUser } from '@/services/user-service-client';
 import { useToast } from '@/hooks/use-toast';
 
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProgramCalendarView } from '@/components/program-calendar-view';
 import { ProgramScheduleDialog } from '@/components/program-schedule-dialog';
@@ -310,7 +317,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
 
   return (
     <>
-      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
+      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <Button variant="outline" asChild>
             <Link href="/programs">
                 <ArrowLeft className="mr-2" />
@@ -331,7 +338,36 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
         </div>
       </div>
       
-      <ProgramCalendarView program={program} />
+      <Card>
+          <CardHeader>
+              <CardTitle>{program.name}</CardTitle>
+              <CardDescription>{program.description}</CardDescription>
+          </CardHeader>
+          <CardContent>
+              <Accordion type="single" collapsible className="w-full">
+                  {program.workouts.map((workout) => (
+                      <AccordionItem value={`day-${workout.day}`} key={workout.day}>
+                          <AccordionTrigger>Day {workout.day}: {workout.title}</AccordionTrigger>
+                          <AccordionContent>
+                              <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                                  {workout.exercises.map((exercise, index) => (
+                                      <li key={index}>
+                                          <span className="font-medium text-foreground">{exercise.name}:</span> {exercise.details}
+                                      </li>
+                                  ))}
+                              </ul>
+                          </AccordionContent>
+                      </AccordionItem>
+                  ))}
+              </Accordion>
+          </CardContent>
+      </Card>
+      
+      {/* This component is now hidden from the user but used for PDF generation */}
+      <div className="hidden">
+        <ProgramCalendarView program={program} />
+      </div>
+
 
       <ProgramScheduleDialog
         program={program}
