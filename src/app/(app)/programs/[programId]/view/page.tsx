@@ -81,42 +81,97 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
       const element = document.querySelector('.print-container');
       if (!element) return;
   
-      const canvas = await html2canvas(element as HTMLElement, {
-        scale: 2,
+      // Create a temporary clone for PDF generation with optimized styles
+      const clone = element.cloneNode(true) as HTMLElement;
+      clone.style.position = 'absolute';
+      clone.style.left = '-9999px';
+      clone.style.top = '0';
+      clone.style.width = '1200px'; // Fixed width for consistency
+      clone.style.background = 'white';
+      clone.style.padding = '20px';
+      clone.style.fontFamily = 'Arial, sans-serif';
+      
+      // Apply PDF-specific styles to the clone
+      const style = document.createElement('style');
+      style.textContent = `
+        .pdf-clone h1 { font-size: 18px !important; margin-bottom: 8px !important; }
+        .pdf-clone p { font-size: 12px !important; margin-bottom: 15px !important; }
+        .pdf-clone h2 { font-size: 14px !important; margin: 10px 0 8px 0 !important; }
+        .pdf-clone .day-cell { 
+          min-height: 100px !important; 
+          padding: 6px !important;
+          border: 1px solid #333 !important;
+          font-size: 9px !important;
+          margin-bottom: 2px !important;
+        }
+        .pdf-clone .day-cell h3 { font-size: 10px !important; margin-bottom: 4px !important; }
+        .pdf-clone .day-cell li { 
+          font-size: 8px !important; 
+          line-height: 1.2 !important;
+          margin-bottom: 1px !important;
+        }
+        .pdf-clone .day-cell strong { font-size: 8px !important; }
+        .pdf-clone .grid { gap: 1px !important; }
+        .pdf-clone .badge { font-size: 8px !important; padding: 2px 4px !important; }
+        .pdf-clone .text-sm { font-size: 8px !important; }
+        .pdf-clone .text-xs { font-size: 7px !important; }
+      `;
+      
+      clone.className += ' pdf-clone';
+      document.head.appendChild(style);
+      document.body.appendChild(clone);
+  
+      // Generate canvas with higher quality settings
+      const canvas = await html2canvas(clone, {
+        scale: 1.5,
         useCORS: true,
         logging: false,
-        width: element.scrollWidth,
-        height: element.scrollHeight,
+        backgroundColor: '#ffffff',
+        width: 1200,
+        height: clone.scrollHeight,
       });
   
-      const imgData = canvas.toDataURL('image/png');
+      // Clean up
+      document.body.removeChild(clone);
+      document.head.removeChild(style);
+  
+      const imgData = canvas.toDataURL('image/png', 0.95);
+      
+      // Create PDF with optimized settings
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
         format: 'a4',
+        compress: true,
       });
   
-      const imgWidth = 297; // A4 landscape width in mm
-      const pageHeight = 210; // A4 landscape height in mm
+      const pageWidth = 297; // A4 landscape width
+      const pageHeight = 210; // A4 landscape height
+      const margin = 10;
+      const imgWidth = pageWidth - (margin * 2);
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
   
-      let position = 0;
+      let position = margin;
+      let remainingHeight = imgHeight;
+      let pageCount = 1;
   
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      // Add first page
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight);
   
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
+      // Add additional pages if content is too long
+      while (remainingHeight > (pageHeight - margin * 2)) {
+        remainingHeight -= (pageHeight - margin * 2);
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        pageCount++;
+        
+        const yOffset = -(pageCount - 1) * (pageHeight - margin * 2);
+        pdf.addImage(imgData, 'PNG', margin, yOffset + margin, imgWidth, imgHeight);
       }
   
       const fileName = `${program.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_training_calendar.pdf`;
       pdf.save(fileName);
       
-      toast({ title: 'PDF Downloaded!', description: 'Your training calendar has been saved.' });
+      toast({ title: 'PDF Downloaded!', description: `Your ${pageCount}-page training calendar has been saved.` });
     } catch (error) {
       console.error('PDF generation failed:', error);
       toast({ 
@@ -125,7 +180,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
         variant: 'destructive' 
       });
     } finally {
-      setIsDownloading(false);
+        setIsDownloading(false);
     }
   };
   
