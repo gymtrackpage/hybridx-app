@@ -121,7 +121,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                 header.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
                     <div>
-                    <h1 style="font-size: 18px; margin: 0; font-weight: bold;">${program.name}</h1>
+                    <h1 style="font-size: 18px; margin: 0; font-weight: bold; color: #008080;">${program.name}</h1>
                     <p style="font-size: 11px; margin: 4px 0 0 0; color: #666; max-width: 600px;">${program.description}</p>
                     </div>
                     <div style="font-size: 14px; font-weight: bold; white-space: nowrap;">HYBRIDX.CLUB</div>
@@ -166,8 +166,8 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                     const dayNumber = document.createElement('div');
                     dayNumber.textContent = (currentDay).toString();
                     dayNumber.style.cssText = `
-                        background: #f4f4f5;
-                        color: #71717a;
+                        background: #FAFAD2;
+                        color: #555;
                         border-radius: 4px;
                         padding: 2px 4px;
                         font-size: 8px;
@@ -246,8 +246,10 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
 
             const imgData = canvas.toDataURL('image/png', 0.95);
             const imgHeight = (canvas.height * contentWidth) / canvas.width;
+            const pageContentHeight = pageHeight - margin * 2;
 
-            pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, imgHeight > contentHeight ? contentHeight : imgHeight);
+
+            pdf.addImage(imgData, 'PNG', margin, margin, contentWidth, imgHeight > pageContentHeight ? pageContentHeight : imgHeight);
         }
 
         const fileName = `${program.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_training_calendar.pdf`;
