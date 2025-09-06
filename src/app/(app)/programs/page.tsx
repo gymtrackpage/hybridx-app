@@ -1,25 +1,23 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, Clock, Loader2, Dumbbell } from 'lucide-react';
+import { CheckCircle, Loader2, Dumbbell } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getAllPrograms } from '@/services/program-service-client';
-import { getUserClient, updateUser } from '@/services/user-service-client';
+import { getUserClient } from '@/services/user-service-client';
 import type { Program, User } from '@/models/types';
-import { ProgramScheduleDialog } from '@/components/program-schedule-dialog';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function ProgramsPage() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
-  const [isScheduling, setIsScheduling] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -50,33 +48,6 @@ export default function ProgramsPage() {
     };
     fetchProgramsAndUser();
   }, [toast]);
-
-  const handleScheduleProgram = async (programId: string, startDate: Date) => {
-    if (!user) {
-        toast({ title: 'Error', description: 'You must be logged in to schedule a program.', variant: 'destructive' });
-        return;
-    }
-
-    setIsScheduling(true);
-    try {
-        await updateUser(user.id, { programId, startDate });
-        toast({
-            title: 'Program Scheduled!',
-            description: 'Your new training program has been added to your calendar.',
-        });
-        setSelectedProgram(null);
-        router.push('/dashboard');
-    } catch (error) {
-        console.error('Failed to schedule program:', error);
-        toast({
-            title: 'Error',
-            description: 'Could not schedule the program. Please try again.',
-            variant: 'destructive',
-        });
-    } finally {
-        setIsScheduling(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -128,8 +99,10 @@ export default function ProgramsPage() {
                                     Currently Active
                                 </Button>
                             ) : (
-                                <Button className="w-full" variant="outline" onClick={() => setSelectedProgram(program)}>
-                                    View & Schedule
+                                <Button className="w-full" variant="outline" asChild>
+                                  <Link href={`/programs/${program.id}/view`}>
+                                    View Program
+                                  </Link>
                                 </Button>
                             )}
                         </CardFooter>
@@ -137,14 +110,6 @@ export default function ProgramsPage() {
                 );
             })}
         </div>
-        
-        <ProgramScheduleDialog
-            program={selectedProgram}
-            isOpen={!!selectedProgram}
-            onClose={() => setSelectedProgram(null)}
-            onSchedule={handleScheduleProgram}
-            isScheduling={isScheduling}
-        />
     </div>
   );
 }
