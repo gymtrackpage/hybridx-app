@@ -326,12 +326,12 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
         </Button>
         <div className="flex gap-2 w-full sm:w-auto">
             {!isCurrentProgram && (
-              <Button onClick={() => setIsScheduleDialogOpen(true)} className="w-full" disabled={isScheduling}>
+              <Button variant="accent" onClick={() => setIsScheduleDialogOpen(true)} className="w-full" disabled={isScheduling}>
                   <CalendarPlus className="mr-2" />
                   Schedule Program
               </Button>
             )}
-            <Button variant="accent" onClick={handleDownloadPDF} className="w-full" disabled={isDownloading}>
+            <Button variant="outline" onClick={handleDownloadPDF} className="w-full" disabled={isDownloading}>
                 {isDownloading ? <Loader2 className="mr-2 animate-spin" /> : <Printer className="mr-2" />}
                 {isDownloading ? 'Generating...' : 'Download PDF'}
             </Button>
