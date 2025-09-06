@@ -14,7 +14,6 @@ function fromFirestore(doc: any): WorkoutSession {
         workoutDate: data.workoutDate.toDate(),
         startedAt: data.startedAt.toDate(),
         finishedAt: data.finishedAt ? data.finishedAt.toDate() : undefined,
-        isRunning: data.isRunning,
         completedExercises: data.completedExercises,
         notes: data.notes || '',
     };
@@ -45,7 +44,6 @@ export async function getOrCreateWorkoutSessionAdmin(userId: string, programId: 
         programId,
         workoutDate: Timestamp.fromDate(workoutDate),
         startedAt: Timestamp.now(),
-        isRunning: false,
         completedExercises: initialCompleted,
         finishedAt: null,
         notes: '',
@@ -59,7 +57,6 @@ export async function getOrCreateWorkoutSessionAdmin(userId: string, programId: 
         programId,
         workoutDate,
         startedAt: new Date(),
-        isRunning: false,
         completedExercises: initialCompleted,
         notes: '',
     };

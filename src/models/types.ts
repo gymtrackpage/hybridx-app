@@ -56,7 +56,6 @@ export interface WorkoutSession {
     workoutDate: Date;
     startedAt: Date;
     finishedAt?: Date;
-    isRunning: boolean;
     completedExercises: { [exerciseName: string]: boolean };
     notes?: string;
 }

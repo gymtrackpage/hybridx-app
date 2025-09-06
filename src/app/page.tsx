@@ -22,7 +22,7 @@ export default function WelcomePage() {
           Unlock Your Peak Performance
         </h1>
         <p className="mt-4 max-w-lg text-lg text-white/90">
-          Advnaced training plans for all abilities, expert coaching, and progress tracking with AI assistance.
+          Advanced training plans for all abilities, expert coaching, and progress tracking with AI assistance.
         </p>
         <div className="mt-8 flex w-full max-w-xs flex-col gap-4">
           <Button asChild size="lg" variant="accent">

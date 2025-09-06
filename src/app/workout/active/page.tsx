@@ -1,9 +1,9 @@
 // src/app/workout/active/page.tsx
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, Play, Pause, CalendarDays, Clock, Target } from 'lucide-react';
+import { Check, Flag, Loader2, CalendarDays, Target } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -20,34 +20,6 @@ import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
 import type { Workout } from '@/models/types';
 
-function Timer({ startTime, isRunning }: { startTime: Date; isRunning: boolean }) {
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    if (!startTime) return;
-
-    if (!isRunning) {
-        setElapsed(new Date().getTime() - startTime.getTime());
-        return;
-    };
-
-    const interval = setInterval(() => {
-      setElapsed(new Date().getTime() - startTime.getTime());
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [startTime, isRunning]);
-  
-  const formatTime = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  return <span className="font-mono text-lg">{formatTime(elapsed || 0)}</span>;
-}
 
 export default function ActiveWorkoutPage() {
   const [session, setSession] = useState<WorkoutSession | null>(null);
@@ -121,23 +93,14 @@ export default function ActiveWorkoutPage() {
     await updateWorkoutSession(session.id, { completedExercises: updatedCompleted });
   };
   
-  const handleToggleTimer = async () => {
-    if (!session) return;
-    const isRunning = !session.isRunning;
-    const updatedSession = { ...session, isRunning };
-    setSession(updatedSession);
-    await updateWorkoutSession(session.id, { isRunning });
-  }
-  
   const handleFinishWorkout = async () => {
       if(!session) return;
       // Final save of notes before finishing
       debouncedSaveNotes.flush();
       const finishedAt = new Date();
-      const isRunning = false;
-      const updatedSession = {...session, isRunning, finishedAt, notes};
+      const updatedSession = {...session, finishedAt, notes};
       setSession(updatedSession);
-      await updateWorkoutSession(session.id, { isRunning, finishedAt, notes });
+      await updateWorkoutSession(session.id, { finishedAt, notes });
   }
 
   if (loading) {
@@ -187,10 +150,6 @@ export default function ActiveWorkoutPage() {
             <CardContent className="space-y-6">
                 <div className="flex items-center gap-6 text-sm text-muted-foreground">
                     <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4" />
-                        <Timer startTime={session.startedAt} isRunning={session.isRunning} />
-                    </div>
-                    <div className="flex items-center gap-2">
                         <CalendarDays className="h-4 w-4" />
                         <span>Week {week}, Day {dayOfWeek}</span>
                     </div>
@@ -233,11 +192,7 @@ export default function ActiveWorkoutPage() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                    <Button variant="secondary" className="flex-1" onClick={handleToggleTimer} disabled={!!session.finishedAt}>
-                        {session.isRunning ? <Pause className="mr-2"/> : <Play className="mr-2"/>}
-                        {session.isRunning ? 'Pause Timer' : 'Start Timer'}
-                    </Button>
-                    <Button className="flex-1" onClick={handleFinishWorkout} disabled={!allExercisesCompleted || !!session.finishedAt}>
+                    <Button className="w-full" onClick={handleFinishWorkout} disabled={!allExercisesCompleted || !!session.finishedAt}>
                         {session.finishedAt ? <Check className="mr-2" /> : <Flag className="mr-2" />}
                         {session.finishedAt ? 'Workout Completed' : 'Finish Workout'}
                     </Button>
