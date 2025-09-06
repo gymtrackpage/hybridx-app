@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Loader2, ArrowLeft, Printer, CalendarPlus } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 import { auth } from '@/lib/firebase';
 import type { Program, User } from '@/models/types';
@@ -23,6 +25,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isScheduling, setIsScheduling] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
@@ -69,8 +72,61 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
     }
   }, [programId, router, toast]);
 
-  const handlePrint = () => {
-    window.print();
+  const handleDownloadPDF = async () => {
+    if (!program) return;
+    setIsDownloading(true);
+    try {
+      toast({ title: 'Generating PDF...', description: 'Please wait while we create your training calendar.' });
+      
+      const element = document.querySelector('.print-container');
+      if (!element) return;
+  
+      const canvas = await html2canvas(element as HTMLElement, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        width: element.scrollWidth,
+        height: element.scrollHeight,
+      });
+  
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+      });
+  
+      const imgWidth = 297; // A4 landscape width in mm
+      const pageHeight = 210; // A4 landscape height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+  
+      let position = 0;
+  
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+  
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+  
+      const fileName = `${program.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_training_calendar.pdf`;
+      pdf.save(fileName);
+      
+      toast({ title: 'PDF Downloaded!', description: 'Your training calendar has been saved.' });
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      toast({ 
+        title: 'Error', 
+        description: 'Failed to generate PDF. Please try the print option instead.',
+        variant: 'destructive' 
+      });
+    } finally {
+      setIsDownloading(false);
+    }
   };
   
   const handleScheduleProgram = async (programId: string, startDate: Date) => {
@@ -121,14 +177,14 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
         </Button>
         <div className="flex gap-2 w-full sm:w-auto">
             {!isCurrentProgram && (
-              <Button onClick={() => setIsScheduleDialogOpen(true)} className="w-full">
+              <Button onClick={() => setIsScheduleDialogOpen(true)} className="w-full" disabled={isScheduling}>
                   <CalendarPlus className="mr-2" />
                   Schedule Program
               </Button>
             )}
-            <Button variant="accent" onClick={handlePrint} className="w-full">
-                <Printer className="mr-2" />
-                Print / Download PDF
+            <Button variant="accent" onClick={handleDownloadPDF} className="w-full" disabled={isDownloading}>
+                {isDownloading ? <Loader2 className="mr-2 animate-spin" /> : <Printer className="mr-2" />}
+                {isDownloading ? 'Generating...' : 'Download PDF'}
             </Button>
         </div>
       </div>
