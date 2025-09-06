@@ -255,11 +255,11 @@ export default function DashboardPage() {
                   <span className="text-sm font-bold">{Math.round(progressPercentage)}%</span>
                 </div>
                 <Separator />
-                <ul className="space-y-3">
+                <ul className="space-y-4">
                   {todaysWorkout.workout.exercises.map((ex) => (
-                    <li key={ex.name} className="flex items-center justify-between">
-                      <span className="font-medium">{ex.name}</span>
-                      <span className="text-sm text-muted-foreground">{ex.details}</span>
+                    <li key={ex.name}>
+                      <p className="font-medium">{ex.name}</p>
+                      <p className="text-sm text-muted-foreground">{ex.details}</p>
                     </li>
                   ))}
                 </ul>
