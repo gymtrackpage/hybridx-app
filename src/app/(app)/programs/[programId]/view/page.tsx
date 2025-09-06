@@ -28,8 +28,7 @@ export default function ProgramViewPage({ params }: { params: { programId: strin
   const { toast } = useToast();
   
   useEffect(() => {
-    const fetchData = async () => {
-      const programId = params.programId;
+    const fetchData = async (programId: string) => {
       if (!programId) {
         router.push('/programs');
         return;
@@ -37,7 +36,7 @@ export default function ProgramViewPage({ params }: { params: { programId: strin
 
       try {
         const [fetchedProgram, unsubscribeAuth] = await Promise.all([
-          getProgramClient(programId as string),
+          getProgramClient(programId),
           onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
               const currentUser = await getUserClient(firebaseUser.uid);
@@ -61,8 +60,10 @@ export default function ProgramViewPage({ params }: { params: { programId: strin
         setLoading(false);
       }
     };
-    fetchData();
-  }, [params, router, toast]);
+    if (params.programId) {
+        fetchData(params.programId as string);
+    }
+  }, [params.programId, router, toast]);
 
   const handlePrint = () => {
     window.print();
