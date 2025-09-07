@@ -1,3 +1,4 @@
+
 // src/app/(app)/programs/[programId]/view/page.tsx
 'use client';
 
@@ -5,18 +6,19 @@ import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Loader2, ArrowLeft, Printer, CalendarPlus } from 'lucide-react';
+import { Loader2, ArrowLeft, Printer, CalendarPlus, AlertTriangle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 import { auth } from '@/lib/firebase';
-import type { Program, User } from '@/models/types';
+import type { Program, User, RunningProgram, PaceZone } from '@/models/types';
 import { getProgramClient } from '@/services/program-service-client';
 import { getUserClient, updateUser } from '@/services/user-service-client';
 import { useToast } from '@/hooks/use-toast';
+import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
+
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Accordion,
   AccordionContent,
@@ -26,10 +28,12 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProgramCalendarView } from '@/components/program-calendar-view';
 import { ProgramScheduleDialog } from '@/components/program-schedule-dialog';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function ProgramViewPage({ params }: { params: Promise<{ programId: string }> }) {
   const [program, setProgram] = useState<Program | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [trainingPaces, setTrainingPaces] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
   const [isScheduling, setIsScheduling] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -48,28 +52,32 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
       }
 
       try {
-        const [fetchedProgram, unsubscribeAuth] = await Promise.all([
-          getProgramClient(id),
-          onAuthStateChanged(auth, async (firebaseUser) => {
-            if (firebaseUser) {
-              const currentUser = await getUserClient(firebaseUser.uid);
-              setUser(currentUser);
-            }
-          })
-        ]);
-
+        const fetchedProgram = await getProgramClient(id);
+        
         if (!fetchedProgram) {
           toast({ title: 'Error', description: 'Program not found.', variant: 'destructive' });
           router.push('/programs');
           return;
         }
-
         setProgram(fetchedProgram);
+        
+        const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (firebaseUser) {
+              const currentUser = await getUserClient(firebaseUser.uid);
+              setUser(currentUser);
+              if (currentUser && fetchedProgram.programType === 'running') {
+                  const paces = calculateTrainingPaces(currentUser);
+                  setTrainingPaces(paces);
+              }
+            }
+            setLoading(false);
+        });
+
         return () => unsubscribeAuth();
+
       } catch (error) {
         console.error('Failed to load program:', error);
         toast({ title: 'Error', description: 'Failed to load program details.', variant: 'destructive' });
-      } finally {
         setLoading(false);
       }
     };
@@ -314,6 +322,8 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
   if (!program) {
     return null; // Should be redirected by useEffect
   }
+  
+  const isRunningProgram = program.programType === 'running';
 
   return (
     <>
@@ -344,18 +354,46 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
               <CardDescription>{program.description}</CardDescription>
           </CardHeader>
           <CardContent>
+            {isRunningProgram && !trainingPaces && (
+                 <div className="mb-4 p-4 border border-yellow-400 bg-yellow-50 rounded-md text-yellow-800 flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 mt-0.5" />
+                    <div>
+                        <h4 className="font-semibold">Paces Not Calculated</h4>
+                        <p className="text-sm">To see your personalized training paces for this program, please add at least one benchmark race time to your profile.</p>
+                        <Button variant="link" className="p-0 h-auto mt-1 text-sm text-yellow-800" asChild>
+                           <Link href="/profile">Update Your Profile</Link>
+                        </Button>
+                    </div>
+                </div>
+            )}
               <Accordion type="single" collapsible className="w-full">
                   {program.workouts.map((workout) => (
                       <AccordionItem value={`day-${workout.day}`} key={workout.day}>
                           <AccordionTrigger>Day {workout.day}: {workout.title}</AccordionTrigger>
                           <AccordionContent>
-                              <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                            {isRunningProgram ? (
+                                <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                                    {(workout as RunningProgram['workouts'][0]).runs.map((run, index) => {
+                                        const pace = trainingPaces ? formatPace(trainingPaces[run.paceZone]) : 'N/A';
+                                        return (
+                                             <li key={index}>
+                                                <span className="font-medium text-foreground">{run.description}</span>
+                                                <p className="text-sm">
+                                                    Target Pace: <span className="font-semibold text-primary">{pace}</span> / mile
+                                                </p>
+                                             </li>
+                                        )
+                                    })}
+                                </ul>
+                            ) : (
+                               <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
                                   {workout.exercises.map((exercise, index) => (
                                       <li key={index}>
                                           <span className="font-medium text-foreground">{exercise.name}:</span> {exercise.details}
                                       </li>
                                   ))}
                               </ul>
+                            )}
                           </AccordionContent>
                       </AccordionItem>
                   ))}
@@ -364,10 +402,9 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
       </Card>
       
       {/* This component is now hidden from the user but used for PDF generation */}
-      <div className="hidden">
+      <div className="hidden print:block">
         <ProgramCalendarView program={program} />
       </div>
-
 
       <ProgramScheduleDialog
         program={program}

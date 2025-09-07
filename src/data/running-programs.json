@@ -1,0 +1,184 @@
+
+[
+  {
+    "id": "running-5k-beginner",
+    "name": "Beginner 5k Plan",
+    "description": "A 6-week plan designed to get you from the couch to your first 5k finish line. Focuses on building consistency and endurance safely.",
+    "programType": "running",
+    "targetRace": "5k",
+    "workouts": [
+      {
+        "day": 1,
+        "title": "Run/Walk",
+        "runs": [{
+          "type": "easy",
+          "distance": 1.5,
+          "paceZone": "easy",
+          "description": "Warm up with a 5-min walk. Then, alternate 60 seconds of jogging with 90 seconds of walking for 20 minutes.",
+          "effortLevel": 3
+        }]
+      },
+      { "day": 2, "title": "Rest or Cross-Train", "runs": [] },
+      {
+        "day": 3,
+        "title": "Run/Walk",
+        "runs": [{
+          "type": "easy",
+          "distance": 1.5,
+          "paceZone": "easy",
+          "description": "Warm up with a 5-min walk. Then, alternate 90 seconds of jogging with 2 minutes of walking for 20 minutes.",
+          "effortLevel": 4
+        }]
+      },
+      { "day": 4, "title": "Rest", "runs": [] },
+      {
+        "day": 5,
+        "title": "Run/Walk",
+        "runs": [{
+          "type": "long",
+          "distance": 2,
+          "paceZone": "easy",
+          "description": "After a 5-min warm-up walk, run for 2 minutes and walk for 1 minute. Repeat for 25 minutes.",
+          "effortLevel": 4
+        }]
+      },
+      { "day": 6, "title": "Active Recovery", "runs": [{ "type": "recovery", "distance": 0, "paceZone": "recovery", "description": "20-30 minutes of light walking or stretching.", "effortLevel": 1 }] },
+      { "day": 7, "title": "Rest", "runs": [] },
+      {
+        "day": 8,
+        "title": "Structured Run",
+        "runs": [{
+          "type": "easy",
+          "distance": 2,
+          "paceZone": "easy",
+          "description": "5-min warm-up walk. Jog for 3 minutes, walk for 90 seconds. Repeat 5 times.",
+          "effortLevel": 4
+        }]
+      },
+      { "day": 9, "title": "Rest or Cross-Train", "runs": [] },
+      {
+        "day": 10,
+        "title": "Fartlek (Speed Play)",
+        "runs": [{
+          "type": "intervals",
+          "distance": 2,
+          "paceZone": "interval",
+          "description": "During your 20-minute jog, pick up the pace for 60 seconds (to a comfortably hard effort) 4-5 times. Walk to recover between each.",
+          "effortLevel": 5
+        }]
+      },
+      { "day": 11, "title": "Rest", "runs": [] },
+      {
+        "day": 12,
+        "title": "Long Run",
+        "runs": [{
+          "type": "long",
+          "distance": 2.5,
+          "paceZone": "easy",
+          "description": "Jog at a comfortable, conversational pace. Take walk breaks as needed.",
+          "effortLevel": 4
+        }]
+      },
+      { "day": 13, "title": "Active Recovery", "runs": [{ "type": "recovery", "distance": 0, "paceZone": "recovery", "description": "20-30 minutes of light walking or stretching.", "effortLevel": 1 }] },
+      { "day": 14, "title": "Rest", "runs": [] },
+      {
+        "day": 15,
+        "title": "Tempo Introduction",
+        "runs": [{
+          "type": "tempo",
+          "distance": 2.25,
+          "paceZone": "threshold",
+          "description": "10 min easy warm-up. 5 minutes at a 'comfortably hard' Threshold pace. 10 min easy cool-down.",
+          "effortLevel": 6
+        }]
+      },
+      { "day": 16, "title": "Rest or Cross-Train", "runs": [] },
+      {
+        "day": 17,
+        "title": "Easy Run",
+        "runs": [{
+          "type": "easy",
+          "distance": 2.25,
+          "paceZone": "easy",
+          "description": "Jog for 25 minutes at a fully conversational pace.",
+          "effortLevel": 4
+        }]
+      },
+      { "day": 18, "title": "Rest", "runs": [] },
+      {
+        "day": 19,
+        "title": "Long Run",
+        "runs": [{
+          "type": "long",
+          "distance": 3,
+          "paceZone": "easy",
+          "description": "Aim to run the full distance, but it's okay to take short walk breaks. Focus on finishing.",
+          "effortLevel": 5
+        }]
+      },
+      { "day": 20, "title": "Active Recovery", "runs": [{ "type": "recovery", "distance": 0, "paceZone": "recovery", "description": "20-30 minutes of light walking or stretching.", "effortLevel": 1 }] },
+      { "day": 21, "title": "Rest", "runs": [] },
+      { "day": 22, "title": "Recovery Week Run", "runs": [{ "type": "recovery", "distance": 1.5, "paceZone": "recovery", "description": "Very easy 20-minute jog.", "effortLevel": 2 }] },
+      { "day": 23, "title": "Rest", "runs": [] },
+      { "day": 24, "title": "Recovery Week Run", "runs": [{ "type": "recovery", "distance": 1.5, "paceZone": "recovery", "description": "Very easy 20-minute jog with 2-3 short, smooth 'strides'.", "effortLevel": 3 }] },
+      { "day": 25, "title": "Rest", "runs": [] },
+      { "day": 26, "title": "Recovery Long Run", "runs": [{ "type": "easy", "distance": 2, "paceZone": "easy", "description": "Easy 30-minute run.", "effortLevel": 3 }] },
+      { "day": 27, "title": "Rest", "runs": [] },
+      { "day": 28, "title": "Rest", "runs": [] },
+      {
+        "day": 29,
+        "title": "Intervals",
+        "runs": [{
+          "type": "intervals",
+          "distance": 2.5,
+          "paceZone": "interval",
+          "description": "10 min easy warm-up. 4x400m at Interval pace, with 400m easy jog recovery. 10 min cool-down.",
+          "effortLevel": 7
+        }]
+      },
+      { "day": 30, "title": "Rest or Cross-Train", "runs": [] },
+      {
+        "day": 31,
+        "title": "Tempo Run",
+        "runs": [{
+          "type": "tempo",
+          "distance": 3,
+          "paceZone": "threshold",
+          "description": "10 min easy warm-up. 10 minutes at Threshold pace. 10 min easy cool-down.",
+          "effortLevel": 6
+        }]
+      },
+      { "day": 32, "title": "Rest", "runs": [] },
+      {
+        "day": 33,
+        "title": "Long Run",
+        "runs": [{
+          "type": "long",
+          "distance": 3.1,
+          "paceZone": "easy",
+          "description": "Run a full 5k at an easy, conversational pace.",
+          "effortLevel": 5
+        }]
+      },
+      { "day": 34, "title": "Active Recovery", "runs": [{ "type": "recovery", "distance": 0, "paceZone": "recovery", "description": "Light walk or stretching.", "effortLevel": 1 }] },
+      { "day": 35, "title": "Rest", "runs": [] },
+      { "day": 36, "title": "Pre-Race Shakeout", "runs": [{ "type": "recovery", "distance": 1, "paceZone": "recovery", "description": "15-minute very light jog to stay loose.", "effortLevel": 2 }] },
+      { "day": 37, "title": "Rest", "runs": [] },
+      { "day": 38, "title": "Pre-Race Shakeout", "runs": [{ "type": "recovery", "distance": 1, "paceZone": "recovery", "description": "15-minute very light jog with 2x100m strides.", "effortLevel": 2 }] },
+      { "day": 39, "title": "Rest", "runs": [] },
+      {
+        "day": 40,
+        "title": "RACE DAY!",
+        "runs": [{
+          "type": "long",
+          "distance": 3.1,
+          "paceZone": "marathon",
+          "description": "Warm up well, run your best, and have fun!",
+          "effortLevel": 10
+        }]
+      },
+      { "day": 41, "title": "Post-Race Recovery", "runs": [{ "type": "recovery", "distance": 0, "paceZone": "recovery", "description": "Celebrate! Light walk if you feel up to it.", "effortLevel": 1 }] },
+      { "day": 42, "title": "Rest", "runs": [] }
+    ]
+  }
+]

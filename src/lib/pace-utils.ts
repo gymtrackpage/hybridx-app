@@ -7,6 +7,7 @@ import type { User } from '@/models/types';
  * VDOT is a measure of your running ability.
  */
 function calculateVdot(distanceMeters: number, timeSeconds: number): number {
+    if (timeSeconds <= 0) return 0;
     const velocity = distanceMeters / (timeSeconds / 60); // meters per minute
     const percentMax = 0.8 + 0.1894393 * Math.exp(-0.012778 * timeSeconds) + 0.2989558 * Math.exp(-0.1932605 * timeSeconds);
     const vo2 = -4.60 + 0.182258 * velocity + 0.000104 * velocity * velocity;
@@ -38,11 +39,11 @@ function getPacesFromVdot(vdot: number): Record<string, number> {
 
 
 /**
- * Converts a time string (e.g., "25:30" or "4:55") to seconds.
+ * Converts a time string (e.g., "25:30" or "4:55" or "01:55:00") to seconds.
  */
 export function timeStringToSeconds(timeStr: string): number {
     if (!timeStr || !timeStr.includes(':')) return 0;
-    const parts = timeStr.split(':').map(Number);
+    const parts = timeStr.split(':').map(part => parseInt(part, 10)).filter(num => !isNaN(num));
     if (parts.length === 2) { // MM:SS
         return parts[0] * 60 + parts[1];
     }
@@ -52,14 +53,23 @@ export function timeStringToSeconds(timeStr: string): number {
     return 0;
 }
 
+
 /**
  * Converts total seconds to a time string (e.g., "25:30").
  */
 export function secondsToTimeString(totalSeconds: number): string {
     if (!totalSeconds || totalSeconds <= 0) return '';
-    const minutes = Math.floor(totalSeconds / 60);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = Math.round(totalSeconds % 60);
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    
+    const paddedMinutes = minutes < 10 ? `0${minutes}` : minutes;
+    const paddedSeconds = seconds < 10 ? `0${seconds}` : seconds;
+
+    if (hours > 0) {
+        return `${hours}:${paddedMinutes}:${paddedSeconds}`;
+    }
+    return `${minutes}:${paddedSeconds}`;
 }
 
 

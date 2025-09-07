@@ -1,9 +1,10 @@
+
 // scripts/upload-programs.ts
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, doc, setDoc, getDocs, query } from 'firebase/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Program } from '@/models/types';
+import type { Program, RunningProgram } from '@/models/types';
 
 // NOTE: This is a simplified script that uses your client-side Firebase config.
 // For more robust, server-side scripting, you would typically use the Firebase Admin SDK.
@@ -27,18 +28,26 @@ const programsCollection = collection(db, 'programs');
 
 async function uploadPrograms() {
     try {
-        console.log('Reading programs from JSON file...');
-        const filePath = path.join(process.cwd(), 'src/data/programs.json');
-        const fileContent = fs.readFileSync(filePath, 'utf-8');
-        const programs: Program[] = JSON.parse(fileContent);
+        console.log('Reading programs from JSON files...');
+        
+        const hyroxFilePath = path.join(process.cwd(), 'src/data/programs.json');
+        const runningFilePath = path.join(process.cwd(), 'src/data/running-programs.json');
+        
+        const hyroxFileContent = fs.readFileSync(hyroxFilePath, 'utf-8');
+        const runningFileContent = fs.readFileSync(runningFilePath, 'utf-8');
 
-        console.log(`Found ${programs.length} programs to upload.`);
+        const hyroxPrograms: Program[] = JSON.parse(hyroxFileContent);
+        const runningPrograms: RunningProgram[] = JSON.parse(runningFileContent);
+        
+        const allPrograms = [...hyroxPrograms, ...runningPrograms];
+
+        console.log(`Found ${allPrograms.length} total programs to upload.`);
 
         // Optional: Check if programs already exist to avoid duplicates
         const existingPrograms = await getDocs(query(programsCollection));
         const existingProgramIds = new Set(existingPrograms.docs.map(d => d.id));
         
-        for (const program of programs) {
+        for (const program of allPrograms) {
             if (existingProgramIds.has(program.id)) {
                 console.log(`Program with ID "${program.id}" already exists. Skipping.`);
                 continue;

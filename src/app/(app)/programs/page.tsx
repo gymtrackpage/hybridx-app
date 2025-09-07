@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, Loader2, Dumbbell } from 'lucide-react';
+import { CheckCircle, Dumbbell, Route } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,7 +12,6 @@ import type { Program, User } from '@/models/types';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function ProgramsPage() {
@@ -19,7 +19,6 @@ export default function ProgramsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const router = useRouter();
 
   useEffect(() => {
     const fetchProgramsAndUser = async () => {
@@ -87,7 +86,7 @@ export default function ProgramsPage() {
                         <CardContent className="flex-grow">
                             <div className="flex items-center text-sm text-muted-foreground gap-4">
                                 <div className="flex items-center gap-1.5">
-                                    <Dumbbell className="h-4 w-4" />
+                                    {program.programType === 'running' ? <Route className="h-4 w-4" /> : <Dumbbell className="h-4 w-4" />}
                                     <span>{program.workouts.length} workouts</span>
                                 </div>
                             </div>
