@@ -59,97 +59,55 @@ export default function DashboardPage() {
   const [motivation, setMotivation] = useState('');
   const [motivationLoading, setMotivationLoading] = useState(false);
   const [summary, setSummary] = useState("Here's your plan for today. Let's get it done.");
-  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [workoutSummaryText, setWorkoutSummaryText] = useState("Assign a program to your profile to see your workout.");
-  const [workoutSummaryLoading, setWorkoutSummaryLoading] = useState(true);
+  const [workoutSummaryLoading, setWorkoutSummaryLoading] = useState(false);
   const router = useRouter();
   
-  const fetchDashboardData = async (userId: string) => {
+  const fetchCoreData = async (userId: string) => {
     setLoading(true);
-    setSummaryLoading(true);
-    setWorkoutSummaryLoading(true);
     try {
       const currentUser = await getUserClient(userId);
       setUser(currentUser);
 
-      if (currentUser) {
-        if (currentUser.runningProfile) {
-            const paces = calculateTrainingPaces(currentUser);
-            setTrainingPaces(paces);
-        }
+      if (!currentUser) return;
 
-        const sessions = await getAllUserSessions(userId);
-        const weeklyProgress = generateProgressData(sessions);
-        setProgressData(weeklyProgress);
+      if (currentUser.runningProfile) {
+          const paces = calculateTrainingPaces(currentUser);
+          setTrainingPaces(paces);
+      }
 
-        if (currentUser.programId && currentUser.startDate) {
-          const currentProgram = await getProgramClient(currentUser.programId);
-          setProgram(currentProgram);
+      const sessions = await getAllUserSessions(userId);
+      const weeklyProgress = generateProgressData(sessions);
+      setProgressData(weeklyProgress);
 
-          if (currentProgram) {
-            const workoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, new Date());
-            setTodaysWorkout(workoutInfo);
+      if (currentUser.programId && currentUser.startDate) {
+        const currentProgram = await getProgramClient(currentUser.programId);
+        setProgram(currentProgram);
 
-            if (workoutInfo.workout) {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const session = await getOrCreateWorkoutSession(userId, currentProgram.id, today, workoutInfo.workout);
-              setTodaysSession(session);
-              
-              const exercisesForSummary = workoutInfo.workout.programType === 'running'
-                ? (workoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
-                : (workoutInfo.workout as Workout).exercises.map(e => e.name).join(', ');
+        if (currentProgram) {
+          const workoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, new Date());
+          setTodaysWorkout(workoutInfo);
 
-              // Generate AI workout summary
-              try {
-                  const workoutResult = await workoutSummary({
-                      userName: currentUser.firstName,
-                      workoutTitle: workoutInfo.workout.title,
-                      exercises: exercisesForSummary,
-                  });
-                  setWorkoutSummaryText(workoutResult.summary);
-              } catch (aiError) {
-                  console.error("Failed to generate AI workout summary:", aiError);
-                  setWorkoutSummaryText(workoutInfo.workout.title); // Fallback to title
-              } finally {
-                  setWorkoutSummaryLoading(false);
-              }
-
-            } else {
-                setWorkoutSummaryLoading(false);
-            }
-            
-            // Generate AI dashboard summary
-            try {
-                const summaryResult = await dashboardSummary({
-                    userName: currentUser.firstName,
-                    programName: currentProgram.name,
-                    daysCompleted: workoutInfo.day > 0 ? workoutInfo.day : 0,
-                    weeklyConsistency: `${weeklyProgress[3]?.workouts || 0} workouts completed in the last week.`
-                });
-                setSummary(summaryResult.summary);
-            } catch (aiError) {
-                console.error("Failed to generate AI summary:", aiError);
-                // Fallback to default message on error
-                setSummary("Here's your plan for today. Let's get it done.");
-            }
+          if (workoutInfo.workout) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const session = await getOrCreateWorkoutSession(userId, currentProgram.id, today, workoutInfo.workout);
+            setTodaysSession(session);
           }
-        } else {
-             setWorkoutSummaryLoading(false);
         }
       }
     } catch (error) {
-        console.error("Error fetching dashboard data:", error);
+        console.error("Error fetching core dashboard data:", error);
     } finally {
         setLoading(false);
-        setSummaryLoading(false);
     }
   };
-
+  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        fetchDashboardData(firebaseUser.uid);
+        fetchCoreData(firebaseUser.uid);
       } else {
         setUser(null);
         setProgram(null);
@@ -160,6 +118,51 @@ export default function DashboardPage() {
 
     return () => unsubscribe();
   }, []);
+
+  // Effect for AI Dashboard Summary
+  useEffect(() => {
+    if (user && program && todaysWorkout && progressData.length > 0) {
+      setSummaryLoading(true);
+      dashboardSummary({
+        userName: user.firstName,
+        programName: program.name,
+        daysCompleted: todaysWorkout.day > 0 ? todaysWorkout.day : 0,
+        weeklyConsistency: `${progressData[3]?.workouts || 0} workouts completed in the last week.`
+      }).then(result => {
+        setSummary(result.summary);
+      }).catch(aiError => {
+        console.error("Failed to generate AI dashboard summary:", aiError);
+        setSummary("Here's your plan for today. Let's get it done."); // Fallback
+      }).finally(() => {
+        setSummaryLoading(false);
+      });
+    }
+  }, [user, program, todaysWorkout, progressData]);
+
+  // Effect for AI Workout Summary
+  useEffect(() => {
+    if (user && todaysWorkout?.workout) {
+      setWorkoutSummaryLoading(true);
+      const exercisesForSummary = todaysWorkout.workout.programType === 'running'
+        ? (todaysWorkout.workout as RunningWorkout).runs.map(r => r.type).join(', ')
+        : (todaysWorkout.workout as Workout).exercises.map(e => e.name).join(', ');
+
+      workoutSummary({
+        userName: user.firstName,
+        workoutTitle: todaysWorkout.workout.title,
+        exercises: exercisesForSummary,
+      }).then(result => {
+        setWorkoutSummaryText(result.summary);
+      }).catch(aiError => {
+        console.error("Failed to generate AI workout summary:", aiError);
+        setWorkoutSummaryText(todaysWorkout.workout!.title); // Fallback
+      }).finally(() => {
+        setWorkoutSummaryLoading(false);
+      });
+    } else {
+      setWorkoutSummaryLoading(false);
+    }
+  }, [user, todaysWorkout]);
 
   
   const generateProgressData = (sessions: WorkoutSession[]) => {
