@@ -1,3 +1,4 @@
+
 export interface PersonalRecords {
   backSquat?: string;
   deadlift?: string;
@@ -6,6 +7,16 @@ export interface PersonalRecords {
   run5k?: string;
   run10k?: string;
   [key: string]: string | undefined; // For flexible additional records
+}
+
+export interface UserRunningProfile {
+  benchmarkPaces: {
+    mile?: number;      // seconds per mile
+    fiveK?: number;     // seconds per mile
+    tenK?: number;      // seconds per mile
+    halfMarathon?: number; // seconds per mile
+  };
+  injuryHistory?: string[];
 }
 
 export type SubscriptionStatus = 'trial' | 'active' | 'canceled' | 'expired' | 'incomplete' | 'paused';
@@ -21,6 +32,7 @@ export interface User {
   programId?: string | null;
   startDate?: Date;
   personalRecords?: PersonalRecords;
+  runningProfile?: UserRunningProfile;
   // Subscription fields
   isAdmin?: boolean;
   subscriptionStatus?: SubscriptionStatus;
@@ -31,18 +43,44 @@ export interface User {
   cancellation_effective_date?: Date;
 }
 
+export type ProgramType = 'hyrox' | 'running';
+
 export interface Program {
   id: string;
   name: string;
   description: string;
+  programType: ProgramType;
   workouts: Workout[];
 }
+
+export interface RunningProgram extends Omit<Program, 'workouts'> {
+  programType: 'running';
+  targetRace?: 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon';
+  workouts: RunningWorkout[];
+}
+
 
 export interface Workout {
   day: number;
   title: string;
   exercises: Exercise[];
 }
+
+export interface RunningWorkout extends Omit<Workout, 'exercises'> {
+  runs: PlannedRun[];
+}
+
+export type PaceZone = 'recovery' | 'easy' | 'marathon' | 'threshold' | 'interval' | 'repetition';
+
+export interface PlannedRun {
+  type: 'easy' | 'tempo' | 'intervals' | 'long' | 'recovery';
+  distance: number; // miles
+  paceZone: PaceZone;
+  description: string;
+  targetPace?: number; // calculated automatically in seconds per mile
+  effortLevel: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+}
+
 
 export interface Exercise {
   name: string;

@@ -1,3 +1,4 @@
+
 // src/services/user-service.ts
 'use server';
 
@@ -28,6 +29,7 @@ export async function getUser(userId: string): Promise<User | null> {
             programId: data.programId,
             startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
             personalRecords: data.personalRecords || {},
+            runningProfile: data.runningProfile || { benchmarkPaces: {} },
             isAdmin: data.isAdmin || false,
             subscriptionStatus: data.subscriptionStatus || 'trial',
             stripeCustomerId: data.stripeCustomerId,
@@ -56,6 +58,7 @@ export async function getUser(userId: string): Promise<User | null> {
                 programId: null,
                 startDate: undefined,
                 personalRecords: {},
+                runningProfile: { benchmarkPaces: {} },
                 isAdmin: false,
                 subscriptionStatus: 'trial',
                 trialStartDate: trialStartDate,

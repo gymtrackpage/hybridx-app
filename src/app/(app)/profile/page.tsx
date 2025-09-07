@@ -1,3 +1,4 @@
+
 // src/app/(app)/profile/page.tsx
 'use client';
 
@@ -17,7 +18,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { getUserClient, updateUser } from '@/services/user-service-client';
-import type { User, PersonalRecords } from '@/models/types';
+import type { User, PersonalRecords, UserRunningProfile } from '@/models/types';
+import { timeStringToSeconds, secondsToTimeString } from '@/lib/pace-utils';
 
 const profileFormSchema = z.object({
   firstName: z.string().min(1, 'First name is required.'),
@@ -34,8 +36,16 @@ const recordsFormSchema = z.object({
     run10k: z.string().optional(),
 });
 
+const runningProfileSchema = z.object({
+    mile: z.string().optional(),
+    fiveK: z.string().optional(),
+    tenK: z.string().optional(),
+    halfMarathon: z.string().optional(),
+});
+
 type ProfileFormData = z.infer<typeof profileFormSchema>;
 type RecordsFormData = z.infer<typeof recordsFormSchema>;
+type RunningProfileFormData = z.infer<typeof runningProfileSchema>;
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -49,6 +59,11 @@ export default function ProfilePage() {
   const recordsForm = useForm<RecordsFormData>({
     resolver: zodResolver(recordsFormSchema),
   });
+
+  const runningForm = useForm<RunningProfileFormData>({
+    resolver: zodResolver(runningProfileSchema),
+  });
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -69,12 +84,18 @@ export default function ProfilePage() {
             run5k: currentUser.personalRecords?.run5k || '',
             run10k: currentUser.personalRecords?.run10k || '',
           });
+          runningForm.reset({
+            mile: currentUser.runningProfile?.benchmarkPaces?.mile ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.mile) : '',
+            fiveK: currentUser.runningProfile?.benchmarkPaces?.fiveK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.fiveK) : '',
+            tenK: currentUser.runningProfile?.benchmarkPaces?.tenK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.tenK) : '',
+            halfMarathon: currentUser.runningProfile?.benchmarkPaces?.halfMarathon ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.halfMarathon) : '',
+          })
         }
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [profileForm, recordsForm]);
+  }, [profileForm, recordsForm, runningForm]);
 
   const handleProfileSubmit = async (data: ProfileFormData) => {
     if (!user) return;
@@ -98,6 +119,25 @@ export default function ProfilePage() {
     }
   };
 
+  const handleRunningSubmit = async (data: RunningProfileFormData) => {
+    if (!user) return;
+    try {
+      const profileToUpdate: UserRunningProfile = {
+        benchmarkPaces: {
+            mile: data.mile ? timeStringToSeconds(data.mile) : undefined,
+            fiveK: data.fiveK ? timeStringToSeconds(data.fiveK) : undefined,
+            tenK: data.tenK ? timeStringToSeconds(data.tenK) : undefined,
+            halfMarathon: data.halfMarathon ? timeStringToSeconds(data.halfMarathon) : undefined,
+        }
+      };
+      await updateUser(user.id, { runningProfile: profileToUpdate });
+      toast({ title: 'Success', description: 'Your running profile has been updated.' });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to update running profile.', variant: 'destructive' });
+    }
+  };
+
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -117,7 +157,7 @@ export default function ProfilePage() {
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Your Profile</h1>
         <p className="text-muted-foreground">Manage your personal information and track your achievements.</p>
       </div>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
         <Card className="lg:col-span-1">
           <Form {...profileForm}>
             <form onSubmit={profileForm.handleSubmit(handleProfileSubmit)}>
@@ -150,42 +190,75 @@ export default function ProfilePage() {
           </Form>
         </Card>
         
-        <Card className="lg:col-span-2">
-            <Form {...recordsForm}>
-                <form onSubmit={recordsForm.handleSubmit(handleRecordsSubmit)}>
-                    <CardHeader>
-                        <CardTitle>Personal Records</CardTitle>
-                        <CardDescription>Log your benchmarks. Use units like "kg", "lbs", or time "hh:mm:ss".</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField control={recordsForm.control} name="backSquat" render={({ field }) => (
-                            <FormItem><FormLabel>Back Squat (1RM)</FormLabel><FormControl><Input placeholder="e.g., 100kg" {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                         <FormField control={recordsForm.control} name="deadlift" render={({ field }) => (
-                            <FormItem><FormLabel>Deadlift (1RM)</FormLabel><FormControl><Input placeholder="e.g., 150kg" {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                         <FormField control={recordsForm.control} name="benchPress" render={({ field }) => (
-                            <FormItem><FormLabel>Bench Press (1RM)</FormLabel><FormControl><Input placeholder="e.g., 80kg" {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={recordsForm.control} name="run1k" render={({ field }) => (
-                            <FormItem><FormLabel>1km Run</FormLabel><FormControl><Input placeholder="e.g., 03:30" {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={recordsForm.control} name="run5k" render={({ field }) => (
-                            <FormItem><FormLabel>5km Run</FormLabel><FormControl><Input placeholder="e.g., 20:00" {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={recordsForm.control} name="run10k" render={({ field }) => (
-                            <FormItem><FormLabel>10km Run</FormLabel><FormControl><Input placeholder="e.g., 45:00" {...field} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                    </CardContent>
-                    <CardFooter>
-                        <Button type="submit" disabled={recordsForm.formState.isSubmitting}>
-                            {recordsForm.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Save Records
-                        </Button>
-                    </CardFooter>
-                </form>
-            </Form>
-        </Card>
+        <div className="lg:col-span-2 space-y-6">
+            <Card>
+                <Form {...runningForm}>
+                    <form onSubmit={runningForm.handleSubmit(handleRunningSubmit)}>
+                        <CardHeader>
+                            <CardTitle>Running Profile</CardTitle>
+                            <CardDescription>Enter at least one recent race time to calculate your training paces.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <FormField control={runningForm.control} name="mile" render={({ field }) => (
+                                <FormItem><FormLabel>Best Mile Time</FormLabel><FormControl><Input placeholder="e.g., 06:30" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={runningForm.control} name="fiveK" render={({ field }) => (
+                                <FormItem><FormLabel>Best 5k Time</FormLabel><FormControl><Input placeholder="e.g., 25:00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={runningForm.control} name="tenK" render={({ field }) => (
+                                <FormItem><FormLabel>Best 10k Time</FormLabel><FormControl><Input placeholder="e.g., 52:00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={runningForm.control} name="halfMarathon" render={({ field }) => (
+                                <FormItem><FormLabel>Best Half Marathon Time</FormLabel><FormControl><Input placeholder="e.g., 01:55:00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                        </CardContent>
+                        <CardFooter>
+                            <Button type="submit" disabled={runningForm.formState.isSubmitting}>
+                                {runningForm.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Save Running Profile
+                            </Button>
+                        </CardFooter>
+                    </form>
+                </Form>
+            </Card>
+
+            <Card>
+                <Form {...recordsForm}>
+                    <form onSubmit={recordsForm.handleSubmit(handleRecordsSubmit)}>
+                        <CardHeader>
+                            <CardTitle>HYROX Personal Records</CardTitle>
+                            <CardDescription>Log your strength and hybrid benchmarks. Use units like "kg", "lbs", or time "hh:mm:ss".</CardDescription>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <FormField control={recordsForm.control} name="backSquat" render={({ field }) => (
+                                <FormItem><FormLabel>Back Squat (1RM)</FormLabel><FormControl><Input placeholder="e.g., 100kg" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={recordsForm.control} name="deadlift" render={({ field }) => (
+                                <FormItem><FormLabel>Deadlift (1RM)</FormLabel><FormControl><Input placeholder="e.g., 150kg" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={recordsForm.control} name="benchPress" render={({ field }) => (
+                                <FormItem><FormLabel>Bench Press (1RM)</FormLabel><FormControl><Input placeholder="e.g., 80kg" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={recordsForm.control} name="run1k" render={({ field }) => (
+                                <FormItem><FormLabel>1km Run</FormLabel><FormControl><Input placeholder="e.g., 03:30" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={recordsForm.control} name="run5k" render={({ field }) => (
+                                <FormItem><FormLabel>5km Run</FormLabel><FormControl><Input placeholder="e.g., 20:00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={recordsForm.control} name="run10k" render={({ field }) => (
+                                <FormItem><FormLabel>10km Run</FormLabel><FormControl><Input placeholder="e.g., 45:00" {...field} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                        </CardContent>
+                        <CardFooter>
+                            <Button type="submit" disabled={recordsForm.formState.isSubmitting}>
+                                {recordsForm.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Save Records
+                            </Button>
+                        </CardFooter>
+                    </form>
+                </Form>
+            </Card>
+        </div>
 
       </div>
     </div>

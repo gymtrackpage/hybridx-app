@@ -1,3 +1,4 @@
+
 // src/services/user-service-client.ts
 // This file contains functions for client-side components. NO 'use server' here.
 
@@ -27,6 +28,7 @@ export async function getUserClient(userId: string): Promise<User | null> {
             programId: data.programId,
             startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
             personalRecords: data.personalRecords || {},
+            runningProfile: data.runningProfile || { benchmarkPaces: {} },
             isAdmin: data.isAdmin || false,
             // Fallback for subscription status if it's missing
             subscriptionStatus: data.subscriptionStatus || 'trial',
@@ -51,6 +53,7 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'startD
         programId: null,
         startDate: null,
         personalRecords: {},
+        runningProfile: { benchmarkPaces: {} },
         isAdmin: false,
         subscriptionStatus: 'trial',
         stripeCustomerId: null,
@@ -64,6 +67,7 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'startD
         id: userId,
         ...data,
         personalRecords: {},
+        runningProfile: { benchmarkPaces: {} },
         isAdmin: false,
         subscriptionStatus: 'trial',
         trialStartDate: trialStartDate,
