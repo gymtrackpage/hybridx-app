@@ -124,16 +124,17 @@ export default function ProfilePage() {
     try {
       const profileToUpdate: UserRunningProfile = {
         benchmarkPaces: {
-            mile: data.mile ? timeStringToSeconds(data.mile) : undefined,
-            fiveK: data.fiveK ? timeStringToSeconds(data.fiveK) : undefined,
-            tenK: data.tenK ? timeStringToSeconds(data.tenK) : undefined,
-            halfMarathon: data.halfMarathon ? timeStringToSeconds(data.halfMarathon) : undefined,
+            mile: data.mile ? timeStringToSeconds(data.mile, 'mile') : undefined,
+            fiveK: data.fiveK ? timeStringToSeconds(data.fiveK, '5k') : undefined,
+            tenK: data.tenK ? timeStringToSeconds(data.tenK, '10k') : undefined,
+            halfMarathon: data.halfMarathon ? timeStringToSeconds(data.halfMarathon, 'half-marathon') : undefined,
         }
       };
       await updateUser(user.id, { runningProfile: profileToUpdate });
       toast({ title: 'Success', description: 'Your running profile has been updated.' });
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to update running profile.', variant: 'destructive' });
+      console.error("Detailed error updating running profile:", error);
+      toast({ title: 'Error', description: 'Failed to update running profile. Check console for details.', variant: 'destructive' });
     }
   };
 

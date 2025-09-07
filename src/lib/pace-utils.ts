@@ -1,6 +1,6 @@
 
 // src/lib/pace-utils.ts
-import type { User } from '@/models/types';
+import type { User, RunningProgram } from '@/models/types';
 
 /**
  * VDOT calculation based on Jack Daniels' formula.
@@ -39,10 +39,10 @@ function getPacesFromVdot(vdot: number): Record<string, number> {
 
 
 /**
- * Converts a time string (e.g., "25:30" or "4:55" or "01:55:00") to seconds.
- * This version is more robust and handles different formats gracefully.
+ * Converts a time string (e.g., "25:30" or "1:55:00") to seconds.
+ * It uses the race type to infer whether a two-part time is H:MM or MM:SS.
  */
-export function timeStringToSeconds(timeStr: string): number {
+export function timeStringToSeconds(timeStr: string, raceType: RunningProgram['targetRace']): number {
     if (!timeStr) return 0;
     
     const parts = timeStr.split(':').map(part => parseInt(part, 10) || 0);
@@ -51,12 +51,12 @@ export function timeStringToSeconds(timeStr: string): number {
 
     if (parts.length === 3) { // HH:MM:SS
         [hours, minutes, seconds] = parts;
-    } else if (parts.length === 2) { // MM:SS or HH:MM
-        // Heuristic: If hours seems more likely for longer distances
-        if (parts[0] >= 1 && parts[0] <= 5) { // A reasonable range for HM/Marathon hours
-             [hours, minutes] = parts;
+    } else if (parts.length === 2) { // Could be MM:SS or HH:MM
+        // Use race type to make an educated guess
+        if (raceType === 'half-marathon' || raceType === 'marathon') {
+            [hours, minutes] = parts; // Assume HH:MM for longer races
         } else {
-            [minutes, seconds] = parts;
+            [minutes, seconds] = parts; // Assume MM:SS for shorter races
         }
     } else if (parts.length === 1) { // SS
         seconds = parts[0];
@@ -69,7 +69,7 @@ export function timeStringToSeconds(timeStr: string): number {
 
 
 /**
- * Converts total seconds to a time string (e.g., "25:30").
+ * Converts total seconds to a time string (e.g., "25:30" or "01:55:00").
  */
 export function secondsToTimeString(totalSeconds: number): string {
     if (!totalSeconds || totalSeconds <= 0) return '';
