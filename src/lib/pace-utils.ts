@@ -44,11 +44,18 @@ function getPacesFromVdot(vdot: number): Record<string, number> {
 export function timeStringToSeconds(timeStr: string): number {
     if (!timeStr || !timeStr.includes(':')) return 0;
     const parts = timeStr.split(':').map(part => parseInt(part, 10)).filter(num => !isNaN(num));
-    if (parts.length === 2) { // MM:SS
-        return parts[0] * 60 + parts[1];
+    if (parts.length === 2) { // MM:SS or HH:MM
+        // Heuristic: if first part > 59, it's likely HH:MM for a long race like a half marathon
+        if (parts[0] > 59) { 
+             return parts[0] * 3600 + parts[1] * 60; // Treat as HH:MM
+        }
+        return parts[0] * 60 + parts[1]; // Treat as MM:SS
     }
     if (parts.length === 3) { // HH:MM:SS
         return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+     if (parts.length === 1 && timeStr.split(':').length === 2) { // Handle "1:27" where last part is empty string
+        return parts[0] * 3600; // Assume it's hours
     }
     return 0;
 }
@@ -89,10 +96,10 @@ export function calculateTrainingPaces(user: User): Record<string, number> | nul
     if (!runningProfile?.benchmarkPaces) return null;
 
     const benchmarks = [
-        { name: 'mile', distance: 1609.34, time: runningProfile.benchmarkPaces.mile ? timeStringToSeconds(runningProfile.benchmarkPaces.mile.toString()) : 0 },
-        { name: 'fiveK', distance: 5000, time: runningProfile.benchmarkPaces.fiveK ? timeStringToSeconds(runningProfile.benchmarkPaces.fiveK.toString()) : 0 },
-        { name: 'tenK', distance: 10000, time: runningProfile.benchmarkPaces.tenK ? timeStringToSeconds(runningProfile.benchmarkPaces.tenK.toString()) : 0 },
-        { name: 'halfMarathon', distance: 21097.5, time: runningProfile.benchmarkPaces.halfMarathon ? timeStringToSeconds(runningProfile.benchmarkPaces.halfMarathon.toString()) : 0 },
+        { name: 'mile', distance: 1609.34, time: runningProfile.benchmarkPaces.mile || 0 },
+        { name: 'fiveK', distance: 5000, time: runningProfile.benchmarkPaces.fiveK || 0 },
+        { name: 'tenK', distance: 10000, time: runningProfile.benchmarkPaces.tenK || 0 },
+        { name: 'halfMarathon', distance: 21097.5, time: runningProfile.benchmarkPaces.halfMarathon || 0 },
     ];
     
     let bestVdot = 0;
