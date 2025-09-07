@@ -220,7 +220,7 @@ export default function ActiveWorkoutPage() {
                                         </div>
                                         <Checkbox
                                             id={key}
-                                            checked={!!session.completedItems[key]}
+                                            checked={!!session.completedItems?.[key]}
                                             onCheckedChange={(checked) => handleToggleItem(key, !!checked)}
                                             className="h-6 w-6"
                                             disabled={!!session.finishedAt}
