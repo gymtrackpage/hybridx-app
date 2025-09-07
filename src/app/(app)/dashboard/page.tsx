@@ -216,7 +216,7 @@ export default function DashboardPage() {
     return (todaysWorkout.workout as Workout).exercises;
   }, [todaysWorkout]);
 
-  const completedItems = todaysSession ? Object.values(todaysSession.completedItems).filter(Boolean).length : 0;
+  const completedItems = todaysSession && todaysSession.completedItems ? Object.values(todaysSession.completedItems).filter(Boolean).length : 0;
   const totalItems = workoutItems.length;
   const progressPercentage = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
   
