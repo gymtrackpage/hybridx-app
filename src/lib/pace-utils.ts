@@ -40,24 +40,31 @@ function getPacesFromVdot(vdot: number): Record<string, number> {
 
 /**
  * Converts a time string (e.g., "25:30" or "4:55" or "01:55:00") to seconds.
+ * This version is more robust and handles different formats gracefully.
  */
 export function timeStringToSeconds(timeStr: string): number {
-    if (!timeStr || !timeStr.includes(':')) return 0;
-    const parts = timeStr.split(':').map(part => parseInt(part, 10)).filter(num => !isNaN(num));
-    if (parts.length === 2) { // MM:SS or HH:MM
-        // Heuristic: if first part > 59, it's likely HH:MM for a long race like a half marathon
-        if (parts[0] > 59) { 
-             return parts[0] * 3600 + parts[1] * 60; // Treat as HH:MM
-        }
-        return parts[0] * 60 + parts[1]; // Treat as MM:SS
-    }
+    if (!timeStr) return 0;
+    
+    const parts = timeStr.split(':').map(part => parseInt(part, 10) || 0);
+
+    let hours = 0, minutes = 0, seconds = 0;
+
     if (parts.length === 3) { // HH:MM:SS
-        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+        [hours, minutes, seconds] = parts;
+    } else if (parts.length === 2) { // MM:SS or HH:MM
+        // Heuristic: If hours seems more likely for longer distances
+        if (parts[0] >= 1 && parts[0] <= 5) { // A reasonable range for HM/Marathon hours
+             [hours, minutes] = parts;
+        } else {
+            [minutes, seconds] = parts;
+        }
+    } else if (parts.length === 1) { // SS
+        seconds = parts[0];
+    } else {
+        return 0; // Invalid format
     }
-     if (parts.length === 1 && timeStr.split(':').length === 2) { // Handle "1:27" where last part is empty string
-        return parts[0] * 3600; // Assume it's hours
-    }
-    return 0;
+
+    return (hours * 3600) + (minutes * 60) + seconds;
 }
 
 
