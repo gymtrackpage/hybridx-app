@@ -1,4 +1,5 @@
 
+
 export interface PersonalRecords {
   backSquat?: string;
   deadlift?: string;
@@ -64,10 +65,12 @@ export interface Workout {
   day: number;
   title: string;
   exercises: Exercise[];
+  programType: ProgramType;
 }
 
 export interface RunningWorkout extends Omit<Workout, 'exercises'> {
   runs: PlannedRun[];
+  targetRace?: 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon';
 }
 
 export type PaceZone = 'recovery' | 'easy' | 'marathon' | 'threshold' | 'interval' | 'repetition';

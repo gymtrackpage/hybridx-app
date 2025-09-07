@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -13,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import type { Program, Workout, Exercise } from '@/models/types';
+import type { Program, Workout, Exercise, RunningProgram, RunningWorkout, PlannedRun, PaceZone, ProgramType } from '@/models/types';
 import { createProgram } from '@/services/program-service-client';
 
 interface ProgramImportDialogProps {
@@ -22,7 +23,7 @@ interface ProgramImportDialogProps {
   onSuccess: () => void;
 }
 
-interface CsvRow {
+interface HyroxCsvRow {
   programName: string;
   programDescription: string;
   workoutDay: string;
@@ -30,6 +31,22 @@ interface CsvRow {
   exerciseName: string;
   exerciseDetails: string;
 }
+
+interface RunningCsvRow {
+  programName: string;
+  programDescription: string;
+  targetRace: string;
+  workoutDay: string;
+  workoutTitle: string;
+  runType: string;
+  runDistance: string;
+  runPaceZone: string;
+  runDescription: string;
+  runEffortLevel: string;
+}
+
+type CsvRow = HyroxCsvRow | RunningCsvRow;
+
 
 export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImportDialogProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -55,13 +72,18 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
       skipEmptyLines: true,
       complete: (results) => {
         if (results.errors.length > 0) {
-          setError('Failed to parse CSV. Please check the file format.');
+          setError('Failed to parse CSV. Please check the file format and headers.');
           console.error('CSV parsing errors:', results.errors);
           setIsLoading(false);
           return;
         }
         try {
-          const program = transformData(results.data);
+          // Detect program type based on headers
+          const isRunningProgram = 'runType' in results.data[0] && 'runPaceZone' in results.data[0];
+          const program = isRunningProgram 
+            ? transformRunningData(results.data as RunningCsvRow[])
+            : transformHyroxData(results.data as HyroxCsvRow[]);
+          
           setParsedProgram(program);
         } catch (e: any) {
           setError(e.message);
@@ -76,51 +98,84 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
       },
     });
   };
+  
+  const transformHyroxData = (rows: HyroxCsvRow[]): Omit<Program, 'id'> => {
+      if (rows.length === 0) throw new Error('CSV is empty.');
+      const { programName, programDescription } = rows[0];
+      if (!programName || !programDescription) throw new Error('CSV must contain programName and programDescription.');
 
-  const transformData = (rows: CsvRow[]): Omit<Program, 'id'> => {
-    if (rows.length === 0) {
-      throw new Error('CSV is empty or invalid.');
-    }
+      const workoutsMap = new Map<number, Workout>();
 
-    const programName = rows[0].programName;
-    const programDescription = rows[0].programDescription;
+      rows.forEach(row => {
+          const day = parseInt(row.workoutDay, 10);
+          if (isNaN(day)) throw new Error(`Invalid workoutDay found: ${row.workoutDay}`);
+          
+          const { workoutTitle, exerciseName, exerciseDetails } = row;
+          if (!workoutTitle || !exerciseName || !exerciseDetails) throw new Error('All hyrox workout fields are required.');
 
-    if (!programName || !programDescription) {
-      throw new Error('CSV must contain programName and programDescription in the first row.');
-    }
-
-    const workoutsMap = new Map<number, Workout>();
-
-    rows.forEach(row => {
-      const day = parseInt(row.workoutDay, 10);
-      if (isNaN(day)) {
-        throw new Error(`Invalid workoutDay found: ${row.workoutDay}`);
-      }
+          const exercise: Exercise = { name: exerciseName, details: exerciseDetails };
+          
+          if (workoutsMap.has(day)) {
+              workoutsMap.get(day)!.exercises.push(exercise);
+          } else {
+              workoutsMap.set(day, { day, title: workoutTitle, exercises: [exercise], programType: 'hyrox' });
+          }
+      });
       
-      const { workoutTitle, exerciseName, exerciseDetails } = row;
-      if (!workoutTitle || !exerciseName || !exerciseDetails) {
-          throw new Error('All workout and exercise fields are required for each row.');
-      }
+      return {
+          name: programName,
+          description: programDescription,
+          programType: 'hyrox',
+          workouts: Array.from(workoutsMap.values()).sort((a, b) => a.day - b.day),
+      };
+  }
+  
+  const transformRunningData = (rows: RunningCsvRow[]): Omit<RunningProgram, 'id'> => {
+      if (rows.length === 0) throw new Error('CSV is empty.');
+      const { programName, programDescription, targetRace } = rows[0];
+      if (!programName || !programDescription || !targetRace) throw new Error('Running CSV must contain programName, programDescription, and targetRace.');
 
-      const exercise: Exercise = { name: exerciseName, details: exerciseDetails };
+      const workoutsMap = new Map<number, RunningWorkout>();
 
-      if (workoutsMap.has(day)) {
-        workoutsMap.get(day)!.exercises.push(exercise);
-      } else {
-        workoutsMap.set(day, {
-          day,
-          title: workoutTitle,
-          exercises: [exercise],
-        });
-      }
-    });
+      rows.forEach(row => {
+          const day = parseInt(row.workoutDay, 10);
+          if (isNaN(day)) throw new Error(`Invalid workoutDay found: ${row.workoutDay}`);
+          
+          const { workoutTitle, runType, runDistance, runPaceZone, runDescription, runEffortLevel } = row;
+          if (!workoutTitle || !runType || !runDistance || !runPaceZone || !runDescription || !runEffortLevel) {
+              throw new Error('All running workout fields are required for each row.');
+          }
 
-    return {
-      name: programName,
-      description: programDescription,
-      workouts: Array.from(workoutsMap.values()).sort((a, b) => a.day - b.day),
-    };
-  };
+          const plannedRun: PlannedRun = {
+              type: runType as PlannedRun['type'],
+              distance: parseFloat(runDistance),
+              paceZone: runPaceZone as PaceZone,
+              description: runDescription,
+              effortLevel: parseInt(runEffortLevel, 10) as PlannedRun['effortLevel'],
+          };
+          
+          if (workoutsMap.has(day)) {
+              workoutsMap.get(day)!.runs.push(plannedRun);
+          } else {
+              workoutsMap.set(day, { 
+                  day, 
+                  title: workoutTitle, 
+                  runs: [plannedRun], 
+                  exercises: [],
+                  programType: 'running',
+                  targetRace: targetRace as RunningProgram['targetRace'],
+              });
+          }
+      });
+      
+      return {
+          name: programName,
+          description: programDescription,
+          programType: 'running',
+          targetRace: targetRace as RunningProgram['targetRace'],
+          workouts: Array.from(workoutsMap.values()).sort((a, b) => a.day - b.day),
+      };
+  }
 
   const handleImport = async () => {
     if (!parsedProgram) return;
@@ -219,9 +274,10 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
                         Preview of Program to be Imported
                     </h4>
                     <p className="text-sm"><strong>Name:</strong> {parsedProgram.name}</p>
+                    <p className="text-sm"><strong>Type:</strong> <span className="capitalize">{parsedProgram.programType}</span></p>
                     <p className="text-sm text-muted-foreground"><strong>Description:</strong> {parsedProgram.description}</p>
                     <p className="text-sm mt-2">
-                        Found <strong>{parsedProgram.workouts.length} unique workout day(s)</strong> with a total of <strong>{parsedProgram.workouts.reduce((acc, w) => acc + w.exercises.length, 0)} exercises</strong>.
+                        Found <strong>{parsedProgram.workouts.length} unique workout day(s)</strong>.
                     </p>
                 </div>
             )}
