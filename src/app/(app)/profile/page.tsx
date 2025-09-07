@@ -122,19 +122,31 @@ export default function ProfilePage() {
   const handleRunningSubmit = async (data: RunningProfileFormData) => {
     if (!user) return;
     try {
-      const profileToUpdate: UserRunningProfile = {
-        benchmarkPaces: {
-            mile: data.mile ? timeStringToSeconds(data.mile, 'mile') : undefined,
-            fiveK: data.fiveK ? timeStringToSeconds(data.fiveK, '5k') : undefined,
-            tenK: data.tenK ? timeStringToSeconds(data.tenK, '10k') : undefined,
-            halfMarathon: data.halfMarathon ? timeStringToSeconds(data.halfMarathon, 'half-marathon') : undefined,
-        }
-      };
-      await updateUser(user.id, { runningProfile: profileToUpdate });
-      toast({ title: 'Success', description: 'Your running profile has been updated.' });
+        const benchmarkPaces: { [key: string]: number } = {};
+        
+        const paceData = {
+            mile: data.mile ? timeStringToSeconds(data.mile, 'mile') : 0,
+            fiveK: data.fiveK ? timeStringToSeconds(data.fiveK, '5k') : 0,
+            tenK: data.tenK ? timeStringToSeconds(data.tenK, '10k') : 0,
+            halfMarathon: data.halfMarathon ? timeStringToSeconds(data.halfMarathon, 'half-marathon') : 0,
+        };
+
+        // Only add paces to the object if they are valid numbers greater than 0
+        Object.entries(paceData).forEach(([key, value]) => {
+            if (value && value > 0) {
+                benchmarkPaces[key] = value;
+            }
+        });
+
+        const profileToUpdate: UserRunningProfile = {
+            benchmarkPaces,
+        };
+        
+        await updateUser(user.id, { runningProfile: profileToUpdate });
+        toast({ title: 'Success', description: 'Your running profile has been updated.' });
     } catch (error) {
-      console.error("Detailed error updating running profile:", error);
-      toast({ title: 'Error', description: 'Failed to update running profile. Check console for details.', variant: 'destructive' });
+        console.error("Detailed error updating running profile:", error);
+        toast({ title: 'Error', description: 'Failed to update running profile. Check console for details.', variant: 'destructive' });
     }
   };
 
