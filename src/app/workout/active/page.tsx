@@ -154,7 +154,7 @@ export default function ActiveWorkoutPage() {
 
   const allItemsCompleted = workoutItems.every(item => {
       const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
-      return session.completedItems[key];
+      return session?.completedItems?.[key];
   });
   
   const isRunningProgram = workout.programType === 'running';
