@@ -1,7 +1,7 @@
 // src/app/(app)/dashboard/page.tsx
 'use client';
 
-import { useEffect, useState }from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { BarChart, Target, Sparkles, Loader2, Route } from 'lucide-react';
