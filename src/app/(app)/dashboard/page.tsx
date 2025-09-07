@@ -4,7 +4,7 @@
 import { useEffect, useState }from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { BarChart, Target, Sparkles, Loader2 } from 'lucide-react';
+import { BarChart, Target, Sparkles, Loader2, Route } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval } from 'date-fns';
 
 import { motivationalCoach } from '@/ai/flows/motivational-coach';
@@ -36,9 +36,10 @@ import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getOrCreateWorkoutSession, getAllUserSessions, type WorkoutSession } from '@/services/session-service-client';
-import type { User, Program, Workout } from '@/models/types';
+import type { User, Program, Workout, RunningWorkout, PlannedRun } from '@/models/types';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 
 const chartConfig = {
   workouts: {
@@ -50,9 +51,10 @@ const chartConfig = {
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [program, setProgram] = useState<Program | null>(null);
-  const [todaysWorkout, setTodaysWorkout] = useState<{ day: number; workout: Workout | null } | null>(null);
+  const [todaysWorkout, setTodaysWorkout] = useState<{ day: number; workout: Workout | RunningWorkout | null } | null>(null);
   const [todaysSession, setTodaysSession] = useState<WorkoutSession | null>(null);
   const [progressData, setProgressData] = useState<{ week: string, workouts: number }[]>([]);
+  const [trainingPaces, setTrainingPaces] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
   const [motivation, setMotivation] = useState('');
   const [motivationLoading, setMotivationLoading] = useState(false);
@@ -71,6 +73,11 @@ export default function DashboardPage() {
       setUser(currentUser);
 
       if (currentUser) {
+        if (currentUser.runningProfile) {
+            const paces = calculateTrainingPaces(currentUser);
+            setTrainingPaces(paces);
+        }
+
         const sessions = await getAllUserSessions(userId);
         const weeklyProgress = generateProgressData(sessions);
         setProgressData(weeklyProgress);
@@ -89,12 +96,16 @@ export default function DashboardPage() {
               const session = await getOrCreateWorkoutSession(userId, currentProgram.id, today, workoutInfo.workout);
               setTodaysSession(session);
               
+              const exercisesForSummary = workoutInfo.workout.programType === 'running'
+                ? (workoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
+                : (workoutInfo.workout as Workout).exercises.map(e => e.name).join(', ');
+
               // Generate AI workout summary
               try {
                   const workoutResult = await workoutSummary({
                       userName: currentUser.firstName,
                       workoutTitle: workoutInfo.workout.title,
-                      exercises: workoutInfo.workout.exercises.map(e => e.name).join(', '),
+                      exercises: exercisesForSummary,
                   });
                   setWorkoutSummaryText(workoutResult.summary);
               } catch (aiError) {
@@ -197,9 +208,17 @@ export default function DashboardPage() {
       }
   }
 
-  const completedExercises = todaysSession ? Object.values(todaysSession.completedExercises).filter(Boolean).length : 0;
-  const totalExercises = todaysWorkout?.workout?.exercises.length || 0;
-  const progressPercentage = totalExercises > 0 ? (completedExercises / totalExercises) * 100 : 0;
+  const workoutItems = useMemo(() => {
+    if (!todaysWorkout?.workout) return [];
+    if (todaysWorkout.workout.programType === 'running') {
+      return (todaysWorkout.workout as RunningWorkout).runs;
+    }
+    return (todaysWorkout.workout as Workout).exercises;
+  }, [todaysWorkout]);
+
+  const completedItems = todaysSession ? Object.values(todaysSession.completedItems).filter(Boolean).length : 0;
+  const totalItems = workoutItems.length;
+  const progressPercentage = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
   
   if (loading) {
     return (
@@ -223,6 +242,8 @@ export default function DashboardPage() {
     );
   }
 
+  const isRunningProgram = todaysWorkout?.workout?.programType === 'running';
+
   return (
     <div className="space-y-6">
       <div className="space-y-1">
@@ -240,7 +261,7 @@ export default function DashboardPage() {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Target className="h-6 w-6" />
+              {isRunningProgram ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
               {program && todaysWorkout?.workout ? `Today's Workout (Day ${todaysWorkout.day})` : 'No Workout Assigned'}
             </CardTitle>
             <CardDescription asChild>
@@ -256,21 +277,36 @@ export default function DashboardPage() {
           <CardContent>
             {todaysWorkout?.workout ? (
                 <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-medium text-muted-foreground w-20">Progress</span>
-                  <Progress value={progressPercentage} className="flex-1" />
-                  <span className="text-sm font-bold">{Math.round(progressPercentage)}%</span>
+                    <div className="flex items-center gap-4">
+                        <span className="text-sm font-medium text-muted-foreground w-20">Progress</span>
+                        <Progress value={progressPercentage} className="flex-1" />
+                        <span className="text-sm font-bold">{Math.round(progressPercentage)}%</span>
+                    </div>
+                    <Separator />
+                    <ul className="space-y-4">
+                      {isRunningProgram ? (
+                          (todaysWorkout.workout as RunningWorkout).runs.map((run: PlannedRun) => (
+                              <li key={run.description}>
+                                <p className="font-medium">{run.description}</p>
+                                {trainingPaces ? (
+                                    <p className="text-sm text-muted-foreground">
+                                        Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / mile
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-yellow-600">Enter benchmark times in your profile to see target paces.</p>
+                                )}
+                              </li>
+                          ))
+                      ) : (
+                          (todaysWorkout.workout as Workout).exercises.map((ex) => (
+                              <li key={ex.name}>
+                                  <p className="font-medium">{ex.name}</p>
+                                  <p className="text-sm text-muted-foreground">{ex.details}</p>
+                              </li>
+                          ))
+                      )}
+                    </ul>
                 </div>
-                <Separator />
-                <ul className="space-y-4">
-                  {todaysWorkout.workout.exercises.map((ex) => (
-                    <li key={ex.name}>
-                      <p className="font-medium">{ex.name}</p>
-                      <p className="text-sm text-muted-foreground">{ex.details}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             ) : (
                 <div className="text-center text-muted-foreground py-10">
                     <p>No workout scheduled for today.</p>

@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, CalendarDays, Target } from 'lucide-react';
+import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -18,12 +18,16 @@ import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
-import type { Workout } from '@/models/types';
+import type { Workout, RunningWorkout, User } from '@/models/types';
+import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
+import Link from 'next/link';
 
 
 export default function ActiveWorkoutPage() {
   const [session, setSession] = useState<WorkoutSession | null>(null);
-  const [workoutInfo, setWorkoutInfo] = useState<{ day: number, workout: Workout | null } | null>(null);
+  const [workoutInfo, setWorkoutInfo] = useState<{ day: number, workout: Workout | RunningWorkout | null } | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [trainingPaces, setTrainingPaces] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
   const [notes, setNotes] = useState('');
   const [summaryText, setSummaryText] = useState('');
@@ -38,35 +42,47 @@ export default function ActiveWorkoutPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const user = await getUserClient(firebaseUser.uid);
-        if (user?.programId && user.startDate) {
-          const program = await getProgramClient(user.programId);
-          if (program) {
-            const currentWorkoutInfo = getWorkoutForDay(program, user.startDate, today);
-            setWorkoutInfo(currentWorkoutInfo);
-            if (currentWorkoutInfo.workout) {
-              const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
-              setSession(workoutSession);
-              setNotes(workoutSession.notes || '');
+        const currentUser = await getUserClient(firebaseUser.uid);
+        setUser(currentUser);
 
-              // Fetch AI summary
-              try {
-                const summaryResult = await workoutSummary({
-                  userName: user.firstName,
-                  workoutTitle: currentWorkoutInfo.workout.title,
-                  exercises: currentWorkoutInfo.workout.exercises.map(e => e.name).join(', '),
-                });
-                setSummaryText(summaryResult.summary);
-              } catch (error) {
-                console.error("Failed to generate AI workout summary:", error);
-                setSummaryText(currentWorkoutInfo.workout.title); // Fallback
-              } finally {
-                setSummaryLoading(false);
-              }
-            } else {
-                setSummaryLoading(false);
+        if (currentUser) {
+            if (currentUser.runningProfile) {
+                const paces = calculateTrainingPaces(currentUser);
+                setTrainingPaces(paces);
             }
-          }
+            if (currentUser.programId && currentUser.startDate) {
+                const program = await getProgramClient(currentUser.programId);
+                if (program) {
+                    const currentWorkoutInfo = getWorkoutForDay(program, currentUser.startDate, today);
+                    setWorkoutInfo(currentWorkoutInfo);
+                    if (currentWorkoutInfo.workout) {
+                        const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
+                        setSession(workoutSession);
+                        setNotes(workoutSession.notes || '');
+
+                        const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
+                            ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
+                            : (currentWorkoutInfo.workout as Workout).exercises.map(e => e.name).join(', ');
+
+                        // Fetch AI summary
+                        try {
+                            const summaryResult = await workoutSummary({
+                            userName: currentUser.firstName,
+                            workoutTitle: currentWorkoutInfo.workout.title,
+                            exercises: exercisesForSummary,
+                            });
+                            setSummaryText(summaryResult.summary);
+                        } catch (error) {
+                            console.error("Failed to generate AI workout summary:", error);
+                            setSummaryText(currentWorkoutInfo.workout.title); // Fallback
+                        } finally {
+                            setSummaryLoading(false);
+                        }
+                    } else {
+                        setSummaryLoading(false);
+                    }
+                }
+            }
         }
       }
       setLoading(false);
@@ -85,12 +101,12 @@ export default function ActiveWorkoutPage() {
     debouncedSaveNotes(e.target.value);
   };
 
-  const handleToggleExercise = async (exerciseName: string, completed: boolean) => {
+  const handleToggleItem = async (itemName: string, completed: boolean) => {
     if (!session) return;
-    const updatedCompleted = { ...session.completedExercises, [exerciseName]: completed };
-    const updatedSession = { ...session, completedExercises: updatedCompleted };
+    const updatedCompleted = { ...session.completedItems, [itemName]: completed };
+    const updatedSession = { ...session, completedItems: updatedCompleted };
     setSession(updatedSession);
-    await updateWorkoutSession(session.id, { completedExercises: updatedCompleted });
+    await updateWorkoutSession(session.id, { completedItems: updatedCompleted });
   };
   
   const handleFinishWorkout = async () => {
@@ -131,7 +147,17 @@ export default function ActiveWorkoutPage() {
   const { workout, day } = workoutInfo;
   const week = Math.ceil(day / 7);
   const dayOfWeek = day % 7 === 0 ? 7 : day % 7;
-  const allExercisesCompleted = workout.exercises.every(ex => session.completedExercises[ex.name]);
+
+  const workoutItems = workout.programType === 'running' 
+    ? (workout as RunningWorkout).runs 
+    : (workout as Workout).exercises;
+
+  const allItemsCompleted = workoutItems.every(item => {
+      const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
+      return session.completedItems[key];
+  });
+  
+  const isRunningProgram = workout.programType === 'running';
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -154,27 +180,56 @@ export default function ActiveWorkoutPage() {
                     </div>
                 </div>
                 
+                {isRunningProgram && !trainingPaces && (
+                    <div className="p-4 border border-yellow-400 bg-yellow-50 rounded-md text-yellow-800 flex items-start gap-3">
+                        <AlertTriangle className="h-5 w-5 mt-0.5" />
+                        <div>
+                            <h4 className="font-semibold">Paces Not Calculated</h4>
+                            <p className="text-sm">To see your personalized training paces, please add at least one benchmark race time to your profile.</p>
+                            <Button variant="link" className="p-0 h-auto mt-1 text-sm text-yellow-800" asChild>
+                            <Link href="/profile">Update Your Profile</Link>
+                            </Button>
+                        </div>
+                    </div>
+                )}
+                
                 <div>
-                    <h3 className="text-base font-semibold mb-3">Exercises:</h3>
+                    <h3 className="text-base font-semibold mb-3">{isRunningProgram ? 'Runs:' : 'Exercises:'}</h3>
                     <div className="space-y-3">
-                        {workout.exercises.map((exercise) => (
-                        <Card key={exercise.name} className="has-[[data-state=checked]]:bg-muted/50 transition-colors">
-                            <CardContent className="p-4 flex items-center gap-4">
-                                <div className="flex-1">
-                                <p className="font-semibold">{exercise.name}</p>
-                                <p className="text-sm text-muted-foreground">{exercise.details}</p>
-                                </div>
-                                <Checkbox
-                                    id={exercise.name}
-                                    checked={!!session.completedExercises[exercise.name]}
-                                    onCheckedChange={(checked) => handleToggleExercise(exercise.name, !!checked)}
-                                    className="h-6 w-6"
-                                    disabled={!!session.finishedAt}
-                                    aria-label={`Mark ${exercise.name} as complete`}
-                                />
-                            </CardContent>
-                        </Card>
-                        ))}
+                        {workoutItems.map((item, index) => {
+                            const key = isRunningProgram ? (item as any).description : (item as any).name;
+                            return (
+                                <Card key={key} className="has-[[data-state=checked]]:bg-muted/50 transition-colors">
+                                    <CardContent className="p-4 flex items-center gap-4">
+                                        <div className="flex-1">
+                                            {isRunningProgram ? (
+                                                <>
+                                                    <p className="font-semibold">{(item as any).description}</p>
+                                                    {trainingPaces && (
+                                                        <p className="text-sm text-muted-foreground">
+                                                            Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[(item as any).paceZone])}</span> / mile
+                                                        </p>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <p className="font-semibold">{(item as any).name}</p>
+                                                    <p className="text-sm text-muted-foreground">{(item as any).details}</p>
+                                                </>
+                                            )}
+                                        </div>
+                                        <Checkbox
+                                            id={key}
+                                            checked={!!session.completedItems[key]}
+                                            onCheckedChange={(checked) => handleToggleItem(key, !!checked)}
+                                            className="h-6 w-6"
+                                            disabled={!!session.finishedAt}
+                                            aria-label={`Mark ${key} as complete`}
+                                        />
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -191,7 +246,7 @@ export default function ActiveWorkoutPage() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                    <Button className="w-full" onClick={handleFinishWorkout} disabled={!allExercisesCompleted || !!session.finishedAt}>
+                    <Button className="w-full" onClick={handleFinishWorkout} disabled={!allItemsCompleted || !!session.finishedAt}>
                         {session.finishedAt ? <Check className="mr-2" /> : <Flag className="mr-2" />}
                         {session.finishedAt ? 'Workout Completed' : 'Finish Workout'}
                     </Button>

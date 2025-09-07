@@ -3,7 +3,7 @@
 
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { WorkoutSession, Workout } from '@/models/types';
+import type { WorkoutSession, Workout, RunningWorkout } from '@/models/types';
 
 function fromFirestore(doc: any): WorkoutSession {
     const data = doc.data();
@@ -14,7 +14,7 @@ function fromFirestore(doc: any): WorkoutSession {
         workoutDate: data.workoutDate.toDate(),
         startedAt: data.startedAt.toDate(),
         finishedAt: data.finishedAt ? data.finishedAt.toDate() : undefined,
-        completedExercises: data.completedExercises,
+        completedItems: data.completedItems,
         notes: data.notes || '',
     };
 }
@@ -31,7 +31,7 @@ export async function getAllUserSessions(userId: string): Promise<WorkoutSession
     return snapshot.docs.map(fromFirestore);
 }
 
-export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout): Promise<WorkoutSession> {
+export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout | RunningWorkout): Promise<WorkoutSession> {
     const q = query(
         sessionsCollection, 
         where('userId', '==', userId), 
@@ -46,16 +46,23 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
     }
 
     const initialCompleted: { [key: string]: boolean } = {};
-    workout.exercises.forEach(ex => {
-        initialCompleted[ex.name] = false;
-    });
+    if (workout.programType === 'running') {
+        (workout as RunningWorkout).runs.forEach(run => {
+            initialCompleted[run.description] = false;
+        });
+    } else {
+        (workout as Workout).exercises.forEach(ex => {
+            initialCompleted[ex.name] = false;
+        });
+    }
+
 
     const newSessionData = {
         userId,
         programId,
         workoutDate: Timestamp.fromDate(workoutDate),
         startedAt: Timestamp.now(),
-        completedExercises: initialCompleted,
+        completedItems: initialCompleted,
         finishedAt: null,
         notes: '',
     };
@@ -68,7 +75,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         programId,
         workoutDate,
         startedAt: new Date(),
-        completedExercises: initialCompleted,
+        completedItems: initialCompleted,
         notes: '',
     };
 }

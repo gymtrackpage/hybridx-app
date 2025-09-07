@@ -1,4 +1,4 @@
-
+// src/models/types.ts
 
 export interface PersonalRecords {
   backSquat?: string;
@@ -51,7 +51,7 @@ export interface Program {
   name: string;
   description: string;
   programType: ProgramType;
-  workouts: Workout[];
+  workouts: (Workout | RunningWorkout)[];
 }
 
 export interface RunningProgram extends Omit<Program, 'workouts'> {
@@ -65,12 +65,16 @@ export interface Workout {
   day: number;
   title: string;
   exercises: Exercise[];
-  programType: ProgramType;
+  programType: 'hyrox'; // Explicitly hyrox for this type
 }
 
-export interface RunningWorkout extends Omit<Workout, 'exercises'> {
+export interface RunningWorkout {
+  day: number;
+  title: string;
   runs: PlannedRun[];
+  programType: 'running'; // Explicitly running for this type
   targetRace?: 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon';
+  exercises: []; // To satisfy base type if needed, but should be empty
 }
 
 export type PaceZone = 'recovery' | 'easy' | 'marathon' | 'threshold' | 'interval' | 'repetition';
@@ -97,6 +101,6 @@ export interface WorkoutSession {
     workoutDate: Date;
     startedAt: Date;
     finishedAt?: Date;
-    completedExercises: { [exerciseName: string]: boolean };
+    completedItems: { [itemName: string]: boolean };
     notes?: string;
 }
