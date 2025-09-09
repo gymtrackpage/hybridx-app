@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { auth } from '@/lib/firebase';
+import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
@@ -40,55 +40,66 @@ export default function ActiveWorkoutPage() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const currentUser = await getUserClient(firebaseUser.uid);
-        setUser(currentUser);
+    const initialize = async () => {
+        const auth = await getAuthInstance();
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (firebaseUser) {
+            const currentUser = await getUserClient(firebaseUser.uid);
+            setUser(currentUser);
 
-        if (currentUser) {
-            if (currentUser.runningProfile) {
-                const paces = calculateTrainingPaces(currentUser);
-                setTrainingPaces(paces);
-            }
-            if (currentUser.programId && currentUser.startDate) {
-                const program = await getProgramClient(currentUser.programId);
-                if (program) {
-                    const currentWorkoutInfo = getWorkoutForDay(program, currentUser.startDate, today);
-                    setWorkoutInfo(currentWorkoutInfo);
-                    if (currentWorkoutInfo.workout) {
-                        const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
-                        setSession(workoutSession);
-                        setNotes(workoutSession.notes || '');
+            if (currentUser) {
+                if (currentUser.runningProfile) {
+                    const paces = calculateTrainingPaces(currentUser);
+                    setTrainingPaces(paces);
+                }
+                if (currentUser.programId && currentUser.startDate) {
+                    const program = await getProgramClient(currentUser.programId);
+                    if (program) {
+                        const currentWorkoutInfo = getWorkoutForDay(program, currentUser.startDate, today);
+                        setWorkoutInfo(currentWorkoutInfo);
+                        if (currentWorkoutInfo.workout) {
+                            const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
+                            setSession(workoutSession);
+                            setNotes(workoutSession.notes || '');
 
-                        const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
-                            ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
-                            : (currentWorkoutInfo.workout as Workout).exercises.map(e => e.name).join(', ');
+                            const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
+                                ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
+                                : (currentWorkoutInfo.workout as Workout).exercises.map(e => e.name).join(', ');
 
-                        // Fetch AI summary
-                        try {
-                            const summaryResult = await workoutSummary({
-                            userName: currentUser.firstName,
-                            workoutTitle: currentWorkoutInfo.workout.title,
-                            exercises: exercisesForSummary,
-                            });
-                            setSummaryText(summaryResult.summary);
-                        } catch (error) {
-                            console.error("Failed to generate AI workout summary:", error);
-                            setSummaryText(currentWorkoutInfo.workout.title); // Fallback
-                        } finally {
+                            // Fetch AI summary
+                            try {
+                                const summaryResult = await workoutSummary({
+                                userName: currentUser.firstName,
+                                workoutTitle: currentWorkoutInfo.workout.title,
+                                exercises: exercisesForSummary,
+                                });
+                                setSummaryText(summaryResult.summary);
+                            } catch (error) {
+                                console.error("Failed to generate AI workout summary:", error);
+                                setSummaryText(currentWorkoutInfo.workout.title); // Fallback
+                            } finally {
+                                setSummaryLoading(false);
+                            }
+                        } else {
                             setSummaryLoading(false);
                         }
-                    } else {
-                        setSummaryLoading(false);
                     }
                 }
             }
         }
-      }
-      setLoading(false);
-    });
+        setLoading(false);
+        });
+        return unsubscribe;
+    };
+    
+    let unsubscribe: () => void;
+    initialize().then(unsub => unsubscribe = unsub);
 
-    return () => unsubscribe();
+    return () => {
+        if (unsubscribe) {
+            unsubscribe();
+        }
+    };
   }, [today]);
 
   const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {

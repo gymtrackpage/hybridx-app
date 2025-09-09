@@ -6,7 +6,7 @@ import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { differenceInDays, addMonths, format } from 'date-fns';
 import { Loader2, CheckCircle, ShieldCheck, Star, PauseCircle, XCircle } from 'lucide-react';
 
-import { auth } from '@/lib/firebase';
+import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { createCheckoutSession, pauseSubscription, cancelSubscription } from '@/services/stripe-service';
 import type { User } from '@/models/types';
@@ -40,14 +40,26 @@ export default function SubscriptionPage() {
     }
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-            if (fbUser) {
-                setFirebaseUser(fbUser);
-                await fetchUserData(fbUser);
+        const initialize = async () => {
+            const auth = await getAuthInstance();
+            const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+                if (fbUser) {
+                    setFirebaseUser(fbUser);
+                    await fetchUserData(fbUser);
+                }
+                setLoading(false);
+            });
+            return unsubscribe;
+        };
+        
+        let unsubscribe: () => void;
+        initialize().then(unsub => unsubscribe = unsub);
+
+        return () => {
+            if (unsubscribe) {
+                unsubscribe();
             }
-            setLoading(false);
-        });
-        return () => unsubscribe();
+        };
     }, []);
 
     const handleSubscribe = async () => {

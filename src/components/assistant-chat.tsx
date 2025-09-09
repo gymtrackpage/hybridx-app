@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { CornerDownLeft, Loader2, Sparkles } from 'lucide-react';
 import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { getAuthInstance } from '@/lib/firebase';
 
 import { trainingAssistant } from '@/ai/flows/training-assistant';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -71,15 +71,27 @@ export function AssistantChat() {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setCurrentUser(user);
-      } else {
-        setCurrentUser(null);
-      }
-      setAuthChecked(true);
-    });
-    return () => unsubscribe();
+    const initialize = async () => {
+        const auth = await getAuthInstance();
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (user) {
+            setCurrentUser(user);
+        } else {
+            setCurrentUser(null);
+        }
+        setAuthChecked(true);
+        });
+        return unsubscribe;
+    };
+    
+    let unsubscribe: () => void;
+    initialize().then(unsub => unsubscribe = unsub);
+
+    return () => {
+        if (unsubscribe) {
+            unsubscribe();
+        }
+    };
   }, []);
 
   useEffect(() => {

@@ -8,7 +8,7 @@ import { ArrowLeft, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, AuthErrorCodes } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { getAuthInstance } from '@/lib/firebase';
 import { createUser } from '@/services/user-service-client';
 
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,7 @@ export function LoginForm() {
   async function onSubmit(values: z.infer<typeof loginSchema>) {
     setIsLoading(true);
     try {
+      const auth = await getAuthInstance();
       await signInWithEmailAndPassword(auth, values.email, values.password);
       toast({
         title: 'Login Successful',
@@ -182,6 +183,7 @@ export function SignupForm() {
     const finalData = { ...formData, ...data } as SignupData;
     
     try {
+      const auth = await getAuthInstance();
       // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, finalData.email, finalData.password);
       const user = userCredential.user;

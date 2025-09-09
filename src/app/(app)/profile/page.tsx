@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { auth } from '@/lib/firebase';
+import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient, updateUser } from '@/services/user-service-client';
 import type { User, PersonalRecords, UserRunningProfile } from '@/models/types';
 import { timeStringToSeconds, secondsToTimeString } from '@/lib/pace-utils';
@@ -66,35 +66,47 @@ export default function ProfilePage() {
 
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const currentUser = await getUserClient(firebaseUser.uid);
-        setUser(currentUser);
-        if (currentUser) {
-          profileForm.reset({
-            firstName: currentUser.firstName,
-            lastName: currentUser.lastName,
-            experience: currentUser.experience,
-          });
-          recordsForm.reset({
-            backSquat: currentUser.personalRecords?.backSquat || '',
-            deadlift: currentUser.personalRecords?.deadlift || '',
-            benchPress: currentUser.personalRecords?.benchPress || '',
-            run1k: currentUser.personalRecords?.run1k || '',
-            run5k: currentUser.personalRecords?.run5k || '',
-            run10k: currentUser.personalRecords?.run10k || '',
-          });
-          runningForm.reset({
-            mile: currentUser.runningProfile?.benchmarkPaces?.mile ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.mile) : '',
-            fiveK: currentUser.runningProfile?.benchmarkPaces?.fiveK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.fiveK) : '',
-            tenK: currentUser.runningProfile?.benchmarkPaces?.tenK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.tenK) : '',
-            halfMarathon: currentUser.runningProfile?.benchmarkPaces?.halfMarathon ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.halfMarathon) : '',
-          })
+    const initialize = async () => {
+        const auth = await getAuthInstance();
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (firebaseUser) {
+            const currentUser = await getUserClient(firebaseUser.uid);
+            setUser(currentUser);
+            if (currentUser) {
+            profileForm.reset({
+                firstName: currentUser.firstName,
+                lastName: currentUser.lastName,
+                experience: currentUser.experience,
+            });
+            recordsForm.reset({
+                backSquat: currentUser.personalRecords?.backSquat || '',
+                deadlift: currentUser.personalRecords?.deadlift || '',
+                benchPress: currentUser.personalRecords?.benchPress || '',
+                run1k: currentUser.personalRecords?.run1k || '',
+                run5k: currentUser.personalRecords?.run5k || '',
+                run10k: currentUser.personalRecords?.run10k || '',
+            });
+            runningForm.reset({
+                mile: currentUser.runningProfile?.benchmarkPaces?.mile ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.mile) : '',
+                fiveK: currentUser.runningProfile?.benchmarkPaces?.fiveK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.fiveK) : '',
+                tenK: currentUser.runningProfile?.benchmarkPaces?.tenK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.tenK) : '',
+                halfMarathon: currentUser.runningProfile?.benchmarkPaces?.halfMarathon ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.halfMarathon) : '',
+            })
+            }
         }
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
+        setLoading(false);
+        });
+        return unsubscribe;
+    };
+    
+    let unsubscribe: () => void;
+    initialize().then(unsub => unsubscribe = unsub);
+
+    return () => {
+        if (unsubscribe) {
+            unsubscribe();
+        }
+    };
   }, [profileForm, recordsForm, runningForm]);
 
   const handleProfileSubmit = async (data: ProfileFormData) => {
@@ -125,18 +137,18 @@ export default function ProfilePage() {
         const benchmarkPaces: { [key: string]: number } = {};
         
         const paceData = {
-            mile: data.mile ? timeStringToSeconds(data.mile, 'mile') : 0,
-            fiveK: data.fiveK ? timeStringToSeconds(data.fiveK, '5k') : 0,
-            tenK: data.tenK ? timeStringToSeconds(data.tenK, '10k') : 0,
-            halfMarathon: data.halfMarathon ? timeStringToSeconds(data.halfMarathon, 'half-marathon') : 0,
+            mile: data.mile ? timeStringToSeconds(data.mile, 'mile') : undefined,
+            fiveK: data.fiveK ? timeStringToSeconds(data.fiveK, '5k') : undefined,
+            tenK: data.tenK ? timeStringToSeconds(data.tenK, '10k') : undefined,
+            halfMarathon: data.halfMarathon ? timeStringToSeconds(data.halfMarathon, 'half-marathon') : undefined,
         };
 
         // Only add paces to the object if they are valid numbers greater than 0
-        Object.entries(paceData).forEach(([key, value]) => {
+        for (const [key, value] of Object.entries(paceData)) {
             if (value && value > 0) {
                 benchmarkPaces[key] = value;
             }
-        });
+        }
 
         const profileToUpdate: UserRunningProfile = {
             benchmarkPaces,
@@ -144,9 +156,9 @@ export default function ProfilePage() {
         
         await updateUser(user.id, { runningProfile: profileToUpdate });
         toast({ title: 'Success', description: 'Your running profile has been updated.' });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Detailed error updating running profile:", error);
-        toast({ title: 'Error', description: 'Failed to update running profile. Check console for details.', variant: 'destructive' });
+        toast({ title: 'Error', description: `Failed to update running profile: ${error.message}`, variant: 'destructive' });
     }
   };
 

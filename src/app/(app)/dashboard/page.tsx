@@ -31,7 +31,7 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, ChartTooltip, CartesianGrid, ChartTooltipContent } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
-import { auth } from '@/lib/firebase';
+import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
@@ -105,18 +105,29 @@ export default function DashboardPage() {
   };
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        fetchCoreData(firebaseUser.uid);
-      } else {
-        setUser(null);
-        setProgram(null);
-        setTodaysWorkout(null);
-        setLoading(false);
-      }
-    });
+    const initialize = async () => {
+        const auth = await getAuthInstance();
+        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+        if (firebaseUser) {
+            fetchCoreData(firebaseUser.uid);
+        } else {
+            setUser(null);
+            setProgram(null);
+            setTodaysWorkout(null);
+            setLoading(false);
+        }
+        });
+        return unsubscribe;
+    };
 
-    return () => unsubscribe();
+    let unsubscribe: () => void;
+    initialize().then(unsub => unsubscribe = unsub);
+
+    return () => {
+        if (unsubscribe) {
+            unsubscribe();
+        }
+    };
   }, []);
 
   // Effect for AI Dashboard Summary

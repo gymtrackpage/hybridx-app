@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { auth } from '@/lib/firebase';
+import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
@@ -31,21 +31,32 @@ export default function CalendarPage() {
   )?.workout;
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const user = await getUserClient(firebaseUser.uid);
-        if (user?.programId && user.startDate) {
-          const program = await getProgramClient(user.programId);
-          const sessions = await getAllUserSessions(firebaseUser.uid);
-          if (program) {
-            generateWorkoutEvents(program, user.startDate, sessions);
-          }
+    const initialize = async () => {
+        const auth = await getAuthInstance();
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (firebaseUser) {
+            const user = await getUserClient(firebaseUser.uid);
+            if (user?.programId && user.startDate) {
+            const program = await getProgramClient(user.programId);
+            const sessions = await getAllUserSessions(firebaseUser.uid);
+            if (program) {
+                generateWorkoutEvents(program, user.startDate, sessions);
+            }
+            }
         }
-      }
-      setLoading(false);
-    });
+        setLoading(false);
+        });
+        return unsubscribe;
+    };
 
-    return () => unsubscribe();
+    let unsubscribe: () => void;
+    initialize().then(unsub => unsubscribe = unsub);
+
+    return () => {
+        if (unsubscribe) {
+            unsubscribe();
+        }
+    };
   }, []);
 
   const generateWorkoutEvents = (program: Program, startDate: Date, sessions: WorkoutSession[]) => {

@@ -15,7 +15,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { getAuthInstance } from '@/lib/firebase';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -101,33 +101,46 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        // Subscription check logic
-        const appUser = await getUserClient(currentUser.uid);
-        if (appUser && !appUser.isAdmin && pathname !== '/subscription') {
-            const status = appUser.subscriptionStatus || 'trial';
-            const trialStart = appUser.trialStartDate;
-            const trialEnded = trialStart ? isAfter(new Date(), addMonths(trialStart, 1)) : true;
+    const initialize = async () => {
+        const auth = await getAuthInstance();
+        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        if (currentUser) {
+            setUser(currentUser);
+            // Subscription check logic
+            const appUser = await getUserClient(currentUser.uid);
+            if (appUser && !appUser.isAdmin && pathname !== '/subscription') {
+                const status = appUser.subscriptionStatus || 'trial';
+                const trialStart = appUser.trialStartDate;
+                const trialEnded = trialStart ? isAfter(new Date(), addMonths(trialStart, 1)) : true;
 
-            if (status === 'trial' && trialEnded) {
-                router.push('/subscription');
-            } else if (!['trial', 'active'].includes(status)) {
-                router.push('/subscription');
+                if (status === 'trial' && trialEnded) {
+                    router.push('/subscription');
+                } else if (!['trial', 'active'].includes(status)) {
+                    router.push('/subscription');
+                }
             }
-        }
 
-      } else {
-        router.push('/login');
-      }
-      setLoading(false);
-    });
-    return () => unsubscribe();
+        } else {
+            router.push('/login');
+        }
+        setLoading(false);
+        });
+        return unsubscribe;
+    };
+
+    let unsubscribe: () => void;
+    initialize().then(unsub => unsubscribe = unsub);
+
+    return () => {
+        if (unsubscribe) {
+            unsubscribe();
+        }
+    };
   }, [router, pathname]);
 
   const handleLogout = async () => {
     try {
+      const auth = await getAuthInstance();
       await signOut(auth);
       toast({
         title: 'Logged Out',

@@ -11,7 +11,7 @@ import { getAllPrograms } from '@/services/program-service-client';
 import { getUserClient } from '@/services/user-service-client';
 import type { Program, User } from '@/models/types';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { getAuthInstance } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -27,6 +27,7 @@ export default function ProgramsPage() {
         const fetchedPrograms = await getAllPrograms();
         setPrograms(fetchedPrograms);
 
+        const auth = await getAuthInstance();
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
           if (firebaseUser) {
             const currentUser = await getUserClient(firebaseUser.uid);
