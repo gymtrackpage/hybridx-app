@@ -24,73 +24,66 @@ const firebaseConfig = {
 const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 
-// Initialize auth with proper persistence
-let auth: Auth;
-let authInitialized: Promise<Auth>;
+// Use a singleton promise to ensure auth is initialized only once
+let authInitialized: Promise<Auth> | null = null;
 
 const initializeAuth = (): Promise<Auth> => {
-    if (authInitialized) {
-        return authInitialized;
+    // This function runs only once
+    const auth = getAuth(app);
+
+    // Run this only in the browser
+    if (typeof window !== 'undefined') {
+        return setPersistence(auth, indexedDBLocalPersistence)
+            .then(() => {
+                console.log('Firebase Auth: IndexedDB persistence set successfully');
+                return auth;
+            })
+            .catch((error) => {
+                console.warn('Firebase Auth: IndexedDB persistence failed, trying localStorage', error);
+                return setPersistence(auth, browserLocalPersistence);
+            })
+            .then(() => {
+                console.log('Firebase Auth: localStorage persistence set successfully');
+                return auth;
+            })
+            .catch((error) => {
+                console.error('Firebase Auth: Could not set any persistence', error);
+                // Still resolve auth, but persistence might not be what's expected.
+                return auth;
+            });
+    } else {
+        // For server-side rendering, just resolve the auth instance
+        return Promise.resolve(auth);
     }
-
-    auth = getAuth(app);
-
-    authInitialized = new Promise<Auth>((resolve, reject) => {
-        // Run this only in the browser
-        if (typeof window !== 'undefined') {
-            setPersistence(auth, indexedDBLocalPersistence)
-                .then(() => {
-                    console.log('Firebase Auth: IndexedDB persistence set successfully');
-                    resolve(auth);
-                })
-                .catch((error) => {
-                    console.warn('Firebase Auth: IndexedDB persistence failed, trying localStorage', error);
-                    return setPersistence(auth, browserLocalPersistence);
-                })
-                .then(() => {
-                    console.log('Firebase Auth: localStorage persistence set successfully');
-                    resolve(auth);
-                })
-                .catch((error) => {
-                    console.error('Firebase Auth: Could not set any persistence', error);
-                    // Still resolve auth, but persistence might not be what's expected.
-                    // The app can function with in-memory persistence.
-                    resolve(auth);
-                });
-        } else {
-            // For server-side rendering, just resolve the auth instance
-            resolve(auth);
-        }
-    });
-
-    return authInitialized;
 };
 
-
-// Helper function to ensure auth is ready
-const getAuthInstance = async (): Promise<Auth> => {
+/**
+ * Gets the initialized Firebase Auth instance.
+ * Uses a singleton promise to prevent race conditions.
+ */
+const getAuthInstance = (): Promise<Auth> => {
   if (!authInitialized) {
-    return initializeAuth();
+    authInitialized = initializeAuth();
   }
   return authInitialized;
 };
 
-// Helper function to wait for auth state to be determined
-const waitForAuthState = (authInstance: Auth): Promise<boolean> => {
+/**
+ * A helper function that resolves when the auth state is first determined.
+ * Resolves with `true` if a user is logged in, `false` otherwise.
+ */
+const waitForAuthState = async (): Promise<boolean> => {
+  const authInstance = await getAuthInstance();
   return new Promise((resolve) => {
     const unsubscribe = onAuthStateChanged(authInstance, (user) => {
-        unsubscribe();
+        unsubscribe(); // Unsubscribe after the first emission
         resolve(!!user);
     });
   });
 };
 
-// Initialize auth immediately if in browser environment
-if (typeof window !== 'undefined') {
-  initializeAuth();
-}
+// Maintain a direct export for any legacy code that might still use it,
+// but getAuthInstance is the preferred method.
+const auth = getAuth(app);
 
-export { app, db, getAuthInstance, waitForAuthState };
-
-// Export auth directly for compatibility, but prefer getAuthInstance for new code
-export { auth };
+export { app, db, auth, getAuthInstance, waitForAuthState };
