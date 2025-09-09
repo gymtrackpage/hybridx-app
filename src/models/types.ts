@@ -1,5 +1,13 @@
 // src/models/types.ts
 
+export interface StravaTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: Date;
+  scope: string;
+  athleteId: number;
+}
+
 export interface PersonalRecords {
   backSquat?: string;
   deadlift?: string;
@@ -34,6 +42,7 @@ export interface User {
   startDate?: Date;
   personalRecords?: PersonalRecords;
   runningProfile?: UserRunningProfile;
+  strava?: StravaTokens;
   // Subscription fields
   isAdmin?: boolean;
   subscriptionStatus?: SubscriptionStatus;

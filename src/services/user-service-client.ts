@@ -29,6 +29,7 @@ export async function getUserClient(userId: string): Promise<User | null> {
             startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
             personalRecords: data.personalRecords || {},
             runningProfile: data.runningProfile || { benchmarkPaces: {} },
+            strava: data.strava ? { ...data.strava, expiresAt: data.strava.expiresAt.toDate() } : undefined,
             isAdmin: data.isAdmin || false,
             // Fallback for subscription status if it's missing
             subscriptionStatus: data.subscriptionStatus || 'trial',
@@ -54,6 +55,7 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'startD
         startDate: null,
         personalRecords: {},
         runningProfile: { benchmarkPaces: {} },
+        strava: null,
         isAdmin: false,
         subscriptionStatus: 'trial',
         stripeCustomerId: null,
@@ -85,6 +87,9 @@ export async function updateUser(userId: string, data: Partial<Omit<User, 'id'>>
     }
     if (data.trialStartDate) {
         dataToUpdate.trialStartDate = Timestamp.fromDate(data.trialStartDate);
+    }
+    if (data.strava?.expiresAt) {
+        dataToUpdate.strava.expiresAt = Timestamp.fromDate(data.strava.expiresAt);
     }
     
     await updateDoc(userRef, dataToUpdate);

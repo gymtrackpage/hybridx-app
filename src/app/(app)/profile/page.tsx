@@ -7,7 +7,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Link as LinkIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -162,6 +162,25 @@ export default function ProfilePage() {
     }
   };
 
+  const initiateStravaAuth = () => {
+    const clientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID;
+    if (!clientId) {
+      toast({ title: 'Error', description: 'Strava integration is not configured correctly.', variant: 'destructive' });
+      return;
+    }
+    const redirectUri = encodeURIComponent(`${window.location.origin}/api/strava/exchange`);
+    const scope = 'read,activity:read_all,activity:write';
+    
+    const authUrl = `https://www.strava.com/oauth/authorize?` +
+      `client_id=${clientId}&` +
+      `response_type=code&` +
+      `redirect_uri=${redirectUri}&` +
+      `approval_prompt=force&` +
+      `scope=${scope}`;
+      
+    window.location.href = authUrl;
+  };
+
 
   if (loading) {
     return (
@@ -216,6 +235,19 @@ export default function ProfilePage() {
         </Card>
         
         <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Integrations</CardTitle>
+                <CardDescription>Connect your account to other services.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <Button onClick={initiateStravaAuth} variant="outline" disabled={!!user?.strava?.accessToken}>
+                    <LinkIcon className="mr-2"/>
+                    {user?.strava?.accessToken ? 'Connected to Strava' : 'Connect with Strava'}
+                  </Button>
+              </CardContent>
+            </Card>
+
             <Card>
                 <Form {...runningForm}>
                     <form onSubmit={runningForm.handleSubmit(handleRunningSubmit)}>
