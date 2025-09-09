@@ -30,7 +30,8 @@ export async function getUser(userId: string): Promise<User | null> {
             startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
             personalRecords: data.personalRecords || {},
             runningProfile: data.runningProfile || { benchmarkPaces: {} },
-            strava: data.strava ? { ...data.strava, expiresAt: data.strava.expiresAt.toDate() } : undefined,
+            strava: data.strava ? { ...data.strava, expiresAt: data.strava.toDate() } : undefined,
+            lastStravaSync: data.lastStravaSync instanceof Timestamp ? data.lastStravaSync.toDate() : undefined,
             isAdmin: data.isAdmin || false,
             subscriptionStatus: data.subscriptionStatus || 'trial',
             stripeCustomerId: data.stripeCustomerId,
@@ -95,6 +96,9 @@ export async function updateUserAdmin(userId: string, data: Partial<Omit<User, '
     }
     if (data.strava?.expiresAt) {
         dataToUpdate.strava.expiresAt = Timestamp.fromDate(data.strava.expiresAt);
+    }
+    if (data.lastStravaSync) {
+        dataToUpdate.lastStravaSync = Timestamp.fromDate(data.lastStravaSync);
     }
 
     await userRef.update(dataToUpdate);

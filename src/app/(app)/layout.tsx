@@ -13,6 +13,7 @@ import {
   BookOpenCheck,
   User as UserIcon,
   CreditCard,
+  Zap,
 } from 'lucide-react';
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
@@ -44,6 +45,7 @@ import { addMonths, isAfter } from 'date-fns';
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/assistant', icon: MessageSquare, label: 'AI Assistant' },
+  { href: '/activity-feed', icon: Zap, label: 'Activity Feed' },
   { href: '/calendar', icon: Calendar, label: 'Calendar' },
   { href: '/programs', icon: BookOpenCheck, label: 'Programs' },
   { href: '/profile', icon: UserIcon, label: 'Profile' },

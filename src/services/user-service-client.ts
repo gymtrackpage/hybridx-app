@@ -30,6 +30,7 @@ export async function getUserClient(userId: string): Promise<User | null> {
             personalRecords: data.personalRecords || {},
             runningProfile: data.runningProfile || { benchmarkPaces: {} },
             strava: data.strava ? { ...data.strava, expiresAt: data.strava.expiresAt.toDate() } : undefined,
+            lastStravaSync: data.lastStravaSync instanceof Timestamp ? data.lastStravaSync.toDate() : undefined,
             isAdmin: data.isAdmin || false,
             // Fallback for subscription status if it's missing
             subscriptionStatus: data.subscriptionStatus || 'trial',
@@ -90,6 +91,9 @@ export async function updateUser(userId: string, data: Partial<Omit<User, 'id'>>
     }
     if (data.strava?.expiresAt) {
         dataToUpdate.strava.expiresAt = Timestamp.fromDate(data.strava.expiresAt);
+    }
+    if (data.lastStravaSync) {
+        dataToUpdate.lastStravaSync = Timestamp.fromDate(data.lastStravaSync);
     }
     
     await updateDoc(userRef, dataToUpdate);

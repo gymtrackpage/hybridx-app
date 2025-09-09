@@ -43,6 +43,7 @@ export interface User {
   personalRecords?: PersonalRecords;
   runningProfile?: UserRunningProfile;
   strava?: StravaTokens;
+  lastStravaSync?: Date;
   // Subscription fields
   isAdmin?: boolean;
   subscriptionStatus?: SubscriptionStatus;
