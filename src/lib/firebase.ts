@@ -1,4 +1,4 @@
-// Import the functions you need from the SDKs you need
+// src/lib/firebase.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth, browserLocalPersistence, setPersistence, Auth } from "firebase/auth";
@@ -17,13 +17,20 @@ const firebaseConfig = {
 const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 
-// Initialize auth and set persistence
-const auth = getAuth(app);
-setPersistence(auth, browserLocalPersistence)
-  .catch((error) => {
-    // This could happen if the browser settings block local storage, etc.
-    console.error("Firebase Auth: Could not set persistence.", error);
-  });
+// Use a function to initialize auth and set persistence only once.
+let auth: Auth;
+const initializeAuth = () => {
+  if (!auth) {
+    auth = getAuth(app);
+    setPersistence(auth, browserLocalPersistence)
+      .catch((error) => {
+        console.error("Firebase Auth: Could not set persistence.", error);
+      });
+  }
+  return auth;
+};
 
+// Export a single instance of auth
+const authInstance = initializeAuth();
 
-export { app, db, auth };
+export { app, db, authInstance as auth };
