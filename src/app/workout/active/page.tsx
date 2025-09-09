@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle } from 'lucide-react';
+import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -153,8 +153,9 @@ export default function ActiveWorkoutPage() {
     : (workout as Workout).exercises;
 
   const allItemsCompleted = workoutItems.every(item => {
+      if (!session?.completedItems) return false;
       const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
-      return session?.completedItems?.[key];
+      return session.completedItems[key];
   });
   
   const isRunningProgram = workout.programType === 'running';
@@ -163,13 +164,19 @@ export default function ActiveWorkoutPage() {
     <div className="space-y-6 max-w-2xl mx-auto">
         <Card className="bg-accent/20 border-accent">
             <CardHeader>
-                <div className="flex items-center gap-3">
-                    <div>
+                <div className="flex justify-between items-start gap-3">
+                    <div className='flex-1'>
                         <CardTitle className="text-2xl font-bold tracking-tight">{workout.title}</CardTitle>
                         <CardDescription className="font-medium text-foreground/80">
                             {summaryLoading ? <Skeleton className="h-5 w-full mt-1" /> : summaryText}
                         </CardDescription>
                     </div>
+                    <Button asChild variant="secondary">
+                        <Link href="https://timer.hybridx.club/" target="_blank">
+                            <Timer className="mr-2" />
+                            Use the Timer
+                        </Link>
+                    </Button>
                 </div>
             </CardHeader>
             <CardContent className="space-y-6">
