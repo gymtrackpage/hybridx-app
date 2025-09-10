@@ -117,8 +117,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Create the activity on Strava
-    // Duration is no longer tracked, so we'll estimate a common workout time (e.g., 3600 seconds = 1 hour)
-    const estimatedDuration = 3600;
+    const estimatedDuration = 3600; // Strava requires a time, default to 1 hour
     const stravaActivityPayload = {
       name: session.workoutTitle,
       type: mapActivityTypeToStrava(session.workoutTitle),

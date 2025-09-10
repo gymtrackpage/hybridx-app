@@ -109,7 +109,7 @@ export default function ActiveWorkoutPage() {
             unsubscribe();
         }
     };
-  }, [today]);
+  }, [today, isCompleteModalOpen]);
 
   const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
     if (!session) return;
@@ -341,7 +341,6 @@ function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout
                              workout={{
                                 name: session.workoutTitle,
                                 type: workout.programType,
-                                duration: 0, // Duration is no longer tracked
                                 startTime: session.startedAt,
                                 notes: session.notes,
                             }}
