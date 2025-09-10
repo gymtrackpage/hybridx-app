@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Download } from 'lucide-react';
+import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -304,9 +304,6 @@ interface WorkoutCompleteModalProps {
 }
 
 function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava }: WorkoutCompleteModalProps) {
-    const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-    const [loadingPreview, setLoadingPreview] = useState(false);
-
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -315,56 +312,6 @@ function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava }: Worko
 
     const duration = session.finishedAt ? differenceInSeconds(session.finishedAt, session.startedAt) : 0;
     
-    useEffect(() => {
-        const generatePreview = async () => {
-            if (isOpen && userHasStrava && !imagePreviewUrl && !loadingPreview) {
-                setLoadingPreview(true);
-                try {
-                    const response = await fetch('/api/generate-workout-image', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            name: session.workoutTitle,
-                            type: 'Workout',
-                            duration: duration,
-                            date: session.startedAt.toISOString(),
-                        }),
-                    });
-                    if (response.ok) {
-                        const blob = await response.blob();
-                        const url = URL.createObjectURL(blob);
-                        setImagePreviewUrl(url);
-                    }
-                } catch (error) {
-                    console.error('Failed to generate image preview:', error);
-                } finally {
-                    setLoadingPreview(false);
-                }
-            }
-        };
-
-        generatePreview();
-        
-        return () => {
-            if (imagePreviewUrl) {
-                URL.revokeObjectURL(imagePreviewUrl);
-            }
-        };
-
-    }, [isOpen, userHasStrava, session, duration, imagePreviewUrl, loadingPreview]);
-
-    const handleDownload = () => {
-        if (imagePreviewUrl) {
-            const link = document.createElement('a');
-            link.href = imagePreviewUrl;
-            link.download = `${session.workoutTitle.replace(/ /g, '_')}_hybridx.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-    };
-
-
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-lg">
@@ -387,28 +334,17 @@ function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava }: Worko
                 {userHasStrava && (
                     <>
                     <Separator />
-                    <div className="space-y-3">
-                        <p className="text-sm font-medium text-center">
+                    <div className="space-y-3 text-center">
+                        <p className="text-sm font-medium">
                         Share your achievement on Strava
                         </p>
                         
-                        <div className="p-2 border rounded-md">
-                           {loadingPreview && <Skeleton className="w-full aspect-[1200/630]" />}
-                           {imagePreviewUrl && <img src={imagePreviewUrl} alt="Workout summary" className="rounded w-full" />}
-                        </div>
-                        
-                        <div className="flex gap-2">
-                             <Button onClick={handleDownload} variant="outline" className="w-full" disabled={!imagePreviewUrl}>
-                                <Download className="mr-2 h-4 w-4" />
-                                Download
-                            </Button>
-                            <StravaUploadButton
-                                sessionId={session.id}
-                                activityName={session.workoutTitle}
-                                isUploaded={session.uploadedToStrava}
-                                stravaId={session.stravaId}
-                            />
-                        </div>
+                        <StravaUploadButton
+                            sessionId={session.id}
+                            activityName={session.workoutTitle}
+                            isUploaded={session.uploadedToStrava}
+                            stravaId={session.stravaId}
+                        />
                     </div>
                     </>
                 )}

@@ -7,7 +7,6 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import axios from 'axios';
 import type { StravaTokens, WorkoutSession } from '@/models/types';
 import { differenceInSeconds } from 'date-fns';
-import FormData from 'form-data';
 
 // Helper function to safely convert Firestore timestamp to Date
 function toDate(timestamp: any): Date {
@@ -118,7 +117,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Cannot upload an incomplete workout' }, { status: 400 });
     }
 
-    // 1. Create the activity on Strava
+    // Create the activity on Strava
     const duration = differenceInSeconds(toDate(session.finishedAt), toDate(session.startedAt));
     const stravaActivityPayload = {
       name: session.workoutTitle,
@@ -138,52 +137,8 @@ export async function POST(req: NextRequest) {
     );
     const stravaActivityId = stravaResponse.data.id;
     console.log('Successfully created Strava activity:', stravaActivityId);
-
-    // 2. Generate the branded image
-    console.log('Generating workout image...');
-    const imageResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/generate-workout-image`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            name: session.workoutTitle,
-            type: mapActivityTypeToStrava(session.workoutTitle),
-            duration: duration,
-            date: toDate(session.startedAt).toISOString(),
-        }),
-    });
-
-    if (!imageResponse.ok) {
-        console.error('Failed to generate workout image, but activity was created.');
-    } else {
-        const imageBuffer = await imageResponse.arrayBuffer();
-        console.log(`Generated image, size: ${imageBuffer.byteLength} bytes.`);
-        
-        // 3. Upload the image as a photo to the new activity
-        const formData = new FormData();
-        formData.append('file', Buffer.from(imageBuffer), {
-            contentType: 'image/png',
-            filename: `hybridx_workout_${sessionId}.png`,
-        });
-
-        console.log('Uploading photo to Strava activity:', stravaActivityId);
-        await axios.post(
-            `https://www.strava.com/api/v3/uploads`,
-            formData,
-            { 
-                headers: { 
-                    ...formData.getHeaders(),
-                    'Authorization': `Bearer ${accessToken}` 
-                },
-                params: {
-                    activity_id: stravaActivityId,
-                    data_type: 'png'
-                }
-            }
-        );
-        console.log('Photo upload process initiated for activity:', stravaActivityId);
-    }
     
-    // 4. Update session doc with Strava ID
+    // Update session doc with Strava ID
     await sessionDoc.ref.update({
         stravaId: stravaActivityId.toString(),
         uploadedToStrava: true,
