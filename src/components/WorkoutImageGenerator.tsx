@@ -10,7 +10,6 @@ interface WorkoutImageGeneratorProps {
   workout: {
     name: string;
     type: string;
-    duration: number;
     distance?: number;
     calories?: number;
     startTime: Date;
@@ -21,17 +20,6 @@ interface WorkoutImageGeneratorProps {
 export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
   const [generating, setGenerating] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
-
-  const formatDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const formatDistance = (meters?: number): string | null => {
     if (!meters) return null;
@@ -156,15 +144,6 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
               </div>
               
               <div style={{ display: 'flex', justifyContent: 'center', gap: '80px', marginBottom: '30px' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '36px', fontWeight: '700', color: '#000000' }}>
-                    {formatDuration(workout.duration)}
-                  </div>
-                  <div style={{ fontSize: '16px', color: '#666666', marginTop: '8px', textTransform: 'uppercase' }}>
-                    Duration
-                  </div>
-                </div>
-                
                 {distance && (
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '36px', fontWeight: '700', color: '#000000' }}>{distance}</div>
@@ -208,10 +187,6 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
                     </div>
                     
                     <div className="flex justify-center gap-4 md:gap-8 text-center my-2">
-                        <div>
-                        <div className="text-lg md:text-2xl font-bold">{formatDuration(workout.duration)}</div>
-                        <div className="text-xs text-gray-500 uppercase">Duration</div>
-                        </div>
                         {distance && (
                         <div>
                             <div className="text-lg md:text-2xl font-bold">{distance}</div>

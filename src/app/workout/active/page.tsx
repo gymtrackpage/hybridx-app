@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X } from 'lucide-react';
+import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Share2 } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -138,8 +138,7 @@ export default function ActiveWorkoutPage() {
       const updatedSession = {...session, finishedAt, notes};
       setSession(updatedSession);
       await updateWorkoutSession(session.id, { finishedAt, notes, workoutTitle: workoutInfo?.workout?.title || 'Workout' });
-      // This is now the ONLY place where the modal is opened
-      setIsCompleteModalOpen(true);
+      // The modal is no longer opened here, but by the "Share Workout" button
   }
 
   if (loading) {
@@ -276,10 +275,17 @@ export default function ActiveWorkoutPage() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 pt-4">
-                    <Button className="w-full" onClick={handleFinishWorkout} disabled={!allItemsCompleted || !!session.finishedAt}>
-                        {session.finishedAt ? <Check className="mr-2" /> : <Flag className="mr-2" />}
-                        {session.finishedAt ? 'Workout Completed' : 'Finish Workout'}
-                    </Button>
+                    {!session.finishedAt ? (
+                        <Button className="w-full" onClick={handleFinishWorkout} disabled={!allItemsCompleted}>
+                            <Flag className="mr-2" />
+                            Finish Workout
+                        </Button>
+                    ) : (
+                        <Button className="w-full" variant="secondary" onClick={() => setIsCompleteModalOpen(true)}>
+                            <Share2 className="mr-2" />
+                            Share Workout
+                        </Button>
+                    )}
                 </div>
             </CardContent>
         </Card>
@@ -339,17 +345,20 @@ function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout
                             isUploaded={session.uploadedToStrava}
                             stravaId={session.stravaId}
                         />
-                        <WorkoutImageGenerator 
-                             workout={{
-                                name: session.workoutTitle,
-                                type: workout.programType,
-                                startTime: session.startedAt,
-                                notes: session.notes,
-                            }}
-                        />
                     </div>
                     </>
                 )}
+                 <div className="space-y-3">
+                    <Separator />
+                    <WorkoutImageGenerator 
+                        workout={{
+                            name: session.workoutTitle,
+                            type: workout.programType,
+                            startTime: session.startedAt,
+                            notes: session.notes,
+                        }}
+                    />
+                </div>
 
                 <Button onClick={onClose} className="w-full" variant="outline">
                     Close
