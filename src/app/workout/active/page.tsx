@@ -1,4 +1,4 @@
-// src/app/workout/active/page.tsx
+{// src/app/workout/active/page.tsx
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
@@ -25,6 +25,7 @@ import type { Workout, RunningWorkout, User } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
 import { differenceInSeconds } from 'date-fns';
+import { WorkoutImageGenerator } from '@/components/WorkoutImageGenerator';
 
 export default function ActiveWorkoutPage() {
   const [session, setSession] = useState<WorkoutSession | null>(null);
@@ -289,6 +290,7 @@ export default function ActiveWorkoutPage() {
             onClose={() => setIsCompleteModalOpen(false)}
             session={session}
             userHasStrava={!!user?.strava?.accessToken}
+            workout={workout}
         />
     )}
     </>
@@ -301,9 +303,10 @@ interface WorkoutCompleteModalProps {
     onClose: () => void;
     session: WorkoutSession;
     userHasStrava?: boolean;
+    workout: Workout | RunningWorkout;
 }
 
-function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava }: WorkoutCompleteModalProps) {
+function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout }: WorkoutCompleteModalProps) {
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -336,7 +339,7 @@ function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava }: Worko
                     <Separator />
                     <div className="space-y-3 text-center">
                         <p className="text-sm font-medium">
-                        Share your achievement on Strava
+                        Share your achievement
                         </p>
                         
                         <StravaUploadButton
@@ -344,6 +347,15 @@ function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava }: Worko
                             activityName={session.workoutTitle}
                             isUploaded={session.uploadedToStrava}
                             stravaId={session.stravaId}
+                        />
+                        <WorkoutImageGenerator 
+                             workout={{
+                                name: session.workoutTitle,
+                                type: workout.programType,
+                                duration: duration,
+                                startTime: session.startedAt,
+                                notes: session.notes,
+                            }}
                         />
                     </div>
                     </>
