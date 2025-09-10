@@ -214,6 +214,13 @@ export default function ActiveWorkoutPage() {
                         </div>
                     </div>
                 )}
+
+                <Button asChild variant="secondary" className="w-full">
+                    <Link href="https://timer.hybridx.club/" target="_blank">
+                        <Timer className="mr-2" />
+                        Use the Timer
+                    </Link>
+                </Button>
                 
                 <div>
                     <h3 className="text-base font-semibold mb-3">{isRunningProgram ? 'Runs:' : 'Exercises:'}</h3>
@@ -300,12 +307,6 @@ interface WorkoutCompleteModalProps {
 }
 
 function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout }: WorkoutCompleteModalProps) {
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
     const duration = session.finishedAt ? differenceInSeconds(session.finishedAt, session.startedAt) : 0;
     
     return (
@@ -321,10 +322,7 @@ function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout
             <div className="space-y-4">
                 <div className="text-center p-4 bg-muted/50 rounded-lg">
                     <h3 className="font-semibold text-lg">{session.workoutTitle}</h3>
-                    <div className="text-4xl font-bold text-primary my-2">
-                    {formatTime(duration)}
-                    </div>
-                    <p className="text-sm text-muted-foreground">Total Time</p>
+                    <p className="text-sm text-muted-foreground">Workout logged successfully.</p>
                 </div>
 
                 {userHasStrava && (
