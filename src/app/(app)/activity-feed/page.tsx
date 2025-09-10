@@ -33,24 +33,66 @@ export default function ActivityFeedPage() {
 
         setSyncing(true);
         setError(null);
+        
         try {
-            console.log('Fetching Strava activities via API route...');
+            console.log('🔄 Fetching Strava activities via API route...');
+            
+            // First, ensure we have a fresh session
+            const auth = await getAuthInstance();
+            const currentUser = auth.currentUser;
+            
+            if (!currentUser) {
+                throw new Error('User not authenticated');
+            }
+
+            // Get fresh ID token and refresh session
+            console.log('🎫 Getting fresh ID token...');
+            const idToken = await currentUser.getIdToken(true);
+            
+            // Refresh session cookie
+            console.log('🍪 Refreshing session cookie...');
+            const sessionResponse = await fetch('/api/auth/session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({ idToken }),
+                credentials: 'include'
+            });
+
+            if (!sessionResponse.ok) {
+                console.error('Failed to refresh session:', await sessionResponse.text());
+                throw new Error('Failed to refresh authentication session');
+            }
+
+            console.log('✅ Session refreshed successfully');
+
+            // Now make the activities request
+            console.log('📊 Making activities request...');
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',
                 credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                cache: 'no-cache'
             });
 
+            console.log('📊 Activities API response status:', response.status);
+
             if (!response.ok) {
-                const errorData = await response.json();
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Activities API error:', errorData);
                 throw new Error(errorData.error || `Failed to fetch activities: ${response.statusText}`);
             }
 
             const fetchedActivities = await response.json();
-            console.log(`Received ${fetchedActivities.length} activities.`);
+            console.log(`✅ Received ${fetchedActivities.length} activities.`);
             setActivities(fetchedActivities);
 
         } catch (err: any) {
-            console.error("Error in fetchActivities:", err);
+            console.error("❌ Error in fetchActivities:", err);
             setError(err.message || 'Failed to fetch activities.');
             toast({
                 title: 'Error',
