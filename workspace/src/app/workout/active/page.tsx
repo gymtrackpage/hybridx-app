@@ -24,7 +24,6 @@ import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } 
 import type { Workout, RunningWorkout, User } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
-import { differenceInSeconds } from 'date-fns';
 import { WorkoutImageGenerator } from '@/components/WorkoutImageGenerator';
 
 export default function ActiveWorkoutPage() {
@@ -110,7 +109,7 @@ export default function ActiveWorkoutPage() {
             unsubscribe();
         }
     };
-  }, [today, isCompleteModalOpen]);
+  }, [today]);
 
   const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
     if (!session) return;
@@ -307,7 +306,6 @@ interface WorkoutCompleteModalProps {
 }
 
 function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout }: WorkoutCompleteModalProps) {
-    const duration = session.finishedAt ? differenceInSeconds(session.finishedAt, session.startedAt) : 0;
     
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -343,7 +341,7 @@ function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout
                              workout={{
                                 name: session.workoutTitle,
                                 type: workout.programType,
-                                duration: duration,
+                                duration: 0, // Duration is no longer tracked
                                 startTime: session.startedAt,
                                 notes: session.notes,
                             }}

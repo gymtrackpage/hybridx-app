@@ -6,7 +6,6 @@ import { getUser, updateUserAdmin } from '@/services/user-service';
 import { getAdminDb } from '@/lib/firebase-admin';
 import axios from 'axios';
 import type { StravaTokens, WorkoutSession } from '@/models/types';
-import { differenceInSeconds } from 'date-fns';
 
 // Helper function to safely convert Firestore timestamp to Date
 function toDate(timestamp: any): Date {
@@ -118,12 +117,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Create the activity on Strava
-    const duration = differenceInSeconds(toDate(session.finishedAt), toDate(session.startedAt));
+    // Duration is no longer tracked, so we'll estimate a common workout time (e.g., 3600 seconds = 1 hour)
+    const estimatedDuration = 3600;
     const stravaActivityPayload = {
       name: session.workoutTitle,
       type: mapActivityTypeToStrava(session.workoutTitle),
       start_date_local: toDate(session.startedAt).toISOString(),
-      elapsed_time: duration,
+      elapsed_time: estimatedDuration,
       description: `Workout from HYBRIDX.CLUB.\n\nNotes:\n${session.notes || 'No notes.'}`,
       trainer: true,
       commute: false
