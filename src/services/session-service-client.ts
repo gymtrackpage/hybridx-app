@@ -12,10 +12,14 @@ function fromFirestore(doc: any): WorkoutSession {
         userId: data.userId,
         programId: data.programId,
         workoutDate: data.workoutDate.toDate(),
+        workoutTitle: data.workoutTitle || 'Workout',
         startedAt: data.startedAt.toDate(),
         finishedAt: data.finishedAt ? data.finishedAt.toDate() : undefined,
         completedItems: data.completedItems,
         notes: data.notes || '',
+        stravaId: data.stravaId,
+        uploadedToStrava: data.uploadedToStrava,
+        stravaUploadedAt: data.stravaUploadedAt ? data.stravaUploadedAt.toDate() : undefined,
     };
 }
 
@@ -61,6 +65,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         userId,
         programId,
         workoutDate: Timestamp.fromDate(workoutDate),
+        workoutTitle: workout.title,
         startedAt: Timestamp.now(),
         completedItems: initialCompleted,
         finishedAt: null,
@@ -74,6 +79,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         userId,
         programId,
         workoutDate,
+        workoutTitle: workout.title,
         startedAt: new Date(),
         completedItems: initialCompleted,
         notes: '',

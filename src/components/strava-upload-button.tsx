@@ -1,0 +1,105 @@
+// src/components/strava-upload-button.tsx
+'use client';
+
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { Upload, ExternalLink, Check, Loader2 } from 'lucide-react';
+
+interface StravaUploadButtonProps {
+  sessionId: string;
+  activityName?: string;
+  isUploaded?: boolean;
+  stravaId?: string;
+  disabled?: boolean;
+}
+
+export function StravaUploadButton({ 
+  sessionId, 
+  activityName, 
+  isUploaded = false, 
+  stravaId,
+  disabled = false 
+}: StravaUploadButtonProps) {
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState(isUploaded);
+  const [uploadedStravaId, setUploadedStravaId] = useState(stravaId);
+  const { toast } = useToast();
+
+  const handleUpload = async () => {
+    if (uploaded || uploading) return;
+    
+    setUploading(true);
+    
+    try {
+      const response = await fetch('/api/strava/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ sessionId })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload to Strava');
+      }
+
+      setUploaded(true);
+      setUploadedStravaId(data.stravaActivityId);
+      
+      toast({
+        title: 'Success!',
+        description: `"${activityName || 'Activity'}" uploaded to Strava successfully.`,
+      });
+
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast({
+        title: 'Upload Failed',
+        description: error.message || 'Failed to upload activity to Strava.',
+        variant: 'destructive'
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const openInStrava = () => {
+    if (uploadedStravaId) {
+      window.open(`https://www.strava.com/activities/${uploadedStravaId}`, '_blank');
+    }
+  };
+
+  if (uploaded && uploadedStravaId) {
+    return (
+      <Button
+        variant="outline"
+        onClick={openInStrava}
+        className="text-orange-600 border-orange-200 hover:bg-orange-50"
+      >
+        <Check className="h-4 w-4 mr-2" />
+        View on Strava
+        <ExternalLink className="h-3 w-3 ml-1" />
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      variant="outline"
+      onClick={handleUpload}
+      disabled={disabled || uploading || uploaded}
+      className="text-orange-600 border-orange-200 hover:bg-orange-50"
+    >
+      {uploading ? (
+        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+      ) : (
+        <Upload className="h-4 w-4 mr-2" />
+      )}
+      {uploading ? 'Uploading...' : 'Upload to Strava'}
+    </Button>
+  );
+}

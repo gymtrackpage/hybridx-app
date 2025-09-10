@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer } from 'lucide-react';
+import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -13,6 +13,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
+import { StravaUploadButton } from '@/components/strava-upload-button';
 import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
@@ -21,6 +24,7 @@ import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } 
 import type { Workout, RunningWorkout, User } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
+import { differenceInSeconds } from 'date-fns';
 
 
 export default function ActiveWorkoutPage() {
@@ -32,6 +36,7 @@ export default function ActiveWorkoutPage() {
   const [notes, setNotes] = useState('');
   const [summaryText, setSummaryText] = useState('');
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   
   const today = useMemo(() => {
       const d = new Date();
@@ -61,6 +66,11 @@ export default function ActiveWorkoutPage() {
                             const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
                             setSession(workoutSession);
                             setNotes(workoutSession.notes || '');
+
+                            // Show completion modal if already finished today
+                            if (workoutSession.finishedAt) {
+                                setIsCompleteModalOpen(true);
+                            }
 
                             const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
                                 ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
@@ -127,7 +137,8 @@ export default function ActiveWorkoutPage() {
       const finishedAt = new Date();
       const updatedSession = {...session, finishedAt, notes};
       setSession(updatedSession);
-      await updateWorkoutSession(session.id, { finishedAt, notes });
+      await updateWorkoutSession(session.id, { finishedAt, notes, workoutTitle: workoutInfo?.workout?.title || 'Workout' });
+      setIsCompleteModalOpen(true);
   }
 
   if (loading) {
@@ -172,6 +183,7 @@ export default function ActiveWorkoutPage() {
   const isRunningProgram = workout.programType === 'running';
 
   return (
+    <>
     <div className="space-y-6 max-w-2xl mx-auto">
         <Card className="bg-accent/20 border-accent">
             <CardHeader>
@@ -271,5 +283,73 @@ export default function ActiveWorkoutPage() {
             </CardContent>
         </Card>
     </div>
+
+    {session.finishedAt && (
+        <WorkoutCompleteModal
+            isOpen={isCompleteModalOpen}
+            onClose={() => setIsCompleteModalOpen(false)}
+            session={session}
+            userHasStrava={!!user?.strava?.accessToken}
+        />
+    )}
+    </>
   );
+}
+
+
+interface WorkoutCompleteModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    session: WorkoutSession;
+    userHasStrava?: boolean;
+}
+
+function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava }: WorkoutCompleteModalProps) {
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const duration = session.finishedAt ? differenceInSeconds(session.finishedAt, session.startedAt) : 0;
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+            <DialogTitle>Workout Complete! 🎉</DialogTitle>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+            <div className="text-center">
+                <h3 className="font-semibold text-lg">{session.workoutTitle}</h3>
+                <div className="text-2xl font-bold text-primary mt-2">
+                {formatTime(duration)}
+                </div>
+            </div>
+
+            {userHasStrava && (
+                <>
+                <Separator />
+                <div className="flex flex-col items-center gap-2">
+                    <p className="text-sm text-muted-foreground text-center">
+                    Share your achievement with the Strava community
+                    </p>
+                    <StravaUploadButton
+                        sessionId={session.id}
+                        activityName={session.workoutTitle}
+                        isUploaded={session.uploadedToStrava}
+                        stravaId={session.stravaId}
+                    />
+                </div>
+                </>
+            )}
+
+            <Button onClick={onClose} className="w-full">
+                Done
+            </Button>
+            </div>
+        </DialogContent>
+        </Dialog>
+    );
 }
