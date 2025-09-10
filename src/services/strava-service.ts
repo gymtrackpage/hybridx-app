@@ -53,6 +53,7 @@ async function getValidAccessToken(userId: string): Promise<string> {
     
     // Check if token is expired or expires soon (5 minutes buffer)
     if (!expiresAt || expiresAt.getTime() - now.getTime() < 300000) {
+        console.log(`Token expired or expiring soon for user ${userId}, refreshing...`);
         if (!stravaTokens.refreshToken) {
             throw new Error('Refresh token not available. Please reconnect your Strava account.');
         }
@@ -78,7 +79,7 @@ async function getValidAccessToken(userId: string): Promise<string> {
             };
 
             await updateUserAdmin(userId, { strava: newTokens });
-            
+            console.log(`Successfully refreshed Strava token for user ${userId}`);
             return newTokens.accessToken;
             
         } catch (error: any) {
@@ -89,7 +90,8 @@ async function getValidAccessToken(userId: string): Promise<string> {
             });
             
             // If refresh fails, the connection might be invalid
-            await updateUserAdmin(userId, { strava: undefined });
+            // Use null which Firestore can handle for field deletion in an update
+            await updateUserAdmin(userId, { strava: null as any });
             
             throw new Error('Strava connection expired. Please reconnect your account in settings.');
         }

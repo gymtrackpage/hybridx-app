@@ -118,12 +118,27 @@ export default function ProfilePage() {
             title: 'Success!', 
             description: 'Your Strava account has been connected successfully.' 
         });
+        
+        // IMPORTANT: Refresh user data immediately after successful connection
+        const refreshUserData = async () => {
+            try {
+                const auth = await getAuthInstance();
+                const currentUser = auth.currentUser;
+                if (currentUser) {
+                    const updatedUser = await getUserClient(currentUser.uid);
+                    setUser(updatedUser);
+                    console.log('Updated user data after Strava connection:', updatedUser?.strava);
+                }
+            } catch (error) {
+                console.error('Failed to refresh user data:', error);
+            }
+        };
+        
+        refreshUserData();
+        
         // Clean up URL
         window.history.replaceState({}, '', '/profile');
-        // Refresh user data
-        if (user) {
-            getUserClient(user.id).then(setUser);
-        }
+        
     } else if (stravaError) {
         const errorMessage = decodeURIComponent(stravaError);
         toast({ 
@@ -134,8 +149,12 @@ export default function ProfilePage() {
         // Clean up URL
         window.history.replaceState({}, '', '/profile');
     }
-  }, [toast, user]);
+  }, [toast]);
 
+  // Debug log to see the current user state
+  useEffect(() => {
+    console.log('Current user strava state:', user?.strava);
+  }, [user]);
 
   const handleProfileSubmit = async (data: ProfileFormData) => {
     if (!user) return;
@@ -226,6 +245,8 @@ export default function ProfilePage() {
     );
   }
 
+  const isStravaConnected = user?.strava?.accessToken && user?.strava?.athleteId;
+
   return (
     <div className="space-y-6">
       <div>
@@ -272,9 +293,9 @@ export default function ProfilePage() {
                 <CardDescription>Connect your account to other services.</CardDescription>
               </CardHeader>
               <CardContent>
-                  <Button onClick={initiateStravaAuth} variant="outline" disabled={!!user?.strava?.accessToken}>
+                  <Button onClick={initiateStravaAuth} variant="outline" disabled={isStravaConnected}>
                     <LinkIcon className="mr-2"/>
-                    {user?.strava?.accessToken ? 'Connected to Strava' : 'Connect with Strava'}
+                    {isStravaConnected ? `Connected to Strava (Athlete: ${user.strava.athleteId})` : 'Connect with Strava'}
                   </Button>
               </CardContent>
             </Card>

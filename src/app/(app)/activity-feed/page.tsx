@@ -8,17 +8,30 @@ import type { StravaActivity } from '@/services/strava-service';
 import { getStravaActivities } from '@/services/strava-service';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Zap } from 'lucide-react';
+import { Loader2, Zap, Activity, Clock, MapPin, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getUserClient } from '@/services/user-service-client';
+import type { User } from '@/models/types';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ActivityFeedPage() {
     const [activities, setActivities] = useState<StravaActivity[]>([]);
+    const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const { toast } = useToast();
+
+    const isStravaConnected = user?.strava?.accessToken && user?.strava?.athleteId;
 
     const fetchActivities = async () => {
+        if (!isStravaConnected) {
+          setError('Strava account not connected');
+          setLoading(false);
+          return;
+        }
+
         setSyncing(true);
         setError(null);
         try {
@@ -26,6 +39,11 @@ export default function ActivityFeedPage() {
             setActivities(fetchedActivities);
         } catch (err: any) {
             setError(err.message || 'Failed to fetch activities.');
+            toast({
+                title: 'Error',
+                description: err.message || 'Failed to load Strava activities',
+                variant: 'destructive'
+            });
         } finally {
             setSyncing(false);
             setLoading(false);
@@ -35,9 +53,15 @@ export default function ActivityFeedPage() {
     useEffect(() => {
         const initialize = async () => {
             const auth = await getAuthInstance();
-            const unsubscribe = onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    fetchActivities();
+            const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+                if (firebaseUser) {
+                    const currentUser = await getUserClient(firebaseUser.uid);
+                    setUser(currentUser);
+                    if (currentUser?.strava?.accessToken) {
+                        fetchActivities();
+                    } else {
+                        setLoading(false);
+                    }
                 } else {
                     setLoading(false);
                 }
@@ -55,18 +79,28 @@ export default function ActivityFeedPage() {
         };
     }, []);
 
-    // Helper to format duration from seconds to HH:MM:SS
+    // Helper to format duration from seconds to HH:MM
     const formatDuration = (seconds: number) => {
-        const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
-        const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-        const s = (seconds % 60).toString().padStart(2, '0');
-        return `${h}:${m}:${s}`;
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (h > 0) {
+            return `${h}h ${m}m`;
+        }
+        return `${m}m`;
     };
 
-    // Helper to format distance from meters to miles
+    // Helper to format distance from meters to km or m
     const formatDistance = (meters: number) => {
-        const miles = meters * 0.000621371;
-        return `${miles.toFixed(2)} mi`;
+        const km = meters / 1000;
+        return km >= 1 ? `${km.toFixed(1)} km` : `${meters.toFixed(0)} m`;
+    };
+
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
     };
 
     if (loading) {
@@ -90,7 +124,6 @@ export default function ActivityFeedPage() {
         );
     }
     
-
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -98,10 +131,12 @@ export default function ActivityFeedPage() {
                     <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Activity Feed</h1>
                     <p className="text-muted-foreground">Your recent activities from Strava.</p>
                 </div>
-                <Button onClick={fetchActivities} disabled={syncing}>
-                    {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                    Sync Now
-                </Button>
+                {isStravaConnected && (
+                    <Button onClick={fetchActivities} disabled={syncing}>
+                        {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                        Sync Now
+                    </Button>
+                )}
             </div>
 
             <Card>
@@ -110,24 +145,67 @@ export default function ActivityFeedPage() {
                     <CardDescription>A log of your training sessions synced from Strava.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {error && <p className="text-destructive">{error}</p>}
-                    {activities.length > 0 ? (
-                        <ul className="space-y-4">
+                    {error && <p className="text-destructive text-center py-4">{error}</p>}
+                    
+                    {!isStravaConnected ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p>No Strava connection found.</p>
+                             <p className="text-sm">Please connect your account in your profile.</p>
+                        </div>
+                    ) : syncing && activities.length === 0 ? (
+                        <div className="space-y-4">
+                            {[...Array(3)].map((_, i) => (
+                            <div key={i} className="flex items-center space-x-4 p-4">
+                                <Skeleton className="h-10 w-10 rounded-full" />
+                                <div className="space-y-2 flex-1">
+                                <Skeleton className="h-4 w-3/4" />
+                                <Skeleton className="h-3 w-1/2" />
+                                </div>
+                            </div>
+                            ))}
+                        </div>
+                    ) : !syncing && activities.length === 0 && !error ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                            <p>No recent activities found.</p>
+                            <Button variant="outline" className="mt-4" onClick={fetchActivities}>
+                                Fetch Activities
+                            </Button>
+                        </div>
+                    ) : (
+                         <ul className="space-y-4">
                             {activities.map((activity) => (
-                                <li key={activity.id} className="p-4 border rounded-md">
-                                    <p className="font-semibold">{activity.name}</p>
-                                    <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                                        <span>{format(new Date(activity.start_date), "MMM d, yyyy")}</span>
-                                        <span>{formatDuration(activity.moving_time)}</span>
-                                        <span>{formatDistance(activity.distance)}</span>
+                                <li key={activity.id} className="flex items-start space-x-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                                     <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                                        <Activity className="h-5 w-5 text-primary" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                            <h4 className="font-medium truncate">{activity.name}</h4>
+                                            <p className="text-sm text-muted-foreground">
+                                                {activity.sport_type} • {formatDate(activity.start_date_local)}
+                                            </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                                            <span className="flex items-center gap-1">
+                                            <MapPin className="h-3 w-3" />
+                                            {formatDistance(activity.distance)}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                            <Clock className="h-3 w-3" />
+                                            {formatDuration(activity.moving_time)}
+                                            </span>
+                                            {activity.total_elevation_gain > 0 && (
+                                            <span>↗️ {Math.round(activity.total_elevation_gain)}m</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </li>
                             ))}
                         </ul>
-                    ) : (
-                        <p className="text-muted-foreground text-center py-8">
-                            No activities found. Sync with Strava to see your feed.
-                        </p>
                     )}
                 </CardContent>
             </Card>
