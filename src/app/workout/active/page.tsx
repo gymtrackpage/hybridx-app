@@ -24,7 +24,6 @@ import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } 
 import type { Workout, RunningWorkout, User } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
-import { differenceInSeconds } from 'date-fns';
 import { WorkoutImageGenerator } from '@/components/WorkoutImageGenerator';
 
 export default function ActiveWorkoutPage() {
@@ -67,10 +66,10 @@ export default function ActiveWorkoutPage() {
                             setSession(workoutSession);
                             setNotes(workoutSession.notes || '');
 
-                            // Show completion modal if already finished today
-                            if (workoutSession.finishedAt && !isCompleteModalOpen) {
-                                setIsCompleteModalOpen(true);
-                            }
+                            // This is the only part removed - no more auto-opening the modal
+                            // if (workoutSession.finishedAt && !isCompleteModalOpen) {
+                            //     setIsCompleteModalOpen(true);
+                            // }
 
                             const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
                                 ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
@@ -110,7 +109,7 @@ export default function ActiveWorkoutPage() {
             unsubscribe();
         }
     };
-  }, [today, isCompleteModalOpen]);
+  }, [today]);
 
   const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
     if (!session) return;
@@ -135,9 +134,11 @@ export default function ActiveWorkoutPage() {
       // Final save of notes before finishing
       debouncedSaveNotes.flush();
       const finishedAt = new Date();
+      // We create a new object for the state update to ensure React detects the change
       const updatedSession = {...session, finishedAt, notes};
       setSession(updatedSession);
       await updateWorkoutSession(session.id, { finishedAt, notes, workoutTitle: workoutInfo?.workout?.title || 'Workout' });
+      // This is now the ONLY place where the modal is opened
       setIsCompleteModalOpen(true);
   }
 
@@ -307,13 +308,6 @@ interface WorkoutCompleteModalProps {
 }
 
 function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout }: WorkoutCompleteModalProps) {
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const duration = session.finishedAt ? differenceInSeconds(session.finishedAt, session.startedAt) : 0;
     
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -328,10 +322,7 @@ function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout
             <div className="space-y-4">
                 <div className="text-center p-4 bg-muted/50 rounded-lg">
                     <h3 className="font-semibold text-lg">{session.workoutTitle}</h3>
-                    <div className="text-4xl font-bold text-primary my-2">
-                    {formatTime(duration)}
-                    </div>
-                    <p className="text-sm text-muted-foreground">Total Time</p>
+                    <p className="text-sm text-muted-foreground">Workout logged successfully.</p>
                 </div>
 
                 {userHasStrava && (
@@ -352,7 +343,6 @@ function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout
                              workout={{
                                 name: session.workoutTitle,
                                 type: workout.programType,
-                                duration: duration,
                                 startTime: session.startedAt,
                                 notes: session.notes,
                             }}
