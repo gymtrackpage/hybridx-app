@@ -214,13 +214,6 @@ export default function ActiveWorkoutPage() {
                         </div>
                     </div>
                 )}
-
-                <Button asChild variant="secondary" className="w-full">
-                    <Link href="https://timer.hybridx.club/" target="_blank">
-                        <Timer className="mr-2" />
-                        Use the Timer
-                    </Link>
-                </Button>
                 
                 <div>
                     <h3 className="text-base font-semibold mb-3">{isRunningProgram ? 'Runs:' : 'Exercises:'}</h3>
