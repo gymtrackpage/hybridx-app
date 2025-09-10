@@ -1,4 +1,3 @@
-
 // src/app/(app)/profile/page.tsx
 'use client';
 
@@ -64,7 +63,6 @@ export default function ProfilePage() {
     resolver: zodResolver(runningProfileSchema),
   });
 
-
   useEffect(() => {
     const initialize = async () => {
         const auth = await getAuthInstance();
@@ -73,25 +71,25 @@ export default function ProfilePage() {
             const currentUser = await getUserClient(firebaseUser.uid);
             setUser(currentUser);
             if (currentUser) {
-            profileForm.reset({
-                firstName: currentUser.firstName,
-                lastName: currentUser.lastName,
-                experience: currentUser.experience,
-            });
-            recordsForm.reset({
-                backSquat: currentUser.personalRecords?.backSquat || '',
-                deadlift: currentUser.personalRecords?.deadlift || '',
-                benchPress: currentUser.personalRecords?.benchPress || '',
-                run1k: currentUser.personalRecords?.run1k || '',
-                run5k: currentUser.personalRecords?.run5k || '',
-                run10k: currentUser.personalRecords?.run10k || '',
-            });
-            runningForm.reset({
-                mile: currentUser.runningProfile?.benchmarkPaces?.mile ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.mile) : '',
-                fiveK: currentUser.runningProfile?.benchmarkPaces?.fiveK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.fiveK) : '',
-                tenK: currentUser.runningProfile?.benchmarkPaces?.tenK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.tenK) : '',
-                halfMarathon: currentUser.runningProfile?.benchmarkPaces?.halfMarathon ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.halfMarathon) : '',
-            })
+                profileForm.reset({
+                    firstName: currentUser.firstName,
+                    lastName: currentUser.lastName,
+                    experience: currentUser.experience,
+                });
+                recordsForm.reset({
+                    backSquat: currentUser.personalRecords?.backSquat || '',
+                    deadlift: currentUser.personalRecords?.deadlift || '',
+                    benchPress: currentUser.personalRecords?.benchPress || '',
+                    run1k: currentUser.personalRecords?.run1k || '',
+                    run5k: currentUser.personalRecords?.run5k || '',
+                    run10k: currentUser.personalRecords?.run10k || '',
+                });
+                runningForm.reset({
+                    mile: currentUser.runningProfile?.benchmarkPaces?.mile ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.mile) : '',
+                    fiveK: currentUser.runningProfile?.benchmarkPaces?.fiveK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.fiveK) : '',
+                    tenK: currentUser.runningProfile?.benchmarkPaces?.tenK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.tenK) : '',
+                    halfMarathon: currentUser.runningProfile?.benchmarkPaces?.halfMarathon ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.halfMarathon) : '',
+                })
             }
         }
         setLoading(false);
@@ -107,7 +105,37 @@ export default function ProfilePage() {
             unsubscribe();
         }
     };
-  }, [profileForm, recordsForm, runningForm]);
+  }, []);
+
+  // Handle URL parameters for Strava auth feedback
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const stravaSuccess = urlParams.get('strava');
+    const stravaError = urlParams.get('strava-error');
+
+    if (stravaSuccess === 'success') {
+        toast({ 
+            title: 'Success!', 
+            description: 'Your Strava account has been connected successfully.' 
+        });
+        // Clean up URL
+        window.history.replaceState({}, '', '/profile');
+        // Refresh user data
+        if (user) {
+            getUserClient(user.id).then(setUser);
+        }
+    } else if (stravaError) {
+        const errorMessage = decodeURIComponent(stravaError);
+        toast({ 
+            title: 'Strava Connection Failed', 
+            description: errorMessage, 
+            variant: 'destructive' 
+        });
+        // Clean up URL
+        window.history.replaceState({}, '', '/profile');
+    }
+  }, [toast, user]);
+
 
   const handleProfileSubmit = async (data: ProfileFormData) => {
     if (!user) return;
@@ -162,25 +190,51 @@ export default function ProfilePage() {
     }
   };
 
-  const initiateStravaAuth = () => {
+  const initiateStravaAuth = async () => {
     const clientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID;
     if (!clientId) {
-      toast({ title: 'Error', description: 'Strava integration is not configured correctly.', variant: 'destructive' });
-      return;
+        toast({ 
+            title: 'Configuration Error', 
+            description: 'Strava integration is not configured. Please contact support.', 
+            variant: 'destructive' 
+        });
+        return;
     }
-    const redirectUri = encodeURIComponent(`${window.location.origin}/api/strava/exchange`);
-    const scope = 'read,activity:read_all,activity:write';
-    
-    const authUrl = `https://www.strava.com/oauth/authorize?` +
-      `client_id=${clientId}&` +
-      `response_type=code&` +
-      `redirect_uri=${redirectUri}&` +
-      `approval_prompt=force&` +
-      `scope=${scope}`;
-      
-    window.location.href = authUrl;
-  };
 
+    try {
+        const auth = await getAuthInstance();
+        const currentUser = auth.currentUser;
+        
+        if (!currentUser) {
+            toast({ 
+                title: 'Authentication Required', 
+                description: 'Please log in to connect your Strava account.', 
+                variant: 'destructive' 
+            });
+            return;
+        }
+
+        const redirectUri = encodeURIComponent(`${window.location.origin}/api/strava/exchange`);
+        const scope = 'read,activity:read_all,activity:write';
+        
+        const authUrl = `https://www.strava.com/oauth/authorize?` +
+            `client_id=${clientId}&` +
+            `response_type=code&` +
+            `redirect_uri=${redirectUri}&` +
+            `approval_prompt=force&` +
+            `scope=${scope}`;
+
+        window.location.href = authUrl;
+        
+    } catch (error: any) {
+        console.error('Error initiating Strava auth:', error);
+        toast({ 
+            title: 'Authentication Error', 
+            description: 'Failed to initiate Strava connection. Please try again.', 
+            variant: 'destructive' 
+        });
+    }
+  };
 
   if (loading) {
     return (
@@ -316,7 +370,6 @@ export default function ProfilePage() {
                 </Form>
             </Card>
         </div>
-
       </div>
     </div>
   );

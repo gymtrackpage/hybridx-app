@@ -6,9 +6,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { getUser, updateUserAdmin } from './user-service';
 import axios from 'axios';
 import type { StravaTokens } from '@/models/types';
-import { headers } from 'next/headers';
 import { cookies } from 'next/headers';
-
 
 // Define the structure of a Strava activity object
 export interface StravaActivity {
@@ -47,39 +45,54 @@ async function getValidAccessToken(userId: string): Promise<string> {
     const user = await getUser(userId);
     const stravaTokens = user?.strava;
 
-    if (!stravaTokens) {
-        throw new Error('User is not connected to Strava.');
+    if (!stravaTokens || !stravaTokens.accessToken) {
+        throw new Error('User is not connected to Strava. Please connect your account in settings.');
     }
 
     const now = new Date();
-    // Check if the token expires in the next 5 minutes (300,000 ms)
-    if (stravaTokens.expiresAt.getTime() - now.getTime() < 300000) {
-        console.log(`Refreshing Strava token for user ${userId}...`);
+    const expiresAt = stravaTokens.expiresAt;
+    
+    // Check if token is expired or expires soon (5 minutes buffer)
+    if (!expiresAt || expiresAt.getTime() - now.getTime() < 300000) {
+        if (!stravaTokens.refreshToken) {
+            throw new Error('Refresh token not available. Please reconnect your Strava account.');
+        }
+
         try {
-            const response = await axios.post('https://www.strava.com/oauth/token', null, {
-                params: {
-                    client_id: process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID,
-                    client_secret: process.env.STRAVA_CLIENT_SECRET,
-                    grant_type: 'refresh_token',
-                    refresh_token: stravaTokens.refreshToken,
-                },
+            const response = await axios.post('https://www.strava.com/oauth/token', {
+                client_id: process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID,
+                client_secret: process.env.STRAVA_CLIENT_SECRET,
+                grant_type: 'refresh_token',
+                refresh_token: stravaTokens.refreshToken,
             });
+
+            if (!response.data.access_token) {
+                throw new Error('Invalid response from Strava token refresh');
+            }
 
             const newTokens: StravaTokens = {
                 accessToken: response.data.access_token,
                 refreshToken: response.data.refresh_token,
                 expiresAt: new Date(response.data.expires_at * 1000),
-                scope: stravaTokens.scope, // Scope doesn't change on refresh
-                athleteId: stravaTokens.athleteId, // Athlete ID doesn't change
+                scope: stravaTokens.scope,
+                athleteId: stravaTokens.athleteId,
             };
 
             await updateUserAdmin(userId, { strava: newTokens });
-            console.log(`Successfully refreshed Strava token for user ${userId}.`);
+            
             return newTokens.accessToken;
+            
         } catch (error: any) {
-            console.error('Failed to refresh Strava token:', error.response?.data || error.message);
-            // Consider what to do here. Maybe mark the connection as invalid.
-            throw new Error('Could not refresh Strava access token. Please try reconnecting your Strava account.');
+            console.error('Failed to refresh Strava token:', {
+                userId,
+                error: error.response?.data || error.message,
+                status: error.response?.status
+            });
+            
+            // If refresh fails, the connection might be invalid
+            await updateUserAdmin(userId, { strava: undefined });
+            
+            throw new Error('Strava connection expired. Please reconnect your account in settings.');
         }
     }
 
@@ -93,20 +106,28 @@ async function getValidAccessToken(userId: string): Promise<string> {
  */
 export async function getStravaActivities(): Promise<StravaActivity[]> {
     try {
-        // --- Authenticate Firebase User ---
         const cookieStore = cookies();
         const sessionCookie = cookieStore.get('__session')?.value;
+        
         if (!sessionCookie) {
-            throw new Error('Authentication required. Please log in.');
+            throw new Error('Authentication required. Please log in to view Strava activities.');
         }
-        const decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
-        const userId = decodedToken.uid;
-        // --- End Firebase Auth ---
 
+        let decodedToken;
+        try {
+            decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
+        } catch (authError) {
+            console.error('Session verification failed:', authError);
+            throw new Error('Session expired. Please log in again.');
+        }
+
+        const userId = decodedToken.uid;
         const accessToken = await getValidAccessToken(userId);
         
         const response = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
-            headers: { Authorization: `Bearer ${accessToken}` },
+            headers: { 
+                Authorization: `Bearer ${accessToken}`,
+            },
             params: {
                 per_page: 30, // Fetch the last 30 activities
                 page: 1,
@@ -116,8 +137,22 @@ export async function getStravaActivities(): Promise<StravaActivity[]> {
         await updateUserAdmin(userId, { lastStravaSync: new Date() });
 
         return response.data as StravaActivity[];
+        
     } catch (error: any) {
-        console.error('Error fetching Strava activities:', error.response?.data || error.message);
-        throw new Error(error.message || 'Failed to fetch activities from Strava.');
+        console.error('Error fetching Strava activities:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
+
+        if (error.response?.status === 401) {
+            throw new Error('Strava authorization expired. Please reconnect your account.');
+        } else if (error.response?.status === 429) {
+            throw new Error('Strava rate limit exceeded. Please try again later.');
+        } else if (error.message.includes('Authentication required')) {
+            throw error; // Re-throw auth errors as-is
+        } else {
+            throw new Error('Failed to fetch activities from Strava. Please try again.');
+        }
     }
 }

@@ -10,9 +10,17 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const code = searchParams.get('code');
     const scope = searchParams.get('scope');
+    const error = searchParams.get('error');
+
+    // Handle authorization errors from Strava
+    if (error) {
+        console.error('Strava authorization error:', error);
+        return NextResponse.redirect(new URL(`/profile?strava-error=${error}`, req.url));
+    }
 
     if (!code) {
-        return NextResponse.redirect(new URL('/profile?strava-error=auth-failed', req.url));
+        console.error('No authorization code received from Strava');
+        return NextResponse.redirect(new URL('/profile?strava-error=no-code', req.url));
     }
 
     try {
@@ -20,9 +28,8 @@ export async function GET(req: NextRequest) {
         const cookieStore = cookies();
         const sessionCookie = cookieStore.get('__session')?.value;
         if (!sessionCookie) {
-            // If there's no session, we can't associate the Strava account.
-            // Redirect to login, maybe with a message.
-            return NextResponse.redirect(new URL('/login?reason=strava-auth', req.url));
+            console.error('No session cookie found for Strava auth');
+            return NextResponse.redirect(new URL('/login?reason=strava-auth-no-session&redirect=/profile', req.url));
         }
         
         const decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
@@ -38,12 +45,17 @@ export async function GET(req: NextRequest) {
 
         const tokenData = response.data;
         
+        // Validate token data
+        if (!tokenData.access_token || !tokenData.refresh_token) {
+            throw new Error('Invalid token response from Strava');
+        }
+
         const stravaTokens: StravaTokens = {
             accessToken: tokenData.access_token,
             refreshToken: tokenData.refresh_token,
             expiresAt: new Date(tokenData.expires_at * 1000),
-            scope: scope || '',
-            athleteId: tokenData.athlete.id,
+            scope: scope || tokenData.scope || '',
+            athleteId: tokenData.athlete?.id || 0,
         };
 
         const adminDb = getAdminDb();
@@ -55,7 +67,11 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(new URL('/profile?strava=success', req.url));
 
     } catch (error: any) {
-        console.error('Strava token exchange error:', error.response?.data || error.message);
+        console.error('Strava token exchange error:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status,
+        });
         const errorMessage = error.response?.data?.message || 'Failed to connect Strava account.';
         return NextResponse.redirect(new URL(`/profile?strava-error=${encodeURIComponent(errorMessage)}`, req.url));
     }
