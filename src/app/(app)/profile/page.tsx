@@ -190,49 +190,50 @@ export default function ProfilePage() {
     }
   };
 
-  const initiateStravaAuth = async () => {
+  // Add this debug version to your profile page
+  const initiateStravaAuth = () => {
     const clientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID;
+    console.log('Strava Client ID:', clientId);
+    
     if (!clientId) {
-        toast({ 
-            title: 'Configuration Error', 
-            description: 'Strava integration is not configured. Please contact support.', 
-            variant: 'destructive' 
-        });
-        return;
+      toast({ title: 'Error', description: 'Strava integration is not configured correctly.', variant: 'destructive' });
+      return;
     }
 
-    try {
-        const auth = await getAuthInstance();
-        const currentUser = auth.currentUser;
-        
-        if (!currentUser) {
-            toast({ 
-                title: 'Authentication Required', 
-                description: 'Please log in to connect your Strava account.', 
-                variant: 'destructive' 
-            });
-            return;
-        }
+    // Debug current location
+    console.log('Current location:', {
+      origin: window.location.origin,
+      hostname: window.location.hostname,
+      href: window.location.href
+    });
 
-        const redirectUri = encodeURIComponent(`${window.location.origin}/api/strava/exchange`);
-        const scope = 'read,activity:read_all,activity:write';
-        
-        const authUrl = `https://www.strava.com/oauth/authorize?` +
-            `client_id=${clientId}&` +
-            `response_type=code&` +
-            `redirect_uri=${redirectUri}&` +
-            `approval_prompt=force&` +
-            `scope=${scope}`;
-
-        window.location.href = authUrl;
-        
-    } catch (error: any) {
-        console.error('Error initiating Strava auth:', error);
-        toast({ 
-            title: 'Authentication Error', 
-            description: 'Failed to initiate Strava connection. Please try again.', 
-            variant: 'destructive' 
-        });
+    const redirectUri = `${window.location.origin}/api/strava/exchange`;
+    console.log('Raw redirect URI:', redirectUri);
+    
+    const encodedRedirectUri = encodeURIComponent(redirectUri);
+    console.log('Encoded redirect URI:', encodedRedirectUri);
+    console.log('Decoded back:', decodeURIComponent(encodedRedirectUri));
+    
+    const scope = 'read,activity:read_all,activity:write';
+    
+    const authUrl = `https://www.strava.com/oauth/authorize?` +
+      `client_id=${clientId}&` +
+      `response_type=code&` +
+      `redirect_uri=${encodedRedirectUri}&` +
+      `approval_prompt=force&` +
+      `scope=${scope}`;
+      
+    console.log('Full Strava auth URL:', authUrl);
+    
+    // Let's also test by manually constructing the URL
+    const manualUrl = `https://www.strava.com/oauth/authorize?client_id=12008&response_type=code&redirect_uri=https%3A//app.hybridx.club/api/strava/exchange&approval_prompt=force&scope=read,activity:read_all,activity:write`;
+    console.log('Manual URL for comparison:', manualUrl);
+    
+    // Show a confirmation dialog with the URL
+    const shouldProceed = confirm(`About to redirect to Strava. Check console for URLs.\n\nRedirect URI: ${redirectUri}\n\nProceed?`);
+    
+    if (shouldProceed) {
+      window.location.href = authUrl;
     }
   };
 
