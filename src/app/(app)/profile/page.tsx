@@ -190,52 +190,28 @@ export default function ProfilePage() {
     }
   };
 
-  // Add this debug version to your profile page
   const initiateStravaAuth = () => {
     const clientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID;
-    console.log('Strava Client ID:', clientId);
-    
-    if (!clientId) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+    if (!clientId || !appUrl) {
       toast({ title: 'Error', description: 'Strava integration is not configured correctly.', variant: 'destructive' });
       return;
     }
 
-    // Debug current location
-    console.log('Current location:', {
-      origin: window.location.origin,
-      hostname: window.location.hostname,
-      href: window.location.href
-    });
-
-    const redirectUri = `${window.location.origin}/api/strava/exchange`;
-    console.log('Raw redirect URI:', redirectUri);
-    
-    const encodedRedirectUri = encodeURIComponent(redirectUri);
-    console.log('Encoded redirect URI:', encodedRedirectUri);
-    console.log('Decoded back:', decodeURIComponent(encodedRedirectUri));
-    
+    const redirectUri = encodeURIComponent(`${appUrl}/api/strava/exchange`);
     const scope = 'read,activity:read_all,activity:write';
     
     const authUrl = `https://www.strava.com/oauth/authorize?` +
       `client_id=${clientId}&` +
       `response_type=code&` +
-      `redirect_uri=${encodedRedirectUri}&` +
+      `redirect_uri=${redirectUri}&` +
       `approval_prompt=force&` +
       `scope=${scope}`;
       
-    console.log('Full Strava auth URL:', authUrl);
-    
-    // Let's also test by manually constructing the URL
-    const manualUrl = `https://www.strava.com/oauth/authorize?client_id=12008&response_type=code&redirect_uri=https%3A//app.hybridx.club/api/strava/exchange&approval_prompt=force&scope=read,activity:read_all,activity:write`;
-    console.log('Manual URL for comparison:', manualUrl);
-    
-    // Show a confirmation dialog with the URL
-    const shouldProceed = confirm(`About to redirect to Strava. Check console for URLs.\n\nRedirect URI: ${redirectUri}\n\nProceed?`);
-    
-    if (shouldProceed) {
-      window.location.href = authUrl;
-    }
+    window.location.href = authUrl;
   };
+
 
   if (loading) {
     return (

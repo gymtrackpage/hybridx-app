@@ -2,7 +2,6 @@
 'use server';
 
 import { getAuth } from 'firebase-admin/auth';
-import { getAdminDb } from '@/lib/firebase-admin';
 import { getUser, updateUserAdmin } from './user-service';
 import axios from 'axios';
 import type { StravaTokens } from '@/models/types';

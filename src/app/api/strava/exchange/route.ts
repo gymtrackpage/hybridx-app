@@ -12,21 +12,21 @@ export async function GET(req: NextRequest) {
     const scope = searchParams.get('scope');
     const error = searchParams.get('error');
 
-    // This is the public URL of your application from environment variables.
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
     if (!appUrl) {
-        throw new Error("NEXT_PUBLIC_APP_URL is not set in environment variables.");
+        console.error("CRITICAL: NEXT_PUBLIC_APP_URL is not set in environment variables.");
+        return new NextResponse('Server configuration error.', { status: 500 });
     }
 
     // Handle authorization errors from Strava
     if (error) {
         console.error('Strava authorization error:', error);
-        return NextResponse.redirect(new URL(`/profile?strava-error=${error}`, appUrl));
+        return NextResponse.redirect(new URL(`/profile?strava-error=${encodeURIComponent(error)}`, appUrl));
     }
 
     if (!code) {
         console.error('No authorization code received from Strava');
-        return NextResponse.redirect(new URL('/profile?strava-error=no-code', appUrl));
+        return NextResponse.redirect(new URL('/profile?strava-error=Authorization code not found.', appUrl));
     }
 
     try {
@@ -51,7 +51,6 @@ export async function GET(req: NextRequest) {
 
         const tokenData = response.data;
         
-        // Validate token data
         if (!tokenData.access_token || !tokenData.refresh_token) {
             throw new Error('Invalid token response from Strava');
         }
