@@ -1,11 +1,10 @@
+
 'use client';
 
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { Logo } from './icons';
 
 interface WorkoutImageGeneratorProps {
   workout: {
@@ -35,10 +34,10 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
     
     try {
       const canvas = await html2canvas(cardRef.current, {
-        width: 1080, // Instagram post size
+        width: 1080,
         height: 1080,
-        scale: 2, // Higher scale for better quality
-        backgroundColor: null, // Use the element's background
+        scale: 2,
+        backgroundColor: null,
         useCORS: true,
         logging: false,
       });
@@ -64,7 +63,6 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
 
   return (
     <div className="space-y-4">
-       {/* This is the hidden card that gets converted to image */}
        <div 
         ref={cardRef}
         className="fixed -left-[9999px] top-0"
@@ -81,16 +79,15 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
             justifyContent: 'space-between',
         }}
         >
-            {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <img src="/icon-logo.png" style={{ width: '48px', height: '48px', filter: 'invert(1)' }} alt="Logo" />
                     <div style={{ fontSize: '28px', fontWeight: '700' }}>
-                        HYBRIDX.CLUB
+                        <span style={{ color: 'hsl(var(--accent))' }}>HYBRID</span>X.CLUB
                     </div>
                 </div>
                 <div style={{
-                    background: '#FAFAD2',
+                    background: 'hsl(var(--accent))',
                     color: '#1A1A1A',
                     padding: '8px 20px',
                     borderRadius: '20px',
@@ -102,7 +99,6 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
                 </div>
             </div>
 
-            {/* Main Content */}
             <div style={{ textAlign: 'left', width: '100%' }}>
                  <div style={{
                     fontSize: '24px',
@@ -114,7 +110,7 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
                    {date}
                 </div>
                 <h1 style={{
-                    fontSize: '100px',
+                    fontSize: '90px',
                     fontWeight: '700',
                     lineHeight: '1.05',
                     margin: 0,
@@ -123,9 +119,21 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
                 }}>
                     {workout.name}
                 </h1>
+                {workout.notes && (
+                  <p style={{
+                    fontSize: '28px',
+                    lineHeight: '1.4',
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    marginTop: '20px',
+                    maxWidth: '80%',
+                    fontFamily: '"Inter", sans-serif',
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                    {`"${workout.notes}"`}
+                  </p>
+                )}
             </div>
 
-            {/* Footer Stats */}
              <div style={{
                 width: '100%',
                 borderTop: '2px solid rgba(255, 255, 255, 0.2)',
@@ -147,9 +155,16 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
                     </div>
                 )}
             </div>
+            <div style={{
+              position: 'absolute',
+              bottom: '60px',
+              left: '60px',
+              width: '200px',
+              height: '4px',
+              background: 'hsl(var(--accent))'
+            }} />
         </div>
         
-        {/* User-visible button */}
         <Button 
             onClick={generateImage} 
             disabled={generating}
