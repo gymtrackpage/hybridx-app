@@ -1,5 +1,4 @@
-// src/app/api/strava/upload/route.ts
-
+{// src/app/api/strava/upload/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { cookies } from 'next/headers';
@@ -8,6 +7,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import axios from 'axios';
 import type { StravaTokens, WorkoutSession } from '@/models/types';
 import { differenceInSeconds } from 'date-fns';
+import FormData from 'form-data';
 
 // Helper function to safely convert Firestore timestamp to Date
 function toDate(timestamp: any): Date {
@@ -37,6 +37,39 @@ function mapActivityTypeToStrava(title: string): string {
     return 'Workout';
 }
 
+async function getValidAccessToken(userId: string): Promise<string> {
+    const user = await getUser(userId);
+    const stravaTokens = user?.strava;
+
+    if (!stravaTokens?.accessToken) {
+        throw new Error('Strava not connected');
+    }
+
+    const now = new Date();
+    const expiresAt = toDate(stravaTokens.expiresAt);
+    
+    if (expiresAt.getTime() - now.getTime() < 300000) { // 5 min buffer
+        console.log('Token expiring soon, refreshing...');
+        const refreshResponse = await axios.post('https://www.strava.com/oauth/token', {
+            client_id: process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID,
+            client_secret: process.env.STRAVA_CLIENT_SECRET,
+            grant_type: 'refresh_token',
+            refresh_token: stravaTokens.refreshToken,
+        });
+
+        const newTokens: StravaTokens = {
+            ...stravaTokens,
+            accessToken: refreshResponse.data.access_token,
+            refreshToken: refreshResponse.data.refresh_token,
+            expiresAt: new Date(refreshResponse.data.expires_at * 1000),
+        };
+
+        await updateUserAdmin(userId, { strava: newTokens });
+        return newTokens.accessToken;
+    }
+    return stravaTokens.accessToken;
+}
+
 export async function POST(req: NextRequest) {
   try {
     console.log('=== STRAVA UPLOAD API START ===');
@@ -59,43 +92,10 @@ export async function POST(req: NextRequest) {
     const userId = decodedToken.uid;
     console.log('Authenticated user:', userId);
 
-    // Get user's Strava tokens
-    const user = await getUser(userId);
-    const stravaTokens = user?.strava;
-
-    if (!stravaTokens?.accessToken) {
-      return NextResponse.json({ error: 'Strava not connected' }, { status: 400 });
-    }
-
-    // Check if token needs refresh
-    const now = new Date();
-    let accessToken = stravaTokens.accessToken;
-    const expiresAt = toDate(stravaTokens.expiresAt);
-    
-    if (expiresAt.getTime() - now.getTime() < 300000) {
-      console.log('Token expiring soon, refreshing...');
-      try {
-        const refreshResponse = await axios.post('https://www.strava.com/oauth/token', {
-          client_id: process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID,
-          client_secret: process.env.STRAVA_CLIENT_SECRET,
-          grant_type: 'refresh_token',
-          refresh_token: stravaTokens.refreshToken,
-        });
-
-        const newTokens: StravaTokens = {
-          ...stravaTokens,
-          accessToken: refreshResponse.data.access_token,
-          refreshToken: refreshResponse.data.refresh_token,
-          expiresAt: new Date(refreshResponse.data.expires_at * 1000),
-        };
-
-        await updateUserAdmin(userId, { strava: newTokens });
-        accessToken = newTokens.accessToken;
-      } catch (refreshError: any) {
-        console.error('Token refresh failed:', refreshError.response?.data);
-        return NextResponse.json({ error: 'Token refresh failed' }, { status: 401 });
-      }
-    }
+    const accessToken = await getValidAccessToken(userId).catch(err => {
+        console.error('Token validation failed:', err.message);
+        throw err;
+    });
 
     // Fetch workout session from your database
     const adminDb = getAdminDb();
@@ -118,38 +118,72 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Cannot upload an incomplete workout' }, { status: 400 });
     }
 
-    // Convert your session format to Strava format
+    // 1. Create the activity on Strava
     const duration = differenceInSeconds(toDate(session.finishedAt), toDate(session.startedAt));
-    
-    const stravaActivity = {
+    const stravaActivityPayload = {
       name: session.workoutTitle,
       type: mapActivityTypeToStrava(session.workoutTitle),
       start_date_local: toDate(session.startedAt).toISOString(),
       elapsed_time: duration,
       description: `Workout from HYBRIDX.CLUB.\n\nNotes:\n${session.notes || 'No notes.'}`,
-      trainer: true, // Assume indoor workout unless specified otherwise
+      trainer: true,
       commute: false
     };
 
-    console.log('Uploading activity to Strava:', stravaActivity);
-
-    // Upload to Strava
+    console.log('Uploading activity to Strava:', stravaActivityPayload);
     const stravaResponse = await axios.post(
       'https://www.strava.com/api/v3/activities',
-      stravaActivity,
-      {
-        headers: { 
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 15000
-      }
+      stravaActivityPayload,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } }
     );
-
     const stravaActivityId = stravaResponse.data.id;
-    console.log('Successfully uploaded to Strava:', stravaActivityId);
+    console.log('Successfully created Strava activity:', stravaActivityId);
 
-    // Update session doc with Strava ID
+    // 2. Generate the branded image
+    console.log('Generating workout image...');
+    const imageResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/generate-workout-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name: session.workoutTitle,
+            type: mapActivityTypeToStrava(session.workoutTitle),
+            duration: duration,
+            date: toDate(session.startedAt).toISOString(),
+        }),
+    });
+
+    if (!imageResponse.ok) {
+        console.error('Failed to generate workout image, but activity was created.');
+    } else {
+        const imageBuffer = await imageResponse.arrayBuffer();
+        console.log(`Generated image, size: ${imageBuffer.byteLength} bytes.`);
+        
+        // 3. Upload the image as a photo to the new activity
+        const formData = new FormData();
+        formData.append('file', Buffer.from(imageBuffer), {
+            contentType: 'image/png',
+            filename: `hybridx_workout_${sessionId}.png`,
+        });
+
+        console.log('Uploading photo to Strava activity:', stravaActivityId);
+        await axios.post(
+            `https://www.strava.com/api/v3/uploads`,
+            formData,
+            { 
+                headers: { 
+                    ...formData.getHeaders(),
+                    'Authorization': `Bearer ${accessToken}` 
+                },
+                params: {
+                    activity_id: stravaActivityId,
+                    data_type: 'png'
+                }
+            }
+        );
+        console.log('Photo upload process initiated for activity:', stravaActivityId);
+    }
+    
+    // 4. Update session doc with Strava ID
     await sessionDoc.ref.update({
         stravaId: stravaActivityId.toString(),
         uploadedToStrava: true,
@@ -171,11 +205,6 @@ export async function POST(req: NextRequest) {
 
     if (error.response?.status === 401) {
       return NextResponse.json({ error: 'Strava authorization expired' }, { status: 401 });
-    } else if (error.response?.status === 422) {
-      return NextResponse.json({ 
-        error: 'Invalid activity data', 
-        details: error.response.data 
-      }, { status: 422 });
     } else {
       return NextResponse.json({ 
         error: 'Failed to upload to Strava',

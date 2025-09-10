@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X } from 'lucide-react';
+import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Download } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { StravaUploadButton } from '@/components/strava-upload-button';
 import { getAuthInstance } from '@/lib/firebase';
@@ -25,7 +25,6 @@ import type { Workout, RunningWorkout, User } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
 import { differenceInSeconds } from 'date-fns';
-
 
 export default function ActiveWorkoutPage() {
   const [session, setSession] = useState<WorkoutSession | null>(null);
@@ -68,7 +67,7 @@ export default function ActiveWorkoutPage() {
                             setNotes(workoutSession.notes || '');
 
                             // Show completion modal if already finished today
-                            if (workoutSession.finishedAt) {
+                            if (workoutSession.finishedAt && !isCompleteModalOpen) {
                                 setIsCompleteModalOpen(true);
                             }
 
@@ -110,7 +109,7 @@ export default function ActiveWorkoutPage() {
             unsubscribe();
         }
     };
-  }, [today]);
+  }, [today, isCompleteModalOpen]);
 
   const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
     if (!session) return;
@@ -305,49 +304,118 @@ interface WorkoutCompleteModalProps {
 }
 
 function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava }: WorkoutCompleteModalProps) {
+    const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+    const [loadingPreview, setLoadingPreview] = useState(false);
+
     const formatTime = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
     const duration = session.finishedAt ? differenceInSeconds(session.finishedAt, session.startedAt) : 0;
+    
+    useEffect(() => {
+        const generatePreview = async () => {
+            if (isOpen && userHasStrava && !imagePreviewUrl && !loadingPreview) {
+                setLoadingPreview(true);
+                try {
+                    const response = await fetch('/api/generate-workout-image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: session.workoutTitle,
+                            type: 'Workout',
+                            duration: duration,
+                            date: session.startedAt.toISOString(),
+                        }),
+                    });
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        setImagePreviewUrl(url);
+                    }
+                } catch (error) {
+                    console.error('Failed to generate image preview:', error);
+                } finally {
+                    setLoadingPreview(false);
+                }
+            }
+        };
+
+        generatePreview();
+        
+        return () => {
+            if (imagePreviewUrl) {
+                URL.revokeObjectURL(imagePreviewUrl);
+            }
+        };
+
+    }, [isOpen, userHasStrava, session, duration, imagePreviewUrl, loadingPreview]);
+
+    const handleDownload = () => {
+        if (imagePreviewUrl) {
+            const link = document.createElement('a');
+            link.href = imagePreviewUrl;
+            link.download = `${session.workoutTitle.replace(/ /g, '_')}_hybridx.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
             <DialogHeader>
             <DialogTitle>Workout Complete! 🎉</DialogTitle>
+             <DialogDescription>
+                Great job finishing your workout. Here's your summary.
+             </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-4">
-            <div className="text-center">
-                <h3 className="font-semibold text-lg">{session.workoutTitle}</h3>
-                <div className="text-2xl font-bold text-primary mt-2">
-                {formatTime(duration)}
+                <div className="text-center p-4 bg-muted/50 rounded-lg">
+                    <h3 className="font-semibold text-lg">{session.workoutTitle}</h3>
+                    <div className="text-4xl font-bold text-primary my-2">
+                    {formatTime(duration)}
+                    </div>
+                    <p className="text-sm text-muted-foreground">Total Time</p>
                 </div>
-            </div>
 
-            {userHasStrava && (
-                <>
-                <Separator />
-                <div className="flex flex-col items-center gap-2">
-                    <p className="text-sm text-muted-foreground text-center">
-                    Share your achievement with the Strava community
-                    </p>
-                    <StravaUploadButton
-                        sessionId={session.id}
-                        activityName={session.workoutTitle}
-                        isUploaded={session.uploadedToStrava}
-                        stravaId={session.stravaId}
-                    />
-                </div>
-                </>
-            )}
+                {userHasStrava && (
+                    <>
+                    <Separator />
+                    <div className="space-y-3">
+                        <p className="text-sm font-medium text-center">
+                        Share your achievement on Strava
+                        </p>
+                        
+                        <div className="p-2 border rounded-md">
+                           {loadingPreview && <Skeleton className="w-full aspect-[1200/630]" />}
+                           {imagePreviewUrl && <img src={imagePreviewUrl} alt="Workout summary" className="rounded w-full" />}
+                        </div>
+                        
+                        <div className="flex gap-2">
+                             <Button onClick={handleDownload} variant="outline" className="w-full" disabled={!imagePreviewUrl}>
+                                <Download className="mr-2 h-4 w-4" />
+                                Download
+                            </Button>
+                            <StravaUploadButton
+                                sessionId={session.id}
+                                activityName={session.workoutTitle}
+                                isUploaded={session.uploadedToStrava}
+                                stravaId={session.stravaId}
+                            />
+                        </div>
+                    </div>
+                    </>
+                )}
 
-            <Button onClick={onClose} className="w-full">
-                Done
-            </Button>
+                <Button onClick={onClose} className="w-full" variant="outline">
+                    Close
+                </Button>
             </div>
         </DialogContent>
         </Dialog>

@@ -99,7 +99,7 @@ export function StravaUploadButton({
       <Button
         variant="outline"
         onClick={openInStrava}
-        className="text-orange-600 border-orange-200 hover:bg-orange-50"
+        className="text-orange-600 border-orange-200 hover:bg-orange-50 w-full"
       >
         <Check className="h-4 w-4 mr-2" />
         View on Strava
@@ -110,10 +110,9 @@ export function StravaUploadButton({
 
   return (
     <Button
-      variant="outline"
       onClick={handleUpload}
       disabled={disabled || uploading || uploaded}
-      className="text-orange-600 border-orange-200 hover:bg-orange-50"
+      className="text-orange-600 bg-orange-100 hover:bg-orange-200 border-orange-200 border w-full"
     >
       {uploading ? (
         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
