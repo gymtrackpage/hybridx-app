@@ -71,11 +71,10 @@ async function getValidAccessToken(userId: string): Promise<string> {
             }
 
             const newTokens: StravaTokens = {
+                ...stravaTokens,
                 accessToken: response.data.access_token,
                 refreshToken: response.data.refresh_token,
                 expiresAt: new Date(response.data.expires_at * 1000),
-                scope: stravaTokens.scope,
-                athleteId: stravaTokens.athleteId,
             };
 
             await updateUserAdmin(userId, { strava: newTokens });
@@ -98,62 +97,4 @@ async function getValidAccessToken(userId: string): Promise<string> {
     }
 
     return stravaTokens.accessToken;
-}
-
-/**
- * Fetches recent Strava activities for the currently logged-in user.
- * This is a Server Action that can be called from client components.
- * @returns An array of Strava activities.
- */
-export async function getStravaActivities(): Promise<StravaActivity[]> {
-    try {
-        const cookieStore = cookies();
-        const sessionCookie = cookieStore.get('__session')?.value;
-        
-        if (!sessionCookie) {
-            throw new Error('Authentication required. Please log in to view Strava activities.');
-        }
-
-        let decodedToken;
-        try {
-            decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
-        } catch (authError) {
-            console.error('Session verification failed:', authError);
-            throw new Error('Session expired. Please log in again.');
-        }
-
-        const userId = decodedToken.uid;
-        const accessToken = await getValidAccessToken(userId);
-        
-        const response = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
-            headers: { 
-                Authorization: `Bearer ${accessToken}`,
-            },
-            params: {
-                per_page: 30, // Fetch the last 30 activities
-                page: 1,
-            },
-        });
-        
-        await updateUserAdmin(userId, { lastStravaSync: new Date() });
-
-        return response.data as StravaActivity[];
-        
-    } catch (error: any) {
-        console.error('Error fetching Strava activities:', {
-            message: error.message,
-            response: error.response?.data,
-            status: error.response?.status
-        });
-
-        if (error.response?.status === 401) {
-            throw new Error('Strava authorization expired. Please reconnect your account.');
-        } else if (error.response?.status === 429) {
-            throw new Error('Strava rate limit exceeded. Please try again later.');
-        } else if (error.message.includes('Authentication required')) {
-            throw error; // Re-throw auth errors as-is
-        } else {
-            throw new Error('Failed to fetch activities from Strava. Please try again.');
-        }
-    }
 }

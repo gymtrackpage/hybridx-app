@@ -5,10 +5,9 @@ import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
 import type { StravaActivity } from '@/services/strava-service';
-import { getStravaActivities } from '@/services/strava-service';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Zap, Activity, Clock, MapPin, RefreshCw } from 'lucide-react';
+import { Loader2, Zap, Activity, Clock, MapPin, RefreshCw, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getUserClient } from '@/services/user-service-client';
@@ -16,8 +15,8 @@ import type { User } from '@/models/types';
 import { useToast } from '@/hooks/use-toast';
 
 export default function ActivityFeedPage() {
-    const [activities, setActivities] = useState<StravaActivity[]>([]);
     const [user, setUser] = useState<User | null>(null);
+    const [activities, setActivities] = useState<StravaActivity[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -35,9 +34,23 @@ export default function ActivityFeedPage() {
         setSyncing(true);
         setError(null);
         try {
-            const fetchedActivities = await getStravaActivities();
+            console.log('Fetching Strava activities via API route...');
+            const response = await fetch('/api/strava/activities', {
+                method: 'GET',
+                credentials: 'include',
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Failed to fetch activities: ${response.statusText}`);
+            }
+
+            const fetchedActivities = await response.json();
+            console.log(`Received ${fetchedActivities.length} activities.`);
             setActivities(fetchedActivities);
+
         } catch (err: any) {
+            console.error("Error in fetchActivities:", err);
             setError(err.message || 'Failed to fetch activities.');
             toast({
                 title: 'Error',
@@ -58,11 +71,12 @@ export default function ActivityFeedPage() {
                     const currentUser = await getUserClient(firebaseUser.uid);
                     setUser(currentUser);
                     if (currentUser?.strava?.accessToken) {
-                        fetchActivities();
+                       fetchActivities(); // Initial fetch
                     } else {
                         setLoading(false);
                     }
                 } else {
+                    setUser(null);
                     setLoading(false);
                 }
             });
@@ -81,6 +95,7 @@ export default function ActivityFeedPage() {
 
     // Helper to format duration from seconds to HH:MM
     const formatDuration = (seconds: number) => {
+        if (!seconds) return '0m';
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
         if (h > 0) {
@@ -91,16 +106,21 @@ export default function ActivityFeedPage() {
 
     // Helper to format distance from meters to km or m
     const formatDistance = (meters: number) => {
+        if (!meters) return '0 km';
         const km = meters / 1000;
         return km >= 1 ? `${km.toFixed(1)} km` : `${meters.toFixed(0)} m`;
     };
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-        });
+        try {
+            return new Date(dateString).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+        } catch {
+            return 'Invalid date';
+        }
     };
 
     if (loading) {
@@ -145,8 +165,6 @@ export default function ActivityFeedPage() {
                     <CardDescription>A log of your training sessions synced from Strava.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {error && <p className="text-destructive text-center py-4">{error}</p>}
-                    
                     {!isStravaConnected ? (
                         <div className="text-center py-8 text-muted-foreground">
                             <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -154,9 +172,9 @@ export default function ActivityFeedPage() {
                              <p className="text-sm">Please connect your account in your profile.</p>
                         </div>
                     ) : syncing && activities.length === 0 ? (
-                        <div className="space-y-4">
+                        <div className="space-y-4 p-4">
                             {[...Array(3)].map((_, i) => (
-                            <div key={i} className="flex items-center space-x-4 p-4">
+                            <div key={i} className="flex items-center space-x-4">
                                 <Skeleton className="h-10 w-10 rounded-full" />
                                 <div className="space-y-2 flex-1">
                                 <Skeleton className="h-4 w-3/4" />
@@ -165,13 +183,19 @@ export default function ActivityFeedPage() {
                             </div>
                             ))}
                         </div>
-                    ) : !syncing && activities.length === 0 && !error ? (
+                    ) : error ? (
+                        <div className="text-center py-8">
+                            <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-destructive" />
+                            <div className="text-destructive mb-2 font-medium">Error Loading Activities</div>
+                            <div className="text-sm text-muted-foreground mb-4">{error}</div>
+                            <Button variant="outline" onClick={fetchActivities}>
+                            Try Again
+                            </Button>
+                        </div>
+                    ) : !syncing && activities.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                             <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
                             <p>No recent activities found.</p>
-                            <Button variant="outline" className="mt-4" onClick={fetchActivities}>
-                                Fetch Activities
-                            </Button>
                         </div>
                     ) : (
                          <ul className="space-y-4">
