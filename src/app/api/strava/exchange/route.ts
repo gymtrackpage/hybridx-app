@@ -12,15 +12,21 @@ export async function GET(req: NextRequest) {
     const scope = searchParams.get('scope');
     const error = searchParams.get('error');
 
+    // This is the public URL of your application from environment variables.
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!appUrl) {
+        throw new Error("NEXT_PUBLIC_APP_URL is not set in environment variables.");
+    }
+
     // Handle authorization errors from Strava
     if (error) {
         console.error('Strava authorization error:', error);
-        return NextResponse.redirect(new URL(`/profile?strava-error=${error}`, req.url));
+        return NextResponse.redirect(new URL(`/profile?strava-error=${error}`, appUrl));
     }
 
     if (!code) {
         console.error('No authorization code received from Strava');
-        return NextResponse.redirect(new URL('/profile?strava-error=no-code', req.url));
+        return NextResponse.redirect(new URL('/profile?strava-error=no-code', appUrl));
     }
 
     try {
@@ -29,7 +35,7 @@ export async function GET(req: NextRequest) {
         const sessionCookie = cookieStore.get('__session')?.value;
         if (!sessionCookie) {
             console.error('No session cookie found for Strava auth');
-            return NextResponse.redirect(new URL('/login?reason=strava-auth-no-session&redirect=/profile', req.url));
+            return NextResponse.redirect(new URL('/login?reason=strava-auth-no-session&redirect=/profile', appUrl));
         }
         
         const decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
@@ -64,7 +70,7 @@ export async function GET(req: NextRequest) {
         });
 
         // Redirect back to the profile page with a success message
-        return NextResponse.redirect(new URL('/profile?strava=success', req.url));
+        return NextResponse.redirect(new URL('/profile?strava=success', appUrl));
 
     } catch (error: any) {
         console.error('Strava token exchange error:', {
@@ -73,6 +79,6 @@ export async function GET(req: NextRequest) {
             status: error.response?.status,
         });
         const errorMessage = error.response?.data?.message || 'Failed to connect Strava account.';
-        return NextResponse.redirect(new URL(`/profile?strava-error=${encodeURIComponent(errorMessage)}`, req.url));
+        return NextResponse.redirect(new URL(`/profile?strava-error=${encodeURIComponent(errorMessage)}`, appUrl));
     }
 }
