@@ -1,9 +1,38 @@
+// src/app/login/page.tsx
+'use client';
+
+import { useEffect } from 'react';
 import Link from 'next/link';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { LoginForm } from '@/components/auth-forms';
 import { Logo } from '@/components/icons';
 
 export default function LoginPage() {
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const reason = urlParams.get('reason');
+    const stravaCode = urlParams.get('strava-code');
+    const stravaScope = urlParams.get('strava-scope');
+    
+    if (reason?.includes('strava-auth') && stravaCode) {
+        toast({
+            title: 'Session Expired',
+            description: 'Please log in again to complete your Strava connection.',
+            variant: 'destructive'
+        });
+        
+        // Store Strava data in localStorage to complete after login
+        localStorage.setItem('pending-strava-auth', JSON.stringify({
+            code: stravaCode,
+            scope: stravaScope,
+            timestamp: Date.now()
+        }));
+    }
+  }, [toast]);
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="container z-40 bg-background">

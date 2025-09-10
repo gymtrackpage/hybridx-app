@@ -48,16 +48,59 @@ export function LoginForm() {
     defaultValues: { email: '', password: '' },
   });
 
+  const completePendingStravaAuth = async () => {
+    const pendingAuth = localStorage.getItem('pending-strava-auth');
+    if (pendingAuth) {
+        try {
+            const { code, scope, timestamp } = JSON.parse(pendingAuth);
+            
+            // Check if the code is still fresh (codes expire quickly)
+            if (Date.now() - timestamp < 300000) { // 5 minutes
+                localStorage.removeItem('pending-strava-auth');
+                
+                // We need to set the session cookie before redirecting
+                const auth = await getAuthInstance();
+                const idToken = await auth.currentUser?.getIdToken(true);
+
+                await fetch('/api/auth/session', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ idToken }),
+                });
+
+                // Redirect to complete the Strava connection
+                window.location.href = `/api/strava/exchange?code=${code}&scope=${scope}`;
+                return true; // Indicate that a redirect is happening
+            }
+        } catch (error) {
+            console.error('Failed to parse pending Strava auth:', error);
+        }
+        
+        localStorage.removeItem('pending-strava-auth');
+        toast({
+            title: 'Strava Connection Expired',
+            description: 'Please try connecting to Strava again from your profile.',
+            variant: 'destructive'
+        });
+    }
+    return false; // No redirect
+  };
+
   async function onSubmit(values: z.infer<typeof loginSchema>) {
     setIsLoading(true);
     try {
       const auth = await getAuthInstance();
       await signInWithEmailAndPassword(auth, values.email, values.password);
-      toast({
-        title: 'Login Successful',
-        description: 'Redirecting to your dashboard...',
-      });
-      router.push('/dashboard');
+      
+      const wasRedirected = await completePendingStravaAuth();
+
+      if (!wasRedirected) {
+          toast({
+            title: 'Login Successful',
+            description: 'Redirecting to your dashboard...',
+          });
+          router.push('/dashboard');
+      }
     } catch (error: any) {
       console.error('Login error:', error);
       let description = 'An unexpected error occurred. Please try again.';
@@ -69,9 +112,9 @@ export function LoginForm() {
         description,
         variant: 'destructive',
       });
-    } finally {
       setIsLoading(false);
-    }
+    } 
+    // Don't setIsLoading(false) if redirecting, to prevent button flicker
   }
 
   return (

@@ -209,26 +209,92 @@ export default function ProfilePage() {
     }
   };
 
-  const initiateStravaAuth = () => {
+  const initiateStravaAuth = async () => {
     const clientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
     if (!clientId || !appUrl) {
-      toast({ title: 'Error', description: 'Strava integration is not configured correctly.', variant: 'destructive' });
-      return;
+        toast({ title: 'Error', description: 'Strava integration is not configured correctly.', variant: 'destructive' });
+        return;
     }
 
-    const redirectUri = encodeURIComponent(`${appUrl}/api/strava/exchange`);
-    const scope = 'read,activity:read_all,activity:write';
-    
-    const authUrl = `https://www.strava.com/oauth/authorize?` +
-      `client_id=${clientId}&` +
-      `response_type=code&` +
-      `redirect_uri=${redirectUri}&` +
-      `approval_prompt=force&` +
-      `scope=${scope}`;
-      
-    window.location.href = authUrl;
+    try {
+        // === ENSURE USER IS AUTHENTICATED ===
+        const auth = await getAuthInstance();
+        const currentUser = auth.currentUser;
+        
+        if (!currentUser) {
+            toast({ 
+                title: 'Authentication Required', 
+                description: 'Please log in to connect your Strava account.', 
+                variant: 'destructive' 
+            });
+            return;
+        }
+
+        console.log('🔐 Current user authenticated:', currentUser.uid);
+
+        // === SET SESSION COOKIE BEFORE REDIRECT ===
+        try {
+            const idToken = await currentUser.getIdToken(true);
+            console.log('🎫 Got fresh ID token');
+            
+            // Set the session cookie via API call
+            const sessionResponse = await fetch('/api/auth/session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({ idToken })
+            });
+
+            if (!sessionResponse.ok) {
+                console.error('Failed to set session cookie:', await sessionResponse.text());
+                throw new Error('Failed to establish session');
+            }
+
+            console.log('✅ Session cookie set successfully');
+            
+        } catch (sessionError) {
+            console.error('Session setup failed:', sessionError);
+            toast({ 
+                title: 'Session Error', 
+                description: 'Failed to establish session. Please try logging out and back in.', 
+                variant: 'destructive' 
+            });
+            return;
+        }
+
+        // === PROCEED WITH STRAVA AUTH ===
+        const redirectUri = encodeURIComponent(`${appUrl}/api/strava/exchange`);
+        const scope = 'read,activity:read_all,activity:write';
+        
+        // Add state for CSRF protection
+        const state = btoa(JSON.stringify({
+            userId: currentUser.uid,
+            timestamp: Date.now()
+        }));
+        
+        const authUrl = `https://www.strava.com/oauth/authorize?` +
+            `client_id=${clientId}&` +
+            `response_type=code&` +
+            `redirect_uri=${redirectUri}&` +
+            `approval_prompt=force&` +
+            `scope=${scope}&` +
+            `state=${state}`;
+            
+        console.log('🚀 Redirecting to Strava auth:', authUrl);
+        window.location.href = authUrl;
+        
+    } catch (error: any) {
+        console.error('Error initiating Strava auth:', error);
+        toast({ 
+            title: 'Authentication Error', 
+            description: 'Failed to initiate Strava connection. Please try again.', 
+            variant: 'destructive' 
+        });
+    }
   };
 
 
