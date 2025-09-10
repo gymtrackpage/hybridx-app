@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, ExternalLink, Check, Loader2 } from 'lucide-react';
+import { getAuthInstance } from '@/lib/firebase';
 
 interface StravaUploadButtonProps {
   sessionId: string;
@@ -32,6 +33,26 @@ export function StravaUploadButton({
     setUploading(true);
     
     try {
+      // Proactively refresh the session cookie before making the API call
+      const auth = await getAuthInstance();
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('You must be logged in to upload to Strava.');
+      }
+      
+      const idToken = await currentUser.getIdToken(true);
+      const sessionResponse = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+          credentials: 'include'
+      });
+
+      if (!sessionResponse.ok) {
+          throw new Error('Failed to refresh authentication session.');
+      }
+
+      // Now make the authenticated request
       const response = await fetch('/api/strava/upload', {
         method: 'POST',
         headers: {
