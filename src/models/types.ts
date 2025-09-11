@@ -96,6 +96,7 @@ export interface PlannedRun {
   description: string;
   targetPace?: number; // calculated automatically in seconds per mile
   effortLevel: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+  noIntervals?: number;
 }
 
 

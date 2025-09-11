@@ -39,6 +39,7 @@ interface RunningCsvRow {
   workoutDay: string;
   workoutTitle: string;
   runType: string;
+  noIntervals: string;
   runDistance: string;
   runPaceZone: string;
   runDescription: string;
@@ -141,7 +142,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
           const day = parseInt(row.workoutDay, 10);
           if (isNaN(day)) throw new Error(`Invalid workoutDay found: ${row.workoutDay}`);
           
-          const { workoutTitle, runType, runDistance, runPaceZone, runDescription, runEffortLevel } = row;
+          const { workoutTitle, runType, noIntervals, runDistance, runPaceZone, runDescription, runEffortLevel } = row;
           if (!workoutTitle || !runType || !runDistance || !runPaceZone || !runDescription || !runEffortLevel) {
               throw new Error('All running workout fields are required for each row.');
           }
@@ -152,6 +153,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
               paceZone: runPaceZone as PaceZone,
               description: runDescription,
               effortLevel: parseInt(runEffortLevel, 10) as PlannedRun['effortLevel'],
+              noIntervals: noIntervals ? parseInt(noIntervals, 10) : undefined,
           };
           
           if (workoutsMap.has(day)) {
