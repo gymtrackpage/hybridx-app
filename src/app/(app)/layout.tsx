@@ -193,8 +193,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6">
-            <SidebarTrigger className="md:hidden" />
+        <header className="flex h-14 items-center justify-between gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6">
+            <div className="flex items-center gap-2">
+                <SidebarTrigger className="md:hidden" />
+                 <Link href="/dashboard" className="flex items-center gap-2 md:hidden">
+                    <Logo className="h-6 w-6 text-primary" />
+                    <span className="font-bold text-md font-headline">HYBRIDX.CLUB</span>
+                </Link>
+            </div>
             <div className="w-full flex-1">
                 {/* Header content can go here, like breadcrumbs */}
             </div>
