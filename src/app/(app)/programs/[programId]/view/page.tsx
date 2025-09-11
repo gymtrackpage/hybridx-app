@@ -335,12 +335,10 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
             </Link>
         </Button>
         <div className="flex gap-2 w-full sm:w-auto">
-            {!isCurrentProgram && (
-              <Button variant="accent" onClick={() => setIsScheduleDialogOpen(true)} className="w-full" disabled={isScheduling}>
-                  <CalendarPlus className="mr-2" />
-                  Schedule Program
-              </Button>
-            )}
+            <Button variant="accent" onClick={() => setIsScheduleDialogOpen(true)} className="w-full" disabled={isScheduling}>
+                <CalendarPlus className="mr-2" />
+                {isCurrentProgram ? 'Reschedule Program' : 'Schedule Program'}
+            </Button>
             <Button variant="outline" onClick={handleDownloadPDF} className="w-full" disabled={isDownloading}>
                 {isDownloading ? <Loader2 className="mr-2 animate-spin" /> : <Printer className="mr-2" />}
                 {isDownloading ? 'Generating...' : 'Download PDF'}
@@ -379,7 +377,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                                              <li key={index}>
                                                 <span className="font-medium text-foreground">{run.description}</span>
                                                 <p className="text-sm">
-                                                    Target Pace: <span className="font-semibold text-primary">{pace}</span> / mile
+                                                    Target Pace: <span className="font-semibold text-primary">{pace}</span> / km
                                                 </p>
                                              </li>
                                         )

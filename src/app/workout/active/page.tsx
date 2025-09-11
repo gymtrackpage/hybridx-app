@@ -309,7 +309,7 @@ export default function ActiveWorkoutPage() {
                                                     <p className="font-semibold">{(item as any).description}</p>
                                                     {trainingPaces && (
                                                         <p className="text-sm text-muted-foreground">
-                                                            Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[(item as any).paceZone])}</span> / mile
+                                                            Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[(item as any).paceZone])}</span> / km
                                                         </p>
                                                     )}
                                                 </>

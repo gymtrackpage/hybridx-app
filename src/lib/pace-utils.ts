@@ -20,11 +20,11 @@ function calculateVdot(distanceMeters: number, timeSeconds: number): number {
  */
 function getPacesFromVdot(vdot: number): Record<string, number> {
     const maxVelocity = 29.54 + 5.000663 * vdot - 0.007546 * vdot * vdot; // meters per minute
-    const metersPerMile = 1609.34;
+    const metersPerKm = 1000;
 
     const calculatePace = (percentage: number) => {
         const pacePerMeter = 1 / (maxVelocity * percentage); // minutes per meter
-        return (pacePerMeter * metersPerMile) * 60; // seconds per mile
+        return (pacePerMeter * metersPerKm) * 60; // seconds per kilometer
     };
     
     return {
@@ -88,11 +88,11 @@ export function secondsToTimeString(totalSeconds: number): string {
 
 
 /**
- * Converts a race time over a distance to a pace in seconds per mile.
+ * Converts a race time over a distance to a pace in seconds per kilometer.
  */
-export function calculatePacePerMile(timeSeconds: number, distanceMiles: number): number {
-    if (!timeSeconds || !distanceMiles) return 0;
-    return timeSeconds / distanceMiles;
+export function calculatePacePerKm(timeSeconds: number, distanceKm: number): number {
+    if (!timeSeconds || !distanceKm) return 0;
+    return timeSeconds / distanceKm;
 }
 
 /**
@@ -137,7 +137,7 @@ export function calculateTrainingPaces(user: User): Record<string, number> | nul
 }
 
 /**
- * Formats a pace in seconds per mile to a "MM:SS" string.
+ * Formats a pace in seconds per kilometer to a "MM:SS" string.
  */
 export function formatPace(paceSeconds: number): string {
     if (paceSeconds <= 0) return "N/A";

@@ -1,3 +1,4 @@
+
 // src/models/types.ts
 
 export interface StravaTokens {
@@ -20,10 +21,10 @@ export interface PersonalRecords {
 
 export interface UserRunningProfile {
   benchmarkPaces: {
-    mile?: number;      // seconds per mile
-    fiveK?: number;     // seconds per mile
-    tenK?: number;      // seconds per mile
-    halfMarathon?: number; // seconds per mile
+    mile?: number;      // total time in seconds
+    fiveK?: number;     // total time in seconds
+    tenK?: number;      // total time in seconds
+    halfMarathon?: number; // total time in seconds
   };
   injuryHistory?: string[];
 }
@@ -91,10 +92,10 @@ export type PaceZone = 'recovery' | 'easy' | 'marathon' | 'threshold' | 'interva
 
 export interface PlannedRun {
   type: 'easy' | 'tempo' | 'intervals' | 'long' | 'recovery';
-  distance: number; // miles
+  distance: number; // kilometers
   paceZone: PaceZone;
   description: string;
-  targetPace?: number; // calculated automatically in seconds per mile
+  targetPace?: number; // calculated automatically in seconds per kilometer
   effortLevel: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   noIntervals?: number;
 }

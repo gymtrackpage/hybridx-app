@@ -345,7 +345,7 @@ export default function DashboardPage() {
                                 <p className="font-medium">{run.description}</p>
                                 {trainingPaces ? (
                                     <p className="text-sm text-muted-foreground">
-                                        Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / mile
+                                        Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
                                     </p>
                                 ) : (
                                     <p className="text-sm text-yellow-600">Enter benchmark times in your profile to see target paces.</p>
