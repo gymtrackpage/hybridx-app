@@ -109,11 +109,13 @@ export interface WorkoutSession {
     userId: string;
     programId: string;
     workoutDate: Date;
-    workoutTitle: string; // Add workout title to session
+    workoutTitle: string;
+    programType: ProgramType;
     startedAt: Date;
     finishedAt?: Date;
     completedItems: { [itemName: string]: boolean };
     notes?: string;
+    extendedExercises?: Exercise[]; // AI-generated exercises
     
     // Strava integration fields
     stravaId?: string;

@@ -3,10 +3,11 @@
 
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Share2 } from 'lucide-react';
+import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Share2, Sparkles } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
+import { extendWorkout } from '@/ai/flows/extend-workout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -18,7 +19,7 @@ import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
-import type { Workout, RunningWorkout, User } from '@/models/types';
+import type { Workout, RunningWorkout, User, Exercise } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
 
@@ -28,9 +29,11 @@ const WorkoutCompleteModal = lazy(() => import('@/components/workout-complete-mo
 export default function ActiveWorkoutPage() {
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [workoutInfo, setWorkoutInfo] = useState<{ day: number, workout: Workout | RunningWorkout | null } | null>(null);
+  const [extendedExercises, setExtendedExercises] = useState<Exercise[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [trainingPaces, setTrainingPaces] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isExtending, setIsExtending] = useState(false);
   const [notes, setNotes] = useState('');
   const [summaryText, setSummaryText] = useState('');
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -64,6 +67,7 @@ export default function ActiveWorkoutPage() {
                             const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
                             setSession(workoutSession);
                             setNotes(workoutSession.notes || '');
+                            setExtendedExercises(workoutSession.extendedExercises || []);
 
                             const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
                                 ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
@@ -122,6 +126,34 @@ export default function ActiveWorkoutPage() {
     setSession(updatedSession);
     await updateWorkoutSession(session.id, { completedItems: updatedCompleted });
   };
+
+  const handleExtendWorkout = async () => {
+    if (!workoutInfo?.workout) return;
+
+    setIsExtending(true);
+    try {
+        const originalExercises = (workoutInfo.workout as Workout).exercises || [];
+        const result = await extendWorkout({
+            workoutTitle: workoutInfo.workout.title,
+            workoutType: workoutInfo.workout.programType,
+            exercises: JSON.stringify(originalExercises),
+        });
+
+        const newExercises = result.newExercises;
+        const allExtended = [...extendedExercises, ...newExercises];
+        setExtendedExercises(allExtended);
+
+        // Update the session in Firestore with the new exercises
+        if (session) {
+            await updateWorkoutSession(session.id, { extendedExercises: allExtended });
+        }
+
+    } catch (error) {
+        console.error("Failed to extend workout:", error);
+    } finally {
+        setIsExtending(false);
+    }
+  };
   
   const handleFinishWorkout = async () => {
       if(!session || !workoutInfo?.workout) return;
@@ -174,11 +206,13 @@ export default function ActiveWorkoutPage() {
   const week = Math.ceil(day / 7);
   const dayOfWeek = day % 7 === 0 ? 7 : day % 7;
 
-  const workoutItems = workout.programType === 'running' 
+  const originalWorkoutItems = workout.programType === 'running' 
     ? (workout as RunningWorkout).runs 
     : (workout as Workout).exercises;
 
-  const allItemsCompleted = workoutItems.every(item => {
+  const allWorkoutItems = [...originalWorkoutItems, ...extendedExercises];
+
+  const allItemsCompleted = allWorkoutItems.every(item => {
       if (!session?.completedItems) return false;
       const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
       return session.completedItems[key];
@@ -229,10 +263,10 @@ export default function ActiveWorkoutPage() {
                 <div>
                     <h3 className="text-base font-semibold mb-3">{isRunningProgram ? 'Runs:' : 'Exercises:'}</h3>
                     <div className="space-y-3">
-                        {workoutItems.map((item, index) => {
+                        {originalWorkoutItems.map((item, index) => {
                             const key = isRunningProgram ? (item as any).description : (item as any).name;
                             return (
-                                <Card key={key} className="has-[[data-state=checked]]:bg-muted/50 transition-colors">
+                                <Card key={`${key}-${index}`} className="has-[[data-state=checked]]:bg-muted/50 transition-colors">
                                     <CardContent className="p-4 flex items-center gap-4">
                                         <div className="flex-1">
                                             {isRunningProgram ? (
@@ -263,8 +297,56 @@ export default function ActiveWorkoutPage() {
                                 </Card>
                             );
                         })}
+                        
+                        {extendedExercises.length > 0 && (
+                            <>
+                                <Separator />
+                                <h3 className="text-base font-semibold !mt-6">Workout Extension:</h3>
+                            </>
+                        )}
+                        
+                        {extendedExercises.map((item, index) => {
+                            const key = (item as any).name;
+                            return (
+                                <Card key={`${key}-${index}`} className="has-[[data-state=checked]]:bg-muted/50 transition-colors border-dashed border-primary/50">
+                                    <CardContent className="p-4 flex items-center gap-4">
+                                        <div className="flex-1">
+                                            <p className="font-semibold">{(item as any).name}</p>
+                                            <p className="text-sm text-muted-foreground">{(item as any).details}</p>
+                                        </div>
+                                        <Checkbox
+                                            id={key}
+                                            checked={!!session.completedItems?.[key]}
+                                            onCheckedChange={(checked) => handleToggleItem(key, !!checked)}
+                                            className="h-6 w-6"
+                                            disabled={!!session.finishedAt}
+                                            aria-label={`Mark ${key} as complete`}
+                                        />
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
                     </div>
                 </div>
+
+                 {!isRunningProgram && !session.finishedAt && (
+                    <div className="pt-2">
+                        <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={handleExtendWorkout}
+                            disabled={isExtending}
+                        >
+                            {isExtending ? (
+                                <Loader2 className="mr-2 animate-spin" />
+                            ) : (
+                                <Sparkles className="mr-2 text-yellow-400" />
+                            )}
+                            {isExtending ? 'Generating...' : 'Extend Workout with AI'}
+                        </Button>
+                    </div>
+                 )}
+
 
                 <div className="space-y-2">
                     <Label htmlFor="workout-notes" className="text-base font-semibold">Workout Notes</Label>
@@ -295,7 +377,7 @@ export default function ActiveWorkoutPage() {
         </Card>
     </div>
 
-    {session.finishedAt && (
+    {session.finishedAt && workout && (
         <Suspense fallback={
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <Loader2 className="h-8 w-8 animate-spin text-white" />

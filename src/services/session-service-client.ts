@@ -3,7 +3,7 @@
 
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { WorkoutSession, Workout, RunningWorkout } from '@/models/types';
+import type { WorkoutSession, Workout, RunningWorkout, Exercise } from '@/models/types';
 
 function fromFirestore(doc: any): WorkoutSession {
     const data = doc.data();
@@ -13,10 +13,12 @@ function fromFirestore(doc: any): WorkoutSession {
         programId: data.programId,
         workoutDate: data.workoutDate.toDate(),
         workoutTitle: data.workoutTitle || 'Workout',
+        programType: data.programType || 'hyrox',
         startedAt: data.startedAt.toDate(),
         finishedAt: data.finishedAt ? data.finishedAt.toDate() : undefined,
         completedItems: data.completedItems,
         notes: data.notes || '',
+        extendedExercises: data.extendedExercises || [],
         stravaId: data.stravaId,
         uploadedToStrava: data.uploadedToStrava,
         stravaUploadedAt: data.stravaUploadedAt ? data.stravaUploadedAt.toDate() : undefined,
@@ -66,10 +68,12 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         programId,
         workoutDate: Timestamp.fromDate(workoutDate),
         workoutTitle: workout.title,
+        programType: workout.programType || 'hyrox', // Add fallback to prevent undefined
         startedAt: Timestamp.now(),
         completedItems: initialCompleted,
         finishedAt: null,
         notes: '',
+        extendedExercises: [],
     };
 
     const docRef = await addDoc(sessionsCollection, newSessionData);
@@ -80,9 +84,11 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         programId,
         workoutDate,
         workoutTitle: workout.title,
+        programType: workout.programType || 'hyrox',
         startedAt: new Date(),
         completedItems: initialCompleted,
         notes: '',
+        extendedExercises: [],
     };
 }
 
