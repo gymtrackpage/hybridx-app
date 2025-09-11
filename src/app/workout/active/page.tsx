@@ -1,7 +1,7 @@
 // src/app/workout/active/page.tsx
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Share2 } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
@@ -13,9 +13,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Separator } from '@/components/ui/separator';
-import { StravaUploadButton } from '@/components/strava-upload-button';
 import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
@@ -24,7 +21,9 @@ import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } 
 import type { Workout, RunningWorkout, User } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
-import { WorkoutImageGenerator } from '@/components/WorkoutImageGenerator';
+
+// Lazy load the modal component
+const WorkoutCompleteModal = lazy(() => import('@/components/workout-complete-modal'));
 
 export default function ActiveWorkoutPage() {
   const [session, setSession] = useState<WorkoutSession | null>(null);
@@ -65,11 +64,6 @@ export default function ActiveWorkoutPage() {
                             const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
                             setSession(workoutSession);
                             setNotes(workoutSession.notes || '');
-
-                            // This is the only part removed - no more auto-opening the modal
-                            // if (workoutSession.finishedAt && !isCompleteModalOpen) {
-                            //     setIsCompleteModalOpen(true);
-                            // }
 
                             const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
                                 ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
@@ -130,15 +124,25 @@ export default function ActiveWorkoutPage() {
   };
   
   const handleFinishWorkout = async () => {
-      if(!session) return;
+      if(!session || !workoutInfo?.workout) return;
       // Final save of notes before finishing
       debouncedSaveNotes.flush();
       const finishedAt = new Date();
-      // We create a new object for the state update to ensure React detects the change
-      const updatedSession = {...session, finishedAt, notes};
-      setSession(updatedSession);
-      await updateWorkoutSession(session.id, { finishedAt, notes, workoutTitle: workoutInfo?.workout?.title || 'Workout' });
-      // The modal is no longer opened here, but by the "Share Workout" button
+      const updatedSessionData = { 
+          ...session, 
+          finishedAt, 
+          notes, 
+          workoutTitle: workoutInfo.workout.title,
+          programType: workoutInfo.workout.programType
+      };
+      setSession(updatedSessionData);
+      await updateWorkoutSession(session.id, { 
+          finishedAt, 
+          notes, 
+          workoutTitle: workoutInfo.workout.title,
+          programType: workoutInfo.workout.programType
+      });
+      setIsCompleteModalOpen(true);
   }
 
   if (loading) {
@@ -292,79 +296,20 @@ export default function ActiveWorkoutPage() {
     </div>
 
     {session.finishedAt && (
-        <WorkoutCompleteModal
-            isOpen={isCompleteModalOpen}
-            onClose={() => setIsCompleteModalOpen(false)}
-            session={session}
-            userHasStrava={!!user?.strava?.accessToken}
-            workout={workout}
-        />
+        <Suspense fallback={
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <Loader2 className="h-8 w-8 animate-spin text-white" />
+            </div>
+        }>
+            <WorkoutCompleteModal
+                isOpen={isCompleteModalOpen}
+                onClose={() => setIsCompleteModalOpen(false)}
+                session={session}
+                userHasStrava={!!user?.strava?.accessToken}
+                workout={workout}
+            />
+        </Suspense>
     )}
     </>
   );
-}
-
-
-interface WorkoutCompleteModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    session: WorkoutSession;
-    userHasStrava?: boolean;
-    workout: Workout | RunningWorkout;
-}
-
-function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout }: WorkoutCompleteModalProps) {
-    
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-            <DialogTitle>Workout Complete! 🎉</DialogTitle>
-             <DialogDescription>
-                Great job finishing your workout. Here's your summary.
-             </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-                <div className="text-center p-4 bg-muted/50 rounded-lg">
-                    <h3 className="font-semibold text-lg">{session.workoutTitle}</h3>
-                    <p className="text-sm text-muted-foreground">Workout logged successfully.</p>
-                </div>
-
-                {userHasStrava && (
-                    <>
-                    <Separator />
-                    <div className="space-y-3 text-center">
-                        <p className="text-sm font-medium">
-                        Share your achievement
-                        </p>
-                        
-                        <StravaUploadButton
-                            sessionId={session.id}
-                            activityName={session.workoutTitle}
-                            isUploaded={session.uploadedToStrava}
-                            stravaId={session.stravaId}
-                        />
-                    </div>
-                    </>
-                )}
-                 <div className="space-y-3">
-                    <Separator />
-                    <WorkoutImageGenerator 
-                        workout={{
-                            name: session.workoutTitle,
-                            type: workout.programType,
-                            startTime: session.startedAt,
-                            notes: session.notes,
-                        }}
-                    />
-                </div>
-
-                <Button onClick={onClose} className="w-full" variant="outline">
-                    Close
-                </Button>
-            </div>
-        </DialogContent>
-        </Dialog>
-    );
 }
