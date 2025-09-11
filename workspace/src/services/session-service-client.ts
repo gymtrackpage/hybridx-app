@@ -67,7 +67,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         programId,
         workoutDate: Timestamp.fromDate(workoutDate),
         workoutTitle: workout.title,
-        programType: workout.programType,
+        programType: workout.programType || 'hyrox', // Add fallback to prevent undefined
         startedAt: Timestamp.now(),
         completedItems: initialCompleted,
         finishedAt: null,
@@ -82,7 +82,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         programId,
         workoutDate,
         workoutTitle: workout.title,
-        programType: workout.programType,
+        programType: workout.programType || 'hyrox',
         startedAt: new Date(),
         completedItems: initialCompleted,
         notes: '',
