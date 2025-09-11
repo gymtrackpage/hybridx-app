@@ -81,17 +81,20 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
     const initialCompleted: { [key: string]: boolean } = {};
     const items = workout.programType === 'running' 
         ? (workout as RunningWorkout).runs 
-        : [...(workout as Workout).exercises];
+        : [...((workout as Workout).exercises || [])]; // Use empty array as fallback
         
-    if ((workout as any).extendedExercises) {
-        items.push(...(workout as any).extendedExercises);
+    // For AI workouts, the exercises are passed directly in the workout object
+    if (programId === 'one-off-ai' && (workout as Workout).exercises) {
+        (workout as Workout).exercises.forEach(item => {
+            const key = (item as any).name;
+            initialCompleted[key] = false;
+        });
+    } else {
+        items.forEach(item => {
+            const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
+            initialCompleted[key] = false;
+        });
     }
-
-    items.forEach(item => {
-        const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
-        initialCompleted[key] = false;
-    });
-
 
     const newSessionData = {
         userId,
@@ -103,7 +106,8 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         completedItems: initialCompleted,
         finishedAt: null,
         notes: '',
-        extendedExercises: (workout as any).extendedExercises || [],
+        // For AI workouts, store the exercises in the extendedExercises field
+        extendedExercises: programId === 'one-off-ai' ? (workout as Workout).exercises : [],
     };
 
     if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai'))) {
@@ -126,7 +130,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         startedAt: new Date(),
         completedItems: initialCompleted,
         notes: '',
-        extendedExercises: (workout as any).extendedExercises || [],
+        extendedExercises: newSessionData.extendedExercises,
     };
 }
 

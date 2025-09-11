@@ -23,6 +23,7 @@ import { getOrCreateWorkoutSession, getTodaysOneOffSession, updateWorkoutSession
 import type { Workout, RunningWorkout, User, Exercise } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
+import { Separator } from '@/components/ui/separator';
 
 // Lazy load the modal component
 const WorkoutCompleteModal = lazy(() => import('@/components/workout-complete-modal'));
@@ -69,15 +70,15 @@ export default function ActiveWorkoutPage() {
 
                 if (oneOffSession) {
                     workoutSession = oneOffSession;
-                    // Reconstruct a temporary workout object for display
+                    // Reconstruct a temporary workout object for display from the session data
                     currentWorkoutInfo = {
                         day: 0,
                         workout: {
                             title: oneOffSession.workoutTitle,
                             programType: oneOffSession.programType,
                             day: 0,
-                            exercises: oneOffSession.extendedExercises || [], // Assuming exercises are stored here for AI workouts
-                            runs: [] // Adjust if AI can generate runs
+                            exercises: oneOffSession.extendedExercises || [],
+                            runs: [] // AI gen doesn't create runs currently
                         } as Workout
                     };
                 } else if (currentUser.programId && currentUser.startDate) {
@@ -244,6 +245,7 @@ export default function ActiveWorkoutPage() {
   });
   
   const isRunningProgram = workout.programType === 'running';
+  const isOneOffWorkout = session.programId === 'one-off-ai';
 
   return (
     <>
@@ -259,10 +261,12 @@ export default function ActiveWorkoutPage() {
             </CardHeader>
             <CardContent className="space-y-6">
                 <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4" />
-                        <span>Week {week}, Day {dayOfWeek}</span>
-                    </div>
+                    {!isOneOffWorkout && (
+                        <div className="flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4" />
+                            <span>Week {week}, Day {dayOfWeek}</span>
+                        </div>
+                    )}
                 </div>
                 
                 {isRunningProgram && !trainingPaces && (
