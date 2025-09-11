@@ -37,7 +37,7 @@ export async function getAllUserSessions(userId: string): Promise<WorkoutSession
     return snapshot.docs.map(fromFirestore);
 }
 
-export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout | RunningWorkout): Promise<WorkoutSession> {
+export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout | RunningWorkout, overwrite: boolean = false): Promise<WorkoutSession> {
     const q = query(
         sessionsCollection, 
         where('userId', '==', userId), 
@@ -47,20 +47,24 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
 
     const snapshot = await getDocs(q);
 
-    if (!snapshot.empty) {
+    if (!snapshot.empty && !overwrite) {
         return fromFirestore(snapshot.docs[0]);
     }
 
-    const initialCompleted: { [key: string]: boolean } = {};
-    if (workout.programType === 'running') {
-        (workout as RunningWorkout).runs.forEach(run => {
-            initialCompleted[run.description] = false;
-        });
-    } else {
-        (workout as Workout).exercises.forEach(ex => {
-            initialCompleted[ex.name] = false;
-        });
+    if (!snapshot.empty && overwrite) {
+        // If we are overwriting, we can just update the existing document
+        console.log(`Overwriting existing workout session for date: ${workoutDate.toISOString()}`);
     }
+
+    const initialCompleted: { [key: string]: boolean } = {};
+    const items = workout.programType === 'running' 
+        ? (workout as RunningWorkout).runs 
+        : (workout as Workout).exercises;
+
+    items.forEach(item => {
+        const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
+        initialCompleted[key] = false;
+    });
 
 
     const newSessionData = {
@@ -68,13 +72,19 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         programId,
         workoutDate: Timestamp.fromDate(workoutDate),
         workoutTitle: workout.title,
-        programType: workout.programType || 'hyrox', // Add fallback to prevent undefined
+        programType: workout.programType || 'hyrox',
         startedAt: Timestamp.now(),
         completedItems: initialCompleted,
         finishedAt: null,
         notes: '',
         extendedExercises: [],
     };
+
+    if (!snapshot.empty && overwrite) {
+        const docToUpdate = snapshot.docs[0];
+        await updateDoc(docToUpdate.ref, newSessionData);
+        return { id: docToUpdate.id, ...fromFirestore({ ...docToUpdate, data: () => newSessionData }) };
+    }
 
     const docRef = await addDoc(sessionsCollection, newSessionData);
     

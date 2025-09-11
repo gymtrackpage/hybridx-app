@@ -4,12 +4,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { BarChart, Target, Sparkles, Loader2, Route } from 'lucide-react';
-import { subWeeks, startOfWeek, isWithinInterval } from 'date-fns';
+import { BarChart, Target, Sparkles, Loader2, Route, Zap } from 'lucide-react';
+import { subWeeks, startOfWeek, isWithinInterval, isFuture, isToday } from 'date-fns';
 
 import { motivationalCoach } from '@/ai/flows/motivational-coach';
 import { dashboardSummary } from '@/ai/flows/dashboard-summary';
 import { workoutSummary } from '@/ai/flows/workout-summary';
+import { generateWorkout } from '@/ai/flows/generate-workout';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -40,6 +41,7 @@ import type { User, Program, Workout, RunningWorkout, PlannedRun } from '@/model
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
+import { useToast } from '@/hooks/use-toast';
 
 const chartConfig = {
   workouts: {
@@ -58,11 +60,13 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [motivation, setMotivation] = useState('');
   const [motivationLoading, setMotivationLoading] = useState(false);
+  const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
   const [summary, setSummary] = useState("Here's your plan for today. Let's get it done.");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [workoutSummaryText, setWorkoutSummaryText] = useState("Assign a program to your profile to see your workout.");
   const [workoutSummaryLoading, setWorkoutSummaryLoading] = useState(false);
   const router = useRouter();
+  const { toast } = useToast();
   
   const fetchCoreData = async (userId: string) => {
     setLoading(true);
@@ -221,6 +225,38 @@ export default function DashboardPage() {
           router.push('/workout/active');
       }
   }
+  
+  const handleGenerateWorkout = async () => {
+    if (!user) return;
+    setIsGeneratingWorkout(true);
+    toast({ title: 'Generating your workout...', description: 'The AI is building a custom session for you.' });
+    try {
+        const generated = await generateWorkout({
+            userName: user.firstName,
+            experience: user.experience,
+        });
+
+        // The AI output matches the structure of a Workout object
+        const oneOffWorkout: Workout = {
+            ...generated,
+            day: 0, // Day 0 can represent a non-program workout
+        };
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // We create a session with a special programId to denote it's a one-off
+        await getOrCreateWorkoutSession(user.id, 'one-off-ai', today, oneOffWorkout, true);
+        
+        toast({ title: 'Workout Generated!', description: 'Redirecting you to start your session.' });
+        router.push('/workout/active');
+
+    } catch (error) {
+        console.error("Failed to generate AI workout:", error);
+        toast({ title: 'Error', description: 'Could not generate a workout. Please try again.', variant: 'destructive' });
+        setIsGeneratingWorkout(false);
+    }
+  };
 
   const workoutItems = useMemo(() => {
     if (!todaysWorkout?.workout) return [];
@@ -233,6 +269,9 @@ export default function DashboardPage() {
   const completedItems = todaysSession && todaysSession.completedItems ? Object.values(todaysSession.completedItems).filter(Boolean).length : 0;
   const totalItems = workoutItems.length;
   const progressPercentage = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+  
+  const programStartsInFuture = user?.startDate && isFuture(user.startDate);
+  const showGenerateWorkoutButton = !program || programStartsInFuture;
   
   if (loading) {
     return (
@@ -276,11 +315,12 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               {isRunningProgram ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
-              {program && todaysWorkout?.workout ? `Today's Workout (Day ${todaysWorkout.day})` : 'No Workout Assigned'}
+              {program && todaysWorkout?.workout && !programStartsInFuture ? `Today's Workout (Day ${todaysWorkout.day})` : "Today's Plan"}
             </CardTitle>
             <CardDescription asChild>
                 <div className={cn("mt-2 p-3 bg-accent/20 border border-accent/50 rounded-md transform -rotate-1 shadow-sm", {
-                    "animate-pulse": workoutSummaryLoading
+                    "animate-pulse": workoutSummaryLoading,
+                    "hidden": !todaysWorkout?.workout || programStartsInFuture
                 })}>
                      <p className="rotate-1 text-accent-foreground/90 italic">
                         {workoutSummaryLoading ? "Generating your daily tip..." : workoutSummaryText}
@@ -289,7 +329,7 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {todaysWorkout?.workout ? (
+            {todaysWorkout?.workout && !programStartsInFuture ? (
                 <div className="space-y-4">
                     <div className="flex items-center gap-4">
                         <span className="text-sm font-medium text-muted-foreground w-20">Progress</span>
@@ -323,13 +363,29 @@ export default function DashboardPage() {
                 </div>
             ) : (
                 <div className="text-center text-muted-foreground py-10">
-                    <p>No workout scheduled for today.</p>
-                    <p className="text-sm">Please check your program or contact an administrator.</p>
+                    {programStartsInFuture ? (
+                        <>
+                            <p>Your program <span className="font-semibold text-foreground">{program?.name}</span> is scheduled to start in the future.</p>
+                            <p className="text-sm">In the meantime, why not generate a workout for today?</p>
+                        </>
+                    ) : (
+                        <>
+                            <p>No workout scheduled for today.</p>
+                            <p className="text-sm">Assign a program in your profile or generate one with AI.</p>
+                        </>
+                    )}
                 </div>
             )}
           </CardContent>
           <CardFooter>
-            <Button variant="accent" className="w-full" onClick={handleStartWorkout} disabled={!todaysWorkout?.workout}>Start / Resume Workout</Button>
+            {showGenerateWorkoutButton ? (
+                 <Button variant="accent" className="w-full" onClick={handleGenerateWorkout} disabled={isGeneratingWorkout}>
+                     {isGeneratingWorkout ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                     {isGeneratingWorkout ? 'Generating...' : 'Generate AI Workout for Today'}
+                 </Button>
+            ) : (
+                <Button variant="accent" className="w-full" onClick={handleStartWorkout} disabled={!todaysWorkout?.workout}>Start / Resume Workout</Button>
+            )}
           </CardFooter>
         </Card>
 

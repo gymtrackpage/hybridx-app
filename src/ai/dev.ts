@@ -6,3 +6,4 @@ import '@/ai/flows/training-assistant.ts';
 import '@/ai/flows/dashboard-summary.ts';
 import '@/ai/flows/workout-summary.ts';
 import '@/ai/flows/extend-workout.ts';
+import '@/ai/flows/generate-workout.ts';
