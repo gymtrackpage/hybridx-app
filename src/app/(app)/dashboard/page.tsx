@@ -1,3 +1,4 @@
+
 // src/app/(app)/dashboard/page.tsx
 'use client';
 
@@ -245,7 +246,7 @@ export default function DashboardPage() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // We create a session with a special programId to denote it's a one-off
+        // We create a session with a special programId to denote it's a one-off and overwrite any existing session for today
         await getOrCreateWorkoutSession(user.id, 'one-off-ai', today, oneOffWorkout, true);
         
         toast({ title: 'Workout Generated!', description: 'Redirecting you to start your session.' });
@@ -467,3 +468,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 // src/services/session-service-client.ts
 // This file contains functions for client-side components. NO 'use server' here.
 
@@ -37,6 +38,21 @@ export async function getAllUserSessions(userId: string): Promise<WorkoutSession
     return snapshot.docs.map(fromFirestore);
 }
 
+export async function getTodaysOneOffSession(userId: string, workoutDate: Date): Promise<WorkoutSession | null> {
+     const q = query(
+        sessionsCollection, 
+        where('userId', '==', userId), 
+        where('programId', '==', 'one-off-ai'),
+        where('workoutDate', '==', Timestamp.fromDate(workoutDate)),
+        limit(1)
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+        return fromFirestore(snapshot.docs[0]);
+    }
+    return null;
+}
+
 export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout | RunningWorkout, overwrite: boolean = false): Promise<WorkoutSession> {
     const q = query(
         sessionsCollection, 
@@ -48,18 +64,28 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
     const snapshot = await getDocs(q);
 
     if (!snapshot.empty && !overwrite) {
-        return fromFirestore(snapshot.docs[0]);
+        // If a session exists and we are not overwriting, return it, unless it's a one-off-ai session and a program session is being created
+        const existingSession = fromFirestore(snapshot.docs[0]);
+        if (existingSession.programId === 'one-off-ai' && programId !== 'one-off-ai') {
+             // We are creating a program session, it should take precedence over the AI one
+        } else {
+            return existingSession;
+        }
     }
 
-    if (!snapshot.empty && overwrite) {
-        // If we are overwriting, we can just update the existing document
+    if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai' && snapshot.docs[0].data().programId === 'one-off-ai'))) {
+        // Overwrite if flag is set, or if we are creating a program day over an existing AI workout
         console.log(`Overwriting existing workout session for date: ${workoutDate.toISOString()}`);
     }
 
     const initialCompleted: { [key: string]: boolean } = {};
     const items = workout.programType === 'running' 
         ? (workout as RunningWorkout).runs 
-        : (workout as Workout).exercises;
+        : [...(workout as Workout).exercises];
+        
+    if ((workout as any).extendedExercises) {
+        items.push(...(workout as any).extendedExercises);
+    }
 
     items.forEach(item => {
         const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
@@ -77,13 +103,15 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         completedItems: initialCompleted,
         finishedAt: null,
         notes: '',
-        extendedExercises: [],
+        extendedExercises: (workout as any).extendedExercises || [],
     };
 
-    if (!snapshot.empty && overwrite) {
+    if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai'))) {
         const docToUpdate = snapshot.docs[0];
         await updateDoc(docToUpdate.ref, newSessionData);
-        return { id: docToUpdate.id, ...fromFirestore({ ...docToUpdate, data: () => newSessionData }) };
+        // The data passed to fromFirestore should match the structure of a Firestore doc
+        const updatedDocData = { ...docToUpdate.data(), ...newSessionData };
+        return { ...fromFirestore({ id: docToUpdate.id, data: () => updatedDocData }) };
     }
 
     const docRef = await addDoc(sessionsCollection, newSessionData);
@@ -98,7 +126,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         startedAt: new Date(),
         completedItems: initialCompleted,
         notes: '',
-        extendedExercises: [],
+        extendedExercises: (workout as any).extendedExercises || [],
     };
 }
 
@@ -113,3 +141,5 @@ export async function updateWorkoutSession(sessionId: string, data: Partial<Omit
 
     await updateDoc(docRef, dataToUpdate);
 }
+
+    

@@ -1,3 +1,4 @@
+
 // src/app/workout/active/page.tsx
 'use client';
 
@@ -18,7 +19,7 @@ import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
+import { getOrCreateWorkoutSession, getTodaysOneOffSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
 import type { Workout, RunningWorkout, User, Exercise } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
@@ -47,6 +48,7 @@ export default function ActiveWorkoutPage() {
 
   useEffect(() => {
     const initialize = async () => {
+        setLoading(true);
         const auth = await getAuthInstance();
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
@@ -58,40 +60,63 @@ export default function ActiveWorkoutPage() {
                     const paces = calculateTrainingPaces(currentUser);
                     setTrainingPaces(paces);
                 }
-                if (currentUser.programId && currentUser.startDate) {
+
+                let workoutSession;
+                let currentWorkoutInfo;
+
+                // First, check for a one-off AI workout for today
+                const oneOffSession = await getTodaysOneOffSession(firebaseUser.uid, today);
+
+                if (oneOffSession) {
+                    workoutSession = oneOffSession;
+                    // Reconstruct a temporary workout object for display
+                    currentWorkoutInfo = {
+                        day: 0,
+                        workout: {
+                            title: oneOffSession.workoutTitle,
+                            programType: oneOffSession.programType,
+                            day: 0,
+                            exercises: oneOffSession.extendedExercises || [], // Assuming exercises are stored here for AI workouts
+                            runs: [] // Adjust if AI can generate runs
+                        } as Workout
+                    };
+                } else if (currentUser.programId && currentUser.startDate) {
+                    // If no one-off workout, look for a scheduled program workout
                     const program = await getProgramClient(currentUser.programId);
                     if (program) {
-                        const currentWorkoutInfo = getWorkoutForDay(program, currentUser.startDate, today);
-                        setWorkoutInfo(currentWorkoutInfo);
+                        currentWorkoutInfo = getWorkoutForDay(program, currentUser.startDate, today);
                         if (currentWorkoutInfo.workout) {
-                            const workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
-                            setSession(workoutSession);
-                            setNotes(workoutSession.notes || '');
-                            setExtendedExercises(workoutSession.extendedExercises || []);
-
-                            const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
-                                ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
-                                : (currentWorkoutInfo.workout as Workout).exercises.map(e => e.name).join(', ');
-
-                            // Fetch AI summary
-                            try {
-                                const summaryResult = await workoutSummary({
-                                userName: currentUser.firstName,
-                                workoutTitle: currentWorkoutInfo.workout.title,
-                                exercises: exercisesForSummary,
-                                });
-                                setSummaryText(summaryResult.summary);
-                            } catch (error) {
-                                console.error("Failed to generate AI workout summary:", error);
-                                setSummaryText(currentWorkoutInfo.workout.title); // Fallback
-                            } finally {
-                                setSummaryLoading(false);
-                            }
-                        } else {
-                            setSummaryLoading(false);
+                           workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
                         }
                     }
                 }
+                
+                setWorkoutInfo(currentWorkoutInfo);
+
+                if (workoutSession) {
+                    setSession(workoutSession);
+                    setNotes(workoutSession.notes || '');
+                    setExtendedExercises(workoutSession.extendedExercises || []);
+
+                    if (currentWorkoutInfo?.workout) {
+                         const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
+                            ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
+                            : [...(currentWorkoutInfo.workout as Workout).exercises, ...(workoutSession.extendedExercises || [])].map(e => e.name).join(', ');
+
+                        try {
+                            const summaryResult = await workoutSummary({
+                            userName: currentUser.firstName,
+                            workoutTitle: currentWorkoutInfo.workout.title,
+                            exercises: exercisesForSummary,
+                            });
+                            setSummaryText(summaryResult.summary);
+                        } catch (error) {
+                            console.error("Failed to generate AI workout summary:", error);
+                            setSummaryText(currentWorkoutInfo.workout.title); // Fallback
+                        }
+                    }
+                }
+                setSummaryLoading(false);
             }
         }
         setLoading(false);
@@ -136,7 +161,7 @@ export default function ActiveWorkoutPage() {
         const result = await extendWorkout({
             workoutTitle: workoutInfo.workout.title,
             workoutType: workoutInfo.workout.programType,
-            exercises: JSON.stringify(originalExercises),
+            exercises: JSON.stringify([...originalExercises, ...extendedExercises]),
         });
 
         const newExercises = result.newExercises;
@@ -395,3 +420,5 @@ export default function ActiveWorkoutPage() {
     </>
   );
 }
+
+    
