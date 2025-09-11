@@ -71,16 +71,19 @@ export default function ActiveWorkoutPage() {
                 if (oneOffSession) {
                     workoutSession = oneOffSession;
                     // Reconstruct a temporary workout object for display from the session data
+                    // For AI workouts, the main exercises ARE the "extendedExercises"
                     currentWorkoutInfo = {
                         day: 0,
                         workout: {
                             title: oneOffSession.workoutTitle,
                             programType: oneOffSession.programType,
                             day: 0,
-                            exercises: oneOffSession.extendedExercises || [],
+                            exercises: oneOffSession.extendedExercises || [], 
                             runs: [] // AI gen doesn't create runs currently
                         } as Workout
                     };
+                    // For a one-off AI workout, there are no "extended" exercises yet.
+                    setExtendedExercises([]); 
                 } else if (currentUser.programId && currentUser.startDate) {
                     // If no one-off workout, look for a scheduled program workout
                     const program = await getProgramClient(currentUser.programId);
@@ -97,7 +100,10 @@ export default function ActiveWorkoutPage() {
                 if (workoutSession) {
                     setSession(workoutSession);
                     setNotes(workoutSession.notes || '');
-                    setExtendedExercises(workoutSession.extendedExercises || []);
+                    // Only set extended exercises if it's NOT a one-off workout
+                    if (workoutSession.programId !== 'one-off-ai') {
+                         setExtendedExercises(workoutSession.extendedExercises || []);
+                    }
 
                     if (currentWorkoutInfo?.workout) {
                          const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
@@ -424,5 +430,3 @@ export default function ActiveWorkoutPage() {
     </>
   );
 }
-
-    
