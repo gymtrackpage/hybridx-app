@@ -26,7 +26,6 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [loading, setLoading] = useState(true);
   const [workoutEvents, setWorkoutEvents] = useState<WorkoutEvent[]>([]);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
   
   const selectedEvent = workoutEvents.find(event => 
     selectedDate && isSameDay(event.date, selectedDate)
@@ -41,23 +40,15 @@ export default function CalendarPage() {
         const auth = await getAuthInstance();
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
           if (firebaseUser) {
-            console.log('📅 Loading calendar data for user:', firebaseUser.uid);
-            
             const user = await getUserClient(firebaseUser.uid);
-            console.log('👤 User data:', user);
-            
             const sessions = await getAllUserSessions(firebaseUser.uid);
-            console.log('📊 Found sessions:', sessions.length, sessions);
             
             let program = null;
             if (user?.programId && user.startDate) {
               program = await getProgramClient(user.programId);
-              console.log('📋 Program data:', program);
             }
             
             generateWorkoutEvents(program, user?.startDate, sessions);
-          } else {
-            console.log('❌ No authenticated user');
           }
           setLoading(false);
         });
@@ -79,7 +70,6 @@ export default function CalendarPage() {
   }, []);
 
   const generateWorkoutEvents = (program: Program | null, startDate: Date | undefined, sessions: WorkoutSession[]) => {
-    console.log('🔄 Generating workout events...');
     const events: WorkoutEvent[] = [];
     
     // Create a map of completed sessions by date for quick lookup
@@ -139,18 +129,7 @@ export default function CalendarPage() {
         });
     });
 
-    console.log('✅ Generated events:', events.length, events);
     setWorkoutEvents(events);
-    
-    // Debug info
-    setDebugInfo({
-      sessionsCount: sessions.length,
-      eventsCount: events.length,
-      hasProgram: !!program,
-      hasStartDate: !!startDate,
-      sessionsMapSize: sessionsMap.size,
-      sampleSession: sessions[0]
-    });
   };
 
   const getCompletedExercises = (session: WorkoutSession): { name: string, details: string }[] => {
@@ -194,18 +173,6 @@ export default function CalendarPage() {
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Workout Calendar</h1>
         <p className="text-muted-foreground">Visualize your active program and track your progress.</p>
       </div>
-
-      {/* Debug Info (remove in production) */}
-      {process.env.NODE_ENV === 'development' && debugInfo && (
-        <Card className="border-yellow-200 bg-yellow-50">
-          <CardHeader>
-            <CardTitle className="text-sm">Debug Info</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-xs overflow-auto max-h-48">{JSON.stringify(debugInfo, null, 2)}</pre>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardContent className="p-2 md:p-6 flex justify-center">
