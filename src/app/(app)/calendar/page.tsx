@@ -1,3 +1,4 @@
+
 // src/app/(app)/calendar/page.tsx
 'use client';
 
@@ -5,20 +6,20 @@ import { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getAllUserSessions } from '@/services/session-service-client';
-import type { User, Program, Workout, WorkoutSession } from '@/models/types';
+import type { User, Program, Workout, WorkoutSession, RunningWorkout, Exercise } from '@/models/types';
 import { addDays, format, isSameDay } from 'date-fns';
 
 interface WorkoutEvent {
   date: Date;
-  workout: Workout;
-  completed: boolean;
+  workout: Workout | RunningWorkout;
+  session?: WorkoutSession;
 }
 
 export default function CalendarPage() {
@@ -26,9 +27,12 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [workoutEvents, setWorkoutEvents] = useState<WorkoutEvent[]>([]);
   
-  const selectedWorkout = workoutEvents.find(event => 
+  const selectedEvent = workoutEvents.find(event => 
     selectedDate && isSameDay(event.date, selectedDate)
-  )?.workout;
+  );
+
+  const selectedWorkout = selectedEvent?.workout;
+  const completedSession = selectedEvent?.session;
 
   useEffect(() => {
     const initialize = async () => {
@@ -62,21 +66,18 @@ export default function CalendarPage() {
   const generateWorkoutEvents = (program: Program, startDate: Date, sessions: WorkoutSession[]) => {
     const events: WorkoutEvent[] = [];
     
-    // Normalize start date to avoid timezone issues
     const normalizedStartDate = new Date(startDate);
     normalizedStartDate.setUTCHours(0, 0, 0, 0);
 
-    // Create a lookup map for completed sessions for efficient access
-    const completedSessionsMap = new Map<string, boolean>();
+    const sessionsMap = new Map<string, WorkoutSession>();
     sessions.forEach(session => {
         if (session.finishedAt) {
             const sessionDate = new Date(session.workoutDate);
             sessionDate.setUTCHours(0, 0, 0, 0);
-            completedSessionsMap.set(sessionDate.toISOString(), true);
+            sessionsMap.set(sessionDate.toISOString(), session);
         }
     });
 
-    // Generate events for a full year
     for (let i = 0; i < 365; i++) {
         const currentDate = addDays(normalizedStartDate, i);
         currentDate.setUTCHours(0, 0, 0, 0);
@@ -84,16 +85,28 @@ export default function CalendarPage() {
         const { workout } = getWorkoutForDay(program, normalizedStartDate, currentDate);
         
         if (workout) {
-            const isCompleted = completedSessionsMap.has(currentDate.toISOString());
+            const session = sessionsMap.get(currentDate.toISOString());
             events.push({
                 date: currentDate,
                 workout: workout,
-                completed: isCompleted,
+                session: session,
             });
         }
     }
     setWorkoutEvents(events);
   };
+
+  const getCompletedExercises = (session: WorkoutSession): (Exercise | { name: string, details: string })[] => {
+      if (!session.completedItems) return [];
+      
+      const items: (Exercise | { name: string, details: string })[] = [];
+      for (const itemName in session.completedItems) {
+          if (session.completedItems[itemName]) {
+              items.push({ name: itemName, details: 'Completed' });
+          }
+      }
+      return items;
+  }
 
 
   return (
@@ -122,7 +135,7 @@ export default function CalendarPage() {
                                     <div className="relative h-full w-full flex items-center justify-center">
                                         <span className="relative z-10">{date.getDate()}</span>
                                         <Badge
-                                            variant={event.completed ? "default" : "secondary"}
+                                            variant={event.session?.finishedAt ? "default" : "secondary"}
                                             className="absolute bottom-1 h-1.5 w-1.5 p-0 rounded-full bg-primary"
                                         />
                                     </div>
@@ -136,20 +149,55 @@ export default function CalendarPage() {
             </CardContent>
         </Card>
 
-        {selectedWorkout && selectedDate && (
+        {selectedEvent && selectedDate && (
              <Card>
                 <CardHeader>
                     <p className="text-sm font-medium text-accent-foreground">{format(selectedDate, "EEEE, MMMM do")}</p>
-                    <CardTitle>{selectedWorkout.title}</CardTitle>
+                    <CardTitle>{completedSession?.workoutTitle || selectedWorkout?.title}</CardTitle>
+                    {completedSession && (
+                        <CardDescription>
+                            Workout completed on {format(completedSession.finishedAt!, "MMMM do, yyyy 'at' h:mm a")}
+                        </CardDescription>
+                    )}
                 </CardHeader>
                 <CardContent>
-                     <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                        {selectedWorkout.exercises.map((exercise, index) => (
-                            <li key={index}>
-                                <span className="font-medium text-foreground">{exercise.name}:</span> {exercise.details}
-                            </li>
-                        ))}
-                    </ul>
+                     {completedSession ? (
+                         <div className="space-y-4">
+                             <div>
+                                 <h4 className="font-semibold mb-2">Completed Exercises</h4>
+                                 <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                                     {getCompletedExercises(completedSession).map((exercise, index) => (
+                                         <li key={index}>
+                                             <span className="font-medium text-foreground">{exercise.name}</span>
+                                         </li>
+                                     ))}
+                                 </ul>
+                             </div>
+                             {completedSession.notes && (
+                                 <div>
+                                     <h4 className="font-semibold mb-2">Your Notes</h4>
+                                     <p className="text-sm text-muted-foreground border-l-2 pl-4 italic">
+                                         {completedSession.notes}
+                                     </p>
+                                 </div>
+                             )}
+                         </div>
+                     ) : selectedWorkout ? (
+                        <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                            {selectedWorkout.programType === 'running' 
+                                ? (selectedWorkout as RunningWorkout).runs.map((run, index) => (
+                                    <li key={index}>
+                                        <span className="font-medium text-foreground">{run.description}</span>
+                                    </li>
+                                ))
+                                : (selectedWorkout as Workout).exercises.map((exercise, index) => (
+                                    <li key={index}>
+                                        <span className="font-medium text-foreground">{exercise.name}:</span> {exercise.details}
+                                    </li>
+                                ))
+                            }
+                        </ul>
+                     ) : null}
                 </CardContent>
             </Card>
         )}
