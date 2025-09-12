@@ -5,7 +5,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { BarChart, Target, Sparkles, Loader2, Route, Zap } from 'lucide-react';
+import { BarChart, Target, Sparkles, Loader2, Route, Zap, PlusSquare } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval, isFuture, isToday } from 'date-fns';
 
 import { motivationalCoach } from '@/ai/flows/motivational-coach';
@@ -43,6 +43,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import { useToast } from '@/hooks/use-toast';
+import { CustomWorkoutDialog } from '@/components/custom-workout-dialog';
 
 const chartConfig = {
   workouts: {
@@ -62,6 +63,7 @@ export default function DashboardPage() {
   const [motivation, setMotivation] = useState('');
   const [motivationLoading, setMotivationLoading] = useState(false);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
+  const [isCustomWorkoutDialogOpen, setIsCustomWorkoutDialogOpen] = useState(false);
   const [summary, setSummary] = useState("Here's your plan for today. Let's get it done.");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [workoutSummaryText, setWorkoutSummaryText] = useState("Assign a program to your profile to see your workout.");
@@ -299,174 +301,187 @@ export default function DashboardPage() {
   const isRunningProgram = todaysWorkout?.workout?.programType === 'running';
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-          Welcome back, {user?.firstName || 'Athlete'}!
-        </h1>
-        {summaryLoading ? (
-            <Skeleton className="h-5 w-2/3" />
-        ) : (
-            <p className="text-muted-foreground">{summary}</p>
-        )}
-      </div>
+    <>
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+            Welcome back, {user?.firstName || 'Athlete'}!
+          </h1>
+          {summaryLoading ? (
+              <Skeleton className="h-5 w-2/3" />
+          ) : (
+              <p className="text-muted-foreground">{summary}</p>
+          )}
+        </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {isRunningProgram ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
-              {program && todaysWorkout?.workout && !programStartsInFuture ? `Today's Workout (Day ${todaysWorkout.day})` : "Today's Plan"}
-            </CardTitle>
-            <CardDescription asChild>
-                <div className={cn("mt-2 p-3 bg-accent/20 border border-accent/50 rounded-md transform -rotate-1 shadow-sm", {
-                    "animate-pulse": workoutSummaryLoading,
-                    "hidden": !todaysWorkout?.workout || programStartsInFuture
-                })}>
-                     <p className="rotate-1 text-accent-foreground/90 italic">
-                        {workoutSummaryLoading ? "Generating your daily tip..." : workoutSummaryText}
-                    </p>
-                </div>
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {todaysWorkout?.workout && !programStartsInFuture ? (
-                <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                        <span className="text-sm font-medium text-muted-foreground w-20">Progress</span>
-                        <Progress value={progressPercentage} className="flex-1" />
-                        <span className="text-sm font-bold">{Math.round(progressPercentage)}%</span>
-                    </div>
-                    <Separator />
-                    <ul className="space-y-4">
-                      {isRunningProgram ? (
-                          (todaysWorkout.workout as RunningWorkout).runs.map((run: PlannedRun) => (
-                              <li key={run.description}>
-                                <p className="font-medium">{run.description}</p>
-                                {trainingPaces ? (
-                                    <p className="text-sm text-muted-foreground">
-                                        Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
-                                    </p>
-                                ) : (
-                                    <p className="text-sm text-yellow-600">Enter benchmark times in your profile to see target paces.</p>
-                                )}
-                              </li>
-                          ))
-                      ) : (
-                          (todaysWorkout.workout as Workout).exercises.map((ex) => (
-                              <li key={ex.name}>
-                                  <p className="font-medium">{ex.name}</p>
-                                  <p className="text-sm text-muted-foreground">{ex.details}</p>
-                              </li>
-                          ))
-                      )}
-                    </ul>
-                </div>
-            ) : (
-                <div className="text-center text-muted-foreground py-10">
-                    {programStartsInFuture ? (
-                        <>
-                            <p>Your program <span className="font-semibold text-foreground">{program?.name}</span> is scheduled to start in the future.</p>
-                            <p className="text-sm">In the meantime, why not generate a workout for today?</p>
-                        </>
-                    ) : (
-                        <>
-                            <p>No workout scheduled for today.</p>
-                            <p className="text-sm">Assign a program in your profile or generate one with AI.</p>
-                        </>
-                    )}
-                </div>
-            )}
-          </CardContent>
-          <CardFooter>
-            {showGenerateWorkoutButton ? (
-                 <Button variant="accent" className="w-full" onClick={handleGenerateWorkout} disabled={isGeneratingWorkout}>
-                     {isGeneratingWorkout ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                     {isGeneratingWorkout ? 'Generating...' : 'Generate AI Workout for Today'}
-                 </Button>
-            ) : (
-                <Button variant="accent" className="w-full" onClick={handleStartWorkout} disabled={!todaysWorkout?.workout}>Start / Resume Workout</Button>
-            )}
-          </CardFooter>
-        </Card>
-
-        <div className="space-y-6">
-          <Card>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-6 w-6 text-yellow-400" />
-                Motivational Coach
+                {isRunningProgram ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
+                {program && todaysWorkout?.workout && !programStartsInFuture ? `Today's Workout (Day ${todaysWorkout.day})` : "Today's Plan"}
               </CardTitle>
-              <CardDescription>Your AI partner for a mental boost.</CardDescription>
+              <CardDescription asChild>
+                  <div className={cn("mt-2 p-3 bg-accent/20 border border-accent/50 rounded-md transform -rotate-1 shadow-sm", {
+                      "animate-pulse": workoutSummaryLoading,
+                      "hidden": !todaysWorkout?.workout || programStartsInFuture
+                  })}>
+                      <p className="rotate-1 text-accent-foreground/90 italic">
+                          {workoutSummaryLoading ? "Generating your daily tip..." : workoutSummaryText}
+                      </p>
+                  </div>
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">Feeling stuck? Get a personalized message from your AI coach based on your recent progress.</p>
+              {todaysWorkout?.workout && !programStartsInFuture ? (
+                  <div className="space-y-4">
+                      <div className="flex items-center gap-4">
+                          <span className="text-sm font-medium text-muted-foreground w-20">Progress</span>
+                          <Progress value={progressPercentage} className="flex-1" />
+                          <span className="text-sm font-bold">{Math.round(progressPercentage)}%</span>
+                      </div>
+                      <Separator />
+                      <ul className="space-y-4">
+                        {isRunningProgram ? (
+                            (todaysWorkout.workout as RunningWorkout).runs.map((run: PlannedRun) => (
+                                <li key={run.description}>
+                                  <p className="font-medium">{run.description}</p>
+                                  {trainingPaces ? (
+                                      <p className="text-sm text-muted-foreground">
+                                          Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
+                                      </p>
+                                  ) : (
+                                      <p className="text-sm text-yellow-600">Enter benchmark times in your profile to see target paces.</p>
+                                  )}
+                                </li>
+                            ))
+                        ) : (
+                            (todaysWorkout.workout as Workout).exercises.map((ex) => (
+                                <li key={ex.name}>
+                                    <p className="font-medium">{ex.name}</p>
+                                    <p className="text-sm text-muted-foreground">{ex.details}</p>
+                                </li>
+                            ))
+                        )}
+                      </ul>
+                  </div>
+              ) : (
+                  <div className="text-center text-muted-foreground py-10">
+                      {programStartsInFuture ? (
+                          <>
+                              <p>Your program <span className="font-semibold text-foreground">{program?.name}</span> is scheduled to start in the future.</p>
+                              <p className="text-sm">In the meantime, why not generate or log a workout for today?</p>
+                          </>
+                      ) : (
+                          <>
+                              <p>No workout scheduled for today.</p>
+                              <p className="text-sm">Assign a program in your profile, generate one with AI, or log a custom activity.</p>
+                          </>
+                      )}
+                  </div>
+              )}
             </CardContent>
-            <CardFooter>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="secondary" className="w-full" onClick={handleGetMotivation} disabled={!user || !program}>Get Motivation</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Your Daily Boost</DialogTitle>
-                    {motivationLoading ? (
-                        <div className="flex items-center justify-center p-8">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : (
-                        <DialogDescription>
-                            {motivation || "Click 'Get Motivation' to see your message."}
-                        </DialogDescription>
-                    )}
-                  </DialogHeader>
-                </DialogContent>
-              </Dialog>
+            <CardFooter className="flex-col md:flex-row gap-2">
+              {showGenerateWorkoutButton ? (
+                  <div className="w-full flex flex-col md:flex-row gap-2">
+                      <Button variant="accent" className="w-full" onClick={handleGenerateWorkout} disabled={isGeneratingWorkout}>
+                          {isGeneratingWorkout ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                          {isGeneratingWorkout ? 'Generating...' : 'Generate AI Workout'}
+                      </Button>
+                      <Button variant="outline" className="w-full" onClick={() => setIsCustomWorkoutDialogOpen(true)}>
+                           <PlusSquare className="mr-2 h-4 w-4" />
+                           Log Custom Workout
+                      </Button>
+                  </div>
+              ) : (
+                  <Button variant="accent" className="w-full" onClick={handleStartWorkout} disabled={!todaysWorkout?.workout}>Start / Resume Workout</Button>
+              )}
             </CardFooter>
           </Card>
 
-          <Card>
-            <CardHeader>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                    <BarChart className="h-6 w-6" />
-                    Weekly Consistency
+                  <Sparkles className="h-6 w-6 text-yellow-400" />
+                  Motivational Coach
                 </CardTitle>
-                <CardDescription>
-                    Your completed workouts over the last 4 weeks.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <ChartContainer config={chartConfig} className="h-40 w-full">
-                    <RechartsBarChart 
-                        accessibilityLayer
-                        data={progressData} 
-                        margin={{ top: 20, right: 10, left: 0, bottom: 0 }}
-                    >
-                        <CartesianGrid vertical={false} />
-                        <XAxis 
-                            dataKey="week" 
-                            tickLine={false} 
-                            axisLine={false} 
-                            tickMargin={8}
-                            tickFormatter={(value) => value.slice(0, 3)}
-                        />
-                        <ChartTooltip 
-                            cursor={false} 
-                            content={<ChartTooltipContent indicator="dot" />} 
-                        />
-                        <Bar 
-                            dataKey="workouts" 
-                            fill="hsl(var(--primary))" 
-                            radius={8} 
-                        />
-                    </RechartsBarChart>
-                </ChartContainer>
-            </CardContent>
-          </Card>
+                <CardDescription>Your AI partner for a mental boost.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Feeling stuck? Get a personalized message from your AI coach based on your recent progress.</p>
+              </CardContent>
+              <CardFooter>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="secondary" className="w-full" onClick={handleGetMotivation} disabled={!user || !program}>Get Motivation</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Your Daily Boost</DialogTitle>
+                      {motivationLoading ? (
+                          <div className="flex items-center justify-center p-8">
+                              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                          </div>
+                      ) : (
+                          <DialogDescription>
+                              {motivation || "Click 'Get Motivation' to see your message."}
+                          </DialogDescription>
+                      )}
+                    </DialogHeader>
+                  </DialogContent>
+                </Dialog>
+              </CardFooter>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                      <BarChart className="h-6 w-6" />
+                      Weekly Consistency
+                  </CardTitle>
+                  <CardDescription>
+                      Your completed workouts over the last 4 weeks.
+                  </CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <ChartContainer config={chartConfig} className="h-40 w-full">
+                      <RechartsBarChart 
+                          accessibilityLayer
+                          data={progressData} 
+                          margin={{ top: 20, right: 10, left: 0, bottom: 0 }}
+                      >
+                          <CartesianGrid vertical={false} />
+                          <XAxis 
+                              dataKey="week" 
+                              tickLine={false} 
+                              axisLine={false} 
+                              tickMargin={8}
+                              tickFormatter={(value) => value.slice(0, 3)}
+                          />
+                          <ChartTooltip 
+                              cursor={false} 
+                              content={<ChartTooltipContent indicator="dot" />} 
+                          />
+                          <Bar 
+                              dataKey="workouts" 
+                              fill="hsl(var(--primary))" 
+                              radius={8} 
+                          />
+                      </RechartsBarChart>
+                  </ChartContainer>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
-    </div>
+      {user && (
+         <CustomWorkoutDialog
+            isOpen={isCustomWorkoutDialogOpen}
+            setIsOpen={setIsCustomWorkoutDialogOpen}
+            userId={user.id}
+         />
+      )}
+    </>
   );
 }
-
-    

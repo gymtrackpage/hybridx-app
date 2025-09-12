@@ -4,7 +4,7 @@
 
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { WorkoutSession, Workout, RunningWorkout, Exercise } from '@/models/types';
+import type { WorkoutSession, Workout, RunningWorkout, Exercise, ProgramType } from '@/models/types';
 
 function fromFirestore(doc: any): WorkoutSession {
     const data = doc.data();
@@ -41,8 +41,8 @@ export async function getAllUserSessions(userId: string): Promise<WorkoutSession
 export async function getTodaysOneOffSession(userId: string, workoutDate: Date): Promise<WorkoutSession | null> {
      const q = query(
         sessionsCollection, 
-        where('userId', '==', userId), 
-        where('programId', '==', 'one-off-ai'),
+        where('userId', '==', userId),
+        where('programId', 'in', ['one-off-ai', 'custom-workout']),
         where('workoutDate', '==', Timestamp.fromDate(workoutDate)),
         limit(1)
     );
@@ -53,7 +53,31 @@ export async function getTodaysOneOffSession(userId: string, workoutDate: Date):
     return null;
 }
 
-export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout | RunningWorkout, overwrite: boolean = false): Promise<WorkoutSession> {
+export async function createCustomWorkoutSession(userId: string, title: string, type: ProgramType, description: string): Promise<void> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const q = query(
+        sessionsCollection,
+        where('userId', '==', userId),
+        where('workoutDate', '==', Timestamp.fromDate(today)),
+        limit(1)
+    );
+    const snapshot = await getDocs(q);
+
+    const workout: Workout = {
+        title,
+        programType: 'hyrox',
+        day: 0,
+        exercises: [{ name: 'Custom Activity', details: description }],
+    };
+    
+    // For custom workouts, we always overwrite any existing session for today
+    return getOrCreateWorkoutSession(userId, 'custom-workout', today, workout, true);
+}
+
+
+export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout | RunningWorkout, overwrite: boolean = false): Promise<any> {
     const q = query(
         sessionsCollection, 
         where('userId', '==', userId), 
@@ -64,37 +88,28 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
     const snapshot = await getDocs(q);
 
     if (!snapshot.empty && !overwrite) {
-        // If a session exists and we are not overwriting, return it, unless it's a one-off-ai session and a program session is being created
+        // If a session exists and we are not overwriting, return it, unless it's a one-off/custom session and a program session is being created
         const existingSession = fromFirestore(snapshot.docs[0]);
-        if (existingSession.programId === 'one-off-ai' && programId !== 'one-off-ai') {
-             // We are creating a program session, it should take precedence over the AI one
+        if (['one-off-ai', 'custom-workout'].includes(existingSession.programId) && !['one-off-ai', 'custom-workout'].includes(programId)) {
+             // We are creating a program session, it should take precedence
         } else {
             return existingSession;
         }
     }
 
-    if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai' && snapshot.docs[0].data().programId === 'one-off-ai'))) {
-        // Overwrite if flag is set, or if we are creating a program day over an existing AI workout
+    if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai' && programId !== 'custom-workout' ))) {
         console.log(`Overwriting existing workout session for date: ${workoutDate.toISOString()}`);
     }
 
     const initialCompleted: { [key: string]: boolean } = {};
     const items = workout.programType === 'running' 
         ? (workout as RunningWorkout).runs 
-        : [...((workout as Workout).exercises || [])]; // Use empty array as fallback
+        : [...((workout as Workout).exercises || [])];
         
-    // For AI workouts, the exercises are passed directly in the workout object
-    if (programId === 'one-off-ai' && (workout as Workout).exercises) {
-        (workout as Workout).exercises.forEach(item => {
-            const key = (item as any).name;
-            initialCompleted[key] = false;
-        });
-    } else {
-        items.forEach(item => {
-            const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
-            initialCompleted[key] = false;
-        });
-    }
+    items.forEach(item => {
+        const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
+        initialCompleted[key] = false;
+    });
 
     const newSessionData = {
         userId,
@@ -106,14 +121,12 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         completedItems: initialCompleted,
         finishedAt: null,
         notes: '',
-        // For AI workouts, store the exercises in the extendedExercises field
-        extendedExercises: programId === 'one-off-ai' ? (workout as Workout).exercises : [],
+        extendedExercises: ['one-off-ai', 'custom-workout'].includes(programId) ? (workout as Workout).exercises : [],
     };
 
-    if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai'))) {
+    if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai' && programId !== 'custom-workout'))) {
         const docToUpdate = snapshot.docs[0];
         await updateDoc(docToUpdate.ref, newSessionData);
-        // The data passed to fromFirestore should match the structure of a Firestore doc
         const updatedDocData = { ...docToUpdate.data(), ...newSessionData };
         return { ...fromFirestore({ id: docToUpdate.id, data: () => updatedDocData }) };
     }
@@ -145,5 +158,3 @@ export async function updateWorkoutSession(sessionId: string, data: Partial<Omit
 
     await updateDoc(docRef, dataToUpdate);
 }
-
-    

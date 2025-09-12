@@ -65,13 +65,12 @@ export default function ActiveWorkoutPage() {
                 let workoutSession;
                 let currentWorkoutInfo;
 
-                // First, check for a one-off AI workout for today
+                // First, check for a one-off or custom workout for today
                 const oneOffSession = await getTodaysOneOffSession(firebaseUser.uid, today);
 
                 if (oneOffSession) {
                     workoutSession = oneOffSession;
                     // Reconstruct a temporary workout object for display from the session data
-                    // For AI workouts, the main exercises ARE the "extendedExercises"
                     currentWorkoutInfo = {
                         day: 0,
                         workout: {
@@ -79,10 +78,9 @@ export default function ActiveWorkoutPage() {
                             programType: oneOffSession.programType,
                             day: 0,
                             exercises: oneOffSession.extendedExercises || [], 
-                            runs: [] // AI gen doesn't create runs currently
+                            runs: [] // Custom/AI runs not supported yet
                         } as Workout
                     };
-                    // For a one-off AI workout, there are no "extended" exercises yet.
                     setExtendedExercises([]); 
                 } else if (currentUser.programId && currentUser.startDate) {
                     // If no one-off workout, look for a scheduled program workout
@@ -100,8 +98,8 @@ export default function ActiveWorkoutPage() {
                 if (workoutSession) {
                     setSession(workoutSession);
                     setNotes(workoutSession.notes || '');
-                    // Only set extended exercises if it's NOT a one-off workout
-                    if (workoutSession.programId !== 'one-off-ai') {
+                    // Only set extended exercises if it's NOT a one-off/custom workout
+                    if (!['one-off-ai', 'custom-workout'].includes(workoutSession.programId)) {
                          setExtendedExercises(workoutSession.extendedExercises || []);
                     }
 
@@ -132,7 +130,7 @@ export default function ActiveWorkoutPage() {
     };
     
     let unsubscribe: () => void;
-    initialize().then(unsub => unsubscribe = unsub);
+    initialize().then(unsub => unsub);
 
     return () => {
         if (unsubscribe) {
@@ -243,7 +241,7 @@ export default function ActiveWorkoutPage() {
     : (workout as Workout).exercises;
   
   const isRunningProgram = workout.programType === 'running';
-  const isOneOffWorkout = session.programId === 'one-off-ai';
+  const isOneOffWorkout = ['one-off-ai', 'custom-workout'].includes(session.programId);
 
   return (
     <>
