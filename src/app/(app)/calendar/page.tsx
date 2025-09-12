@@ -82,65 +82,46 @@ export default function CalendarPage() {
     console.log('🔄 Generating workout events...');
     const events: WorkoutEvent[] = [];
     
-    // Create a map of completed sessions by date
+    // Create a map of completed sessions by date for quick lookup
     const sessionsMap = new Map<string, WorkoutSession>();
-    
     sessions.forEach(session => {
-      if (session.finishedAt) {
-        // Handle different date formats
-        let sessionDate: Date;
-        
-        if (session.workoutDate instanceof Date) {
-          sessionDate = new Date(session.workoutDate);
-        } else if (typeof session.workoutDate === 'string') {
-          sessionDate = parseISO(session.workoutDate);
-        } else if (session.workoutDate && typeof (session.workoutDate as any).toDate === 'function') {
-          // Firestore Timestamp
-          sessionDate = (session.workoutDate as any).toDate();
-        } else {
-          console.warn('⚠️ Invalid session date format:', session.workoutDate);
-          return;
-        }
+        if (session.finishedAt && session.workoutDate) {
+            let sessionDate: Date;
+            if (session.workoutDate instanceof Date) {
+              sessionDate = new Date(session.workoutDate);
+            } else {
+              // Handle Firestore Timestamp or string dates
+              sessionDate = parseISO(session.workoutDate.toString());
+            }
 
-        if (!isValid(sessionDate)) {
-          console.warn('⚠️ Invalid session date:', session.workoutDate);
-          return;
+            if (isValid(sessionDate)) {
+                const dateKey = format(sessionDate, 'yyyy-MM-dd');
+                sessionsMap.set(dateKey, session);
+            }
         }
-
-        // Normalize to start of day in local timezone
-        const normalizedDate = new Date(sessionDate.getFullYear(), sessionDate.getMonth(), sessionDate.getDate());
-        const dateKey = normalizedDate.toISOString().split('T')[0];
-        
-        console.log('📅 Adding session for date:', dateKey, session);
-        sessionsMap.set(dateKey, session);
-      }
     });
 
-    // Add programmed workouts if available
+    // Add programmed workouts if a program is active
     if (program && startDate) {
       const normalizedStartDate = new Date(startDate);
       normalizedStartDate.setHours(0, 0, 0, 0);
+      
+      const programDuration = Math.max(...program.workouts.map(w => w.day), 0);
 
-      for (let i = 0; i < 365; i++) {
+      for (let i = 0; i < programDuration; i++) {
         const currentDate = addDays(normalizedStartDate, i);
-        currentDate.setHours(0, 0, 0, 0);
-        
-        const dateKey = currentDate.toISOString().split('T')[0];
+        const dateKey = format(currentDate, 'yyyy-MM-dd');
         const { workout } = getWorkoutForDay(program, normalizedStartDate, currentDate);
         const session = sessionsMap.get(dateKey);
         
         if (workout || session) {
-          const eventType: 'programmed' | 'completed' | 'both' = 
-            workout && session ? 'both' : 
-            workout ? 'programmed' : 'completed';
-            
           events.push({
             date: currentDate,
             workout: workout || undefined,
             session: session,
-            type: eventType
+            type: workout && session ? 'both' : (session ? 'completed' : 'programmed')
           });
-          // Remove the session from the map so it's not added twice
+          // Remove from map to avoid duplication
           if (session) {
             sessionsMap.delete(dateKey);
           }
@@ -148,17 +129,15 @@ export default function CalendarPage() {
       }
     }
     
-    // Add any remaining completed sessions that were not part of the program
-    console.log('📝 Adding non-programmed completed sessions');
+    // Add any remaining completed sessions that were not part of the active program
     sessionsMap.forEach((session, dateKey) => {
-        const eventDate = new Date(dateKey + 'T00:00:00');
+        const eventDate = new Date(dateKey + 'T12:00:00'); // Use noon to avoid timezone issues
         events.push({
             date: eventDate,
             session: session,
             type: 'completed'
         });
     });
-
 
     console.log('✅ Generated events:', events.length, events);
     setWorkoutEvents(events);
