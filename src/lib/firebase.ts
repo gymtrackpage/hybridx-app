@@ -1,3 +1,4 @@
+
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
@@ -24,25 +25,29 @@ const firebaseConfig = {
 const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 
-// Use a singleton promise to ensure auth is initialized only once
+// Singleton instance for Auth
 let authInstance: Auth | null = null;
 
 /**
  * Gets the initialized Firebase Auth instance.
- * Ensures persistence is set for PWA functionality.
+ * Ensures persistence is set for PWA functionality and that it's only initialized once.
  */
 const getAuthInstance = (): Auth => {
-  if (!authInstance) {
-    if (typeof window !== 'undefined') {
-      // For client-side, initialize with persistence
-      authInstance = initializeFirebaseAuth(app, {
-        persistence: [indexedDBLocalPersistence, browserLocalPersistence]
-      });
-    } else {
-      // For server-side, just get the auth instance
-      authInstance = getAuth(app);
-    }
+  if (authInstance) {
+    return authInstance;
   }
+
+  if (typeof window !== 'undefined') {
+    // For client-side, initialize with persistence. This will create a new instance if one doesn't exist
+    // or return the existing one if it's already been initialized elsewhere.
+    authInstance = initializeFirebaseAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+    });
+  } else {
+    // For server-side, just get the auth instance
+    authInstance = getAuth(app);
+  }
+  
   return authInstance;
 };
 
@@ -52,8 +57,8 @@ const getAuthInstance = (): Auth => {
  * Resolves with `true` if a user is logged in, `false` otherwise.
  */
 const waitForAuthState = (): Promise<boolean> => {
-  const auth = getAuthInstance();
   return new Promise((resolve) => {
+    const auth = getAuthInstance();
     const unsubscribe = onAuthStateChanged(auth, (user) => {
         unsubscribe(); // Unsubscribe after the first emission
         resolve(!!user);
