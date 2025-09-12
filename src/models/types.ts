@@ -1,4 +1,3 @@
-
 // src/models/types.ts
 
 export interface StravaTokens {
@@ -117,6 +116,7 @@ export interface WorkoutSession {
     finishedAt?: Date;
     completedItems: { [itemName: string]: boolean };
     notes?: string;
+    duration?: string; // Optional duration for custom workouts
     extendedExercises?: Exercise[]; // AI-generated exercises
     
     // Strava integration fields

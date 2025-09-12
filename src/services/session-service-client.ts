@@ -1,4 +1,3 @@
-
 // src/services/session-service-client.ts
 // This file contains functions for client-side components. NO 'use server' here.
 
@@ -19,6 +18,7 @@ function fromFirestore(doc: any): WorkoutSession {
         finishedAt: data.finishedAt ? data.finishedAt.toDate() : undefined,
         completedItems: data.completedItems,
         notes: data.notes || '',
+        duration: data.duration,
         extendedExercises: data.extendedExercises || [],
         stravaId: data.stravaId,
         uploadedToStrava: data.uploadedToStrava,
@@ -53,7 +53,7 @@ export async function getTodaysOneOffSession(userId: string, workoutDate: Date):
     return null;
 }
 
-export async function createCustomWorkoutSession(userId: string, title: string, type: ProgramType, description: string): Promise<void> {
+export async function createCustomWorkoutSession(userId: string, title: string, type: ProgramType, description: string, duration?: string): Promise<void> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -73,11 +73,11 @@ export async function createCustomWorkoutSession(userId: string, title: string, 
     };
     
     // For custom workouts, we always overwrite any existing session for today
-    return getOrCreateWorkoutSession(userId, 'custom-workout', today, workout, true);
+    return getOrCreateWorkoutSession(userId, 'custom-workout', today, workout, true, duration);
 }
 
 
-export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout | RunningWorkout, overwrite: boolean = false): Promise<any> {
+export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout | RunningWorkout, overwrite: boolean = false, duration?: string): Promise<any> {
     const q = query(
         sessionsCollection, 
         where('userId', '==', userId), 
@@ -121,6 +121,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         completedItems: initialCompleted,
         finishedAt: null,
         notes: '',
+        duration: duration || null,
         extendedExercises: ['one-off-ai', 'custom-workout'].includes(programId) ? (workout as Workout).exercises : [],
     };
 
@@ -143,6 +144,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         startedAt: new Date(),
         completedItems: initialCompleted,
         notes: '',
+        duration: newSessionData.duration,
         extendedExercises: newSessionData.extendedExercises,
     };
 }

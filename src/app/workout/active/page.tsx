@@ -1,10 +1,9 @@
-
 // src/app/workout/active/page.tsx
 'use client';
 
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Share2, Sparkles } from 'lucide-react';
+import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Share2, Sparkles, Clock } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -19,7 +18,7 @@ import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getOrCreateWorkoutSession, getTodaysOneOffSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
+import { getTodaysOneOffSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
 import type { Workout, RunningWorkout, User, Exercise } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
@@ -130,7 +129,7 @@ export default function ActiveWorkoutPage() {
     };
     
     let unsubscribe: () => void;
-    initialize().then(unsub => unsub);
+    initialize().then(unsub => unsubscribe = unsub);
 
     return () => {
         if (unsubscribe) {
@@ -261,6 +260,12 @@ export default function ActiveWorkoutPage() {
                         <div className="flex items-center gap-2">
                             <CalendarDays className="h-4 w-4" />
                             <span>Week {week}, Day {dayOfWeek}</span>
+                        </div>
+                    )}
+                    {isOneOffWorkout && session.duration && (
+                        <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span>{session.duration}</span>
                         </div>
                     )}
                 </div>

@@ -125,6 +125,8 @@ export default function CalendarPage() {
         events.push({
             date: eventDate,
             session: session,
+            // If there's no program, workout will be undefined
+            workout: undefined,
             type: 'completed'
         });
     });

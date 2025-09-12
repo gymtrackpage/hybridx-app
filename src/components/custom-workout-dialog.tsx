@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -41,6 +40,7 @@ const customWorkoutSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters.'),
   type: z.enum(['hyrox', 'running']),
   description: z.string().min(10, 'Description must be at least 10 characters.'),
+  duration: z.string().optional(),
 });
 
 type CustomWorkoutFormData = z.infer<typeof customWorkoutSchema>;
@@ -62,6 +62,7 @@ export function CustomWorkoutDialog({ isOpen, setIsOpen, userId }: CustomWorkout
       title: '',
       type: 'hyrox',
       description: '',
+      duration: '',
     },
   });
 
@@ -73,7 +74,8 @@ export function CustomWorkoutDialog({ isOpen, setIsOpen, userId }: CustomWorkout
         userId,
         data.title,
         data.type as ProgramType,
-        data.description
+        data.description,
+        data.duration
       );
       toast({ title: 'Workout Logged!', description: 'Redirecting you to start your session.' });
       setIsOpen(false);
@@ -115,27 +117,42 @@ export function CustomWorkoutDialog({ isOpen, setIsOpen, userId }: CustomWorkout
                 </FormItem>
               )}
             />
-             <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                <FormItem>
-                    <FormLabel>Workout Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                        <SelectTrigger>
-                        <SelectValue placeholder="Select a workout type" />
-                        </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        <SelectItem value="hyrox">Hybrid / Strength</SelectItem>
-                        <SelectItem value="running">Running</SelectItem>
-                    </SelectContent>
-                    </Select>
-                    <FormMessage />
-                </FormItem>
-                )}
-            />
+             <div className="grid grid-cols-2 gap-4">
+                 <FormField
+                    control={form.control}
+                    name="type"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Workout Type</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                            <SelectTrigger>
+                            <SelectValue placeholder="Select a workout type" />
+                            </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            <SelectItem value="hyrox">Hybrid / Strength</SelectItem>
+                            <SelectItem value="running">Running</SelectItem>
+                        </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="duration"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Duration (Optional)</FormLabel>
+                        <FormControl>
+                            <Input placeholder="e.g., 45 mins" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+             </div>
             <FormField
               control={form.control}
               name="description"
