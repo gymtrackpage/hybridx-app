@@ -241,14 +241,6 @@ export default function ActiveWorkoutPage() {
   const originalWorkoutItems = workout.programType === 'running' 
     ? (workout as RunningWorkout).runs 
     : (workout as Workout).exercises;
-
-  const allWorkoutItems = [...originalWorkoutItems, ...extendedExercises];
-
-  const allItemsCompleted = allWorkoutItems.every(item => {
-      if (!session?.completedItems) return false;
-      const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
-      return session.completedItems[key];
-  });
   
   const isRunningProgram = workout.programType === 'running';
   const isOneOffWorkout = session.programId === 'one-off-ai';
@@ -397,7 +389,7 @@ export default function ActiveWorkoutPage() {
 
                 <div className="flex flex-col sm:flex-row gap-2 pt-4">
                     {!session.finishedAt ? (
-                        <Button className="w-full" onClick={handleFinishWorkout} disabled={!allItemsCompleted}>
+                        <Button className="w-full" onClick={handleFinishWorkout}>
                             <Flag className="mr-2" />
                             Finish Workout
                         </Button>
