@@ -33,6 +33,16 @@ export interface StravaActivity {
     };
 }
 
+// Helper function to safely convert Firestore timestamp to Date
+function safeToDate(timestamp: any): Date {
+  if (!timestamp) return new Date();
+  if (timestamp instanceof Date) return timestamp;
+  if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+  if (typeof timestamp === 'string') return new Date(timestamp);
+  if (typeof timestamp === 'number') return new Date(timestamp);
+  return new Date();
+}
+
 
 /**
  * Retrieves a valid Strava access token for the given user, refreshing it if necessary.
@@ -49,7 +59,7 @@ async function getValidAccessToken(userId: string): Promise<string> {
     }
 
     const now = new Date();
-    const expiresAt = stravaTokens.expiresAt;
+    const expiresAt = safeToDate(stravaTokens.expiresAt);
     
     // Check if token is expired or expires soon (5 minutes buffer)
     if (!expiresAt || expiresAt.getTime() - now.getTime() < 300000) {

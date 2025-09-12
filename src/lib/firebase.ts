@@ -4,8 +4,8 @@ import { getFirestore } from "firebase/firestore";
 import { 
   getAuth, 
   indexedDBLocalPersistence, 
-  browserLocalPersistence, 
-  setPersistence, 
+  browserLocalPersistence,
+  initializeAuth as initializeFirebaseAuth,
   Auth,
   onAuthStateChanged
 } from "firebase/auth";
@@ -25,57 +25,36 @@ const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : get
 const db = getFirestore(app);
 
 // Use a singleton promise to ensure auth is initialized only once
-let authInitialized: Promise<Auth> | null = null;
-
-const initializeAuth = (): Promise<Auth> => {
-    // This function runs only once
-    const auth = getAuth(app);
-
-    // Run this only in the browser
-    if (typeof window !== 'undefined') {
-        return setPersistence(auth, indexedDBLocalPersistence)
-            .then(() => {
-                console.log('Firebase Auth: IndexedDB persistence set successfully');
-                return auth;
-            })
-            .catch((error) => {
-                console.warn('Firebase Auth: IndexedDB persistence failed, trying localStorage', error);
-                return setPersistence(auth, browserLocalPersistence);
-            })
-            .then(() => {
-                console.log('Firebase Auth: localStorage persistence set successfully');
-                return auth;
-            })
-            .catch((error) => {
-                console.error('Firebase Auth: Could not set any persistence', error);
-                // Still resolve auth, but persistence might not be what's expected.
-                return auth;
-            });
-    } else {
-        // For server-side rendering, just resolve the auth instance
-        return Promise.resolve(auth);
-    }
-};
+let authInstance: Auth | null = null;
 
 /**
  * Gets the initialized Firebase Auth instance.
- * Uses a singleton promise to prevent race conditions.
+ * Ensures persistence is set for PWA functionality.
  */
-const getAuthInstance = (): Promise<Auth> => {
-  if (!authInitialized) {
-    authInitialized = initializeAuth();
+const getAuthInstance = (): Auth => {
+  if (!authInstance) {
+    if (typeof window !== 'undefined') {
+      // For client-side, initialize with persistence
+      authInstance = initializeFirebaseAuth(app, {
+        persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+      });
+    } else {
+      // For server-side, just get the auth instance
+      authInstance = getAuth(app);
+    }
   }
-  return authInitialized;
+  return authInstance;
 };
+
 
 /**
  * A helper function that resolves when the auth state is first determined.
  * Resolves with `true` if a user is logged in, `false` otherwise.
  */
-const waitForAuthState = async (): Promise<boolean> => {
-  const authInstance = await getAuthInstance();
+const waitForAuthState = (): Promise<boolean> => {
+  const auth = getAuthInstance();
   return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(authInstance, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
         unsubscribe(); // Unsubscribe after the first emission
         resolve(!!user);
     });
