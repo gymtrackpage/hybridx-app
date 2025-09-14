@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Article } from '@/models/types';
 import { searchArticles, createArticle } from '@/services/article-service';
 import { generateArticle } from '@/ai/flows/generate-article';
+import Link from 'next/link';
 
 export default function ArticlesPage() {
     const [searchTerm, setSearchTerm] = useState('');
@@ -149,19 +150,21 @@ export default function ArticlesPage() {
                 )}
                 
                 {!isLoading && !isGenerating && articles.map((article) => (
-                    <Card key={article.id} className="flex flex-col">
-                        <CardHeader>
-                            <CardTitle>{article.title}</CardTitle>
-                            <CardDescription>
-                                Generated from: "{article.prompt}"
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex-grow">
-                             <p className="text-sm text-muted-foreground line-clamp-3">
-                                {article.content.substring(0, 150)}...
-                            </p>
-                        </CardContent>
-                    </Card>
+                    <Link key={article.id} href={`/articles/${article.id}`} className="flex">
+                        <Card className="flex flex-col w-full hover:border-primary/50 transition-colors">
+                            <CardHeader>
+                                <CardTitle>{article.title}</CardTitle>
+                                <CardDescription>
+                                    Generated from: "{article.prompt}"
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex-grow">
+                                <p className="text-sm text-muted-foreground line-clamp-3">
+                                    {article.content.substring(0, 150)}...
+                                </p>
+                            </CardContent>
+                        </Card>
+                    </Link>
                 ))}
             </div>
 
