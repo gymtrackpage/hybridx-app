@@ -11,7 +11,6 @@ import { useToast } from '@/hooks/use-toast';
 import type { Article } from '@/models/types';
 import { searchArticles, createArticle } from '@/services/article-service';
 import { generateArticle } from '@/ai/flows/generate-article';
-import { useDebouncedCallback } from 'use-debounce';
 
 export default function ArticlesPage() {
     const [searchTerm, setSearchTerm] = useState('');
@@ -38,10 +37,6 @@ export default function ArticlesPage() {
             setIsLoading(false);
         }
     };
-    
-    const debouncedSearch = useDebouncedCallback((query: string) => {
-        handleSearch(query);
-    }, 500);
 
     const handleGenerateArticle = async (prompt: string) => {
         setIsGenerating(true);
@@ -59,10 +54,11 @@ export default function ArticlesPage() {
                     description: 'Please search for topics related to fitness, health, or training.',
                     variant: 'destructive',
                 });
+                setArticles([]); // Clear articles if the topic is not relevant
                 return;
             }
             
-            const articleId = await createArticle({
+            await createArticle({
                 title: aiResult.title,
                 content: aiResult.content,
                 tags: aiResult.tags,
@@ -70,14 +66,16 @@ export default function ArticlesPage() {
             });
             
             // Refetch articles to show the newly created one
-            await handleSearch(searchTerm);
+            const newResults = await searchArticles(prompt);
+            setArticles(newResults);
 
             toast({
                 title: 'Article Created!',
                 description: 'Your new article is now available.',
             });
 
-        } catch (err: any) {
+        } catch (err: any)
+        {
             console.error('Error generating article:', err);
             setError('Failed to generate a new article. The AI may be busy, please try again later.');
             toast({
@@ -90,14 +88,14 @@ export default function ArticlesPage() {
         }
     };
 
+    // Initial load of recent articles
     useEffect(() => {
-        handleSearch(''); // Initial load of recent articles
+        handleSearch('');
     }, []);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newSearchTerm = e.target.value;
-        setSearchTerm(newSearchTerm);
-        debouncedSearch(newSearchTerm);
+    const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        handleSearch(searchTerm);
     };
 
     return (
@@ -107,15 +105,21 @@ export default function ArticlesPage() {
                 <p className="text-muted-foreground">Explain what you would like to learn about. We'll find an article or write one for you.</p>
             </div>
             
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                    placeholder="e.g., 'Best recovery methods for HYROX' or 'How to improve my 5k time'"
-                    className="pl-10"
-                    value={searchTerm}
-                    onChange={handleInputChange}
-                />
-            </div>
+            <form onSubmit={handleFormSubmit} className="flex items-center gap-2">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input
+                        placeholder="e.g., 'Best recovery methods for HYROX' or 'How to improve my 5k time'"
+                        className="pl-10"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <Button type="submit" disabled={isLoading || isGenerating}>
+                    {isLoading || isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    {isLoading ? 'Searching...' : isGenerating ? 'Generating...' : 'Search'}
+                </Button>
+            </form>
 
             {error && (
                 <Card className="bg-destructive/10 border-destructive/50 text-destructive">
@@ -167,7 +171,7 @@ export default function ArticlesPage() {
                     <h3 className="text-lg font-semibold text-foreground">No Articles Found</h3>
                     <p>
                         {searchTerm 
-                            ? "There are no articles matching your search. A new one is being generated now." 
+                            ? "There are no articles matching your search. Try a different query." 
                             : "No articles available yet. Start by searching for a topic."
                         }
                     </p>
