@@ -124,3 +124,12 @@ export interface WorkoutSession {
     uploadedToStrava?: boolean;
     stravaUploadedAt?: Date;
 }
+
+export interface Article {
+  id: string;
+  title: string;
+  content: string; // The full article content in Markdown format
+  prompt: string; // The user's original search query
+  tags: string[]; // Keywords for searching
+  createdAt: Date;
+}
