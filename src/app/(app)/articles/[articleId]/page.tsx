@@ -1,7 +1,7 @@
 // src/app/(app)/articles/[articleId]/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { getArticle } from '@/services/article-service';
 import type { Article } from '@/models/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,15 +12,18 @@ import Link from 'next/link';
 import { MarkdownRenderer } from '@/components/markdown-renderer';
 import { format } from 'date-fns';
 
-export default function ArticlePage({ params }: { params: { articleId: string } }) {
+export default function ArticlePage({ params }: { params: Promise<{ articleId: string }> }) {
     const [article, setArticle] = useState<Article | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    
+    // Unwrap the params promise with React.use()
+    const { articleId } = use(params);
 
     useEffect(() => {
         const fetchArticle = async () => {
             try {
-                const fetchedArticle = await getArticle(params.articleId);
+                const fetchedArticle = await getArticle(articleId);
                 if (fetchedArticle) {
                     setArticle(fetchedArticle);
                 } else {
@@ -33,10 +36,10 @@ export default function ArticlePage({ params }: { params: { articleId: string } 
             }
         };
 
-        if (params.articleId) {
+        if (articleId) {
             fetchArticle();
         }
-    }, [params.articleId]);
+    }, [articleId]);
     
     if (loading) {
         return (
