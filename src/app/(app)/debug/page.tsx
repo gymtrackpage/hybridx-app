@@ -6,6 +6,7 @@ import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AuthDiagnostics } from '@/components/AuthDiagnostics';
 
 export default function DebugPage() {
   const [debugInfo, setDebugInfo] = useState<any>(null);
@@ -102,16 +103,18 @@ export default function DebugPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Debug Information</h1>
-        <p className="text-muted-foreground">Diagnostic information for Strava integration</p>
+        <p className="text-muted-foreground">Diagnostic information for Strava integration and PWA Auth</p>
       </div>
       
+      <AuthDiagnostics />
+
       <Card>
         <CardHeader>
-          <CardTitle>Authentication & API Tests</CardTitle>
+          <CardTitle>Strava Integration Tests</CardTitle>
         </CardHeader>
         <CardContent>
           <Button onClick={runDebugChecks} disabled={loading}>
-            {loading ? 'Running Tests...' : 'Run Debug Tests'}
+            {loading ? 'Running Tests...' : 'Run Strava Tests'}
           </Button>
           
           {debugInfo && (
