@@ -27,61 +27,6 @@ export default function ActivityFeedPage() {
 
     const isStravaConnected = user?.strava?.accessToken && user?.strava?.athleteId;
 
-    const fetchActivities = async (showSyncingIndicator = true) => {
-        if (!isStravaConnected) {
-          setError('Strava account not connected. Please connect it in your profile.');
-          setLoading(false);
-          return;
-        }
-
-        if (showSyncingIndicator) {
-            setSyncing(true);
-        }
-        setError(null);
-        
-        try {
-            const auth = await getAuthInstance();
-            const currentUser = auth.currentUser;
-            
-            if (!currentUser) {
-                throw new Error('User not authenticated');
-            }
-
-            const idToken = await currentUser.getIdToken(true);
-            
-            const response = await fetch('/api/strava/activities', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
-                },
-                cache: 'no-cache'
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `Failed to fetch activities: ${response.statusText}`);
-            }
-
-            const fetchedActivities = await response.json();
-            setActivities(fetchedActivities);
-
-        } catch (err: any) {
-            console.error("❌ Error in fetchActivities:", err);
-            setError(err.message || 'Failed to fetch activities.');
-            toast({
-                title: 'Error',
-                description: err.message || 'Failed to load Strava activities',
-                variant: 'destructive'
-            });
-        } finally {
-             if (showSyncingIndicator) {
-                setSyncing(false);
-            }
-            setLoading(false);
-        }
-    };
-    
     // Effect to get the user
     useEffect(() => {
         const initialize = async () => {
@@ -110,14 +55,68 @@ export default function ActivityFeedPage() {
     
     // Effect to fetch activities once user is loaded
     useEffect(() => {
-        if (user) { // This will only run when the user state is set
+        const fetchActivities = async (showSyncingIndicator = true) => {
+            if (!isStravaConnected) {
+              setError('Strava account not connected. Please connect it in your profile.');
+              setLoading(false);
+              return;
+            }
+    
+            if (showSyncingIndicator) {
+                setSyncing(true);
+            }
+            setError(null);
+            
+            try {
+                const auth = await getAuthInstance();
+                const currentUser = auth.currentUser;
+                
+                if (!currentUser) {
+                    throw new Error('User not authenticated');
+                }
+    
+                const idToken = await currentUser.getIdToken(true);
+                
+                const response = await fetch('/api/strava/activities', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${idToken}`
+                    },
+                    cache: 'no-cache'
+                });
+    
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Failed to fetch activities: ${response.statusText}`);
+                }
+    
+                const fetchedActivities = await response.json();
+                setActivities(fetchedActivities);
+    
+            } catch (err: any) {
+                console.error("❌ Error in fetchActivities:", err);
+                setError(err.message || 'Failed to fetch activities.');
+                toast({
+                    title: 'Error',
+                    description: err.message || 'Failed to load Strava activities',
+                    variant: 'destructive'
+                });
+            } finally {
+                 if (showSyncingIndicator) {
+                    setSyncing(false);
+                }
+                setLoading(false);
+            }
+        };
+        if (user) { 
             if (user.strava?.accessToken) {
-                fetchActivities(false); // Initial fetch, don't show the "Syncing..." button state
+                fetchActivities(false); 
             } else {
-                setLoading(false); // If no Strava token, stop loading
+                setLoading(false);
             }
         }
-    }, [user]); // Dependency on user object
+    }, [user, isStravaConnected, toast]);
 
     const handleActivityClick = (activityId: number) => {
         setSelectedActivityId(activityId);
@@ -186,7 +185,63 @@ export default function ActivityFeedPage() {
                     <p className="text-muted-foreground">Your recent activities from Strava.</p>
                 </div>
                 {isStravaConnected && (
-                     <Button onClick={() => fetchActivities(true)} disabled={syncing} size="icon" className="md:size-auto md:px-4 md:py-2">
+                     <Button onClick={() => {
+                        const fetchActivities = async (showSyncingIndicator = true) => {
+                            if (!isStravaConnected) {
+                              setError('Strava account not connected. Please connect it in your profile.');
+                              setLoading(false);
+                              return;
+                            }
+                    
+                            if (showSyncingIndicator) {
+                                setSyncing(true);
+                            }
+                            setError(null);
+                            
+                            try {
+                                const auth = await getAuthInstance();
+                                const currentUser = auth.currentUser;
+                                
+                                if (!currentUser) {
+                                    throw new Error('User not authenticated');
+                                }
+                    
+                                const idToken = await currentUser.getIdToken(true);
+                                
+                                const response = await fetch('/api/strava/activities', {
+                                    method: 'GET',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${idToken}`
+                                    },
+                                    cache: 'no-cache'
+                                });
+                    
+                                if (!response.ok) {
+                                    const errorData = await response.json().catch(() => ({}));
+                                    throw new Error(errorData.error || `Failed to fetch activities: ${response.statusText}`);
+                                }
+                    
+                                const fetchedActivities = await response.json();
+                                setActivities(fetchedActivities);
+                    
+                            } catch (err: any) {
+                                console.error("❌ Error in fetchActivities:", err);
+                                setError(err.message || 'Failed to fetch activities.');
+                                toast({
+                                    title: 'Error',
+                                    description: err.message || 'Failed to load Strava activities',
+                                    variant: 'destructive'
+                                });
+                            } finally {
+                                 if (showSyncingIndicator) {
+                                    setSyncing(false);
+                                }
+                                setLoading(false);
+                            }
+                        };
+                        fetchActivities(true)
+                     }} disabled={syncing} size="icon" className="md:size-auto md:px-4 md:py-2">
                         {syncing ? <Loader2 className="h-4 w-4 animate-spin md:mr-2" /> : <RefreshCw className="h-4 w-4 md:mr-2" />}
                         <span className="hidden md:inline">Sync Now</span>
                     </Button>
@@ -222,7 +277,63 @@ export default function ActivityFeedPage() {
                             <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-destructive" />
                             <div className="text-destructive mb-2 font-medium">Error Loading Activities</div>
                             <div className="text-sm text-muted-foreground mb-4">{error}</div>
-                            <Button variant="outline" onClick={() => fetchActivities(true)}>
+                            <Button variant="outline" onClick={() => {
+                                 const fetchActivities = async (showSyncingIndicator = true) => {
+                                    if (!isStravaConnected) {
+                                      setError('Strava account not connected. Please connect it in your profile.');
+                                      setLoading(false);
+                                      return;
+                                    }
+                            
+                                    if (showSyncingIndicator) {
+                                        setSyncing(true);
+                                    }
+                                    setError(null);
+                                    
+                                    try {
+                                        const auth = await getAuthInstance();
+                                        const currentUser = auth.currentUser;
+                                        
+                                        if (!currentUser) {
+                                            throw new Error('User not authenticated');
+                                        }
+                            
+                                        const idToken = await currentUser.getIdToken(true);
+                                        
+                                        const response = await fetch('/api/strava/activities', {
+                                            method: 'GET',
+                                            headers: {
+                                                'Content-Type': 'application/json',
+                                                'Authorization': `Bearer ${idToken}`
+                                            },
+                                            cache: 'no-cache'
+                                        });
+                            
+                                        if (!response.ok) {
+                                            const errorData = await response.json().catch(() => ({}));
+                                            throw new Error(errorData.error || `Failed to fetch activities: ${response.statusText}`);
+                                        }
+                            
+                                        const fetchedActivities = await response.json();
+                                        setActivities(fetchedActivities);
+                            
+                                    } catch (err: any) {
+                                        console.error("❌ Error in fetchActivities:", err);
+                                        setError(err.message || 'Failed to fetch activities.');
+                                        toast({
+                                            title: 'Error',
+                                            description: err.message || 'Failed to load Strava activities',
+                                            variant: 'destructive'
+                                        });
+                                    } finally {
+                                         if (showSyncingIndicator) {
+                                            setSyncing(false);
+                                        }
+                                        setLoading(false);
+                                    }
+                                };
+                                fetchActivities(true)
+                            }}>
                             Try Again
                             </Button>
                         </div>
@@ -244,8 +355,8 @@ export default function ActivityFeedPage() {
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="min-w-0">
-                                                <h4 className="font-medium truncate">{activity.name}</h4>
-                                                <p className="text-sm text-muted-foreground truncate">
+                                                <h4 className="font-medium text-base break-words">{activity.name}</h4>
+                                                <p className="text-xs text-muted-foreground break-words">
                                                     {activity.sport_type} • {formatDate(activity.start_date_local)}
                                                 </p>
                                             </div>
