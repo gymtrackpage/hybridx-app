@@ -27,19 +27,19 @@ export default function ActivityFeedPage() {
 
     const isStravaConnected = user?.strava?.accessToken && user?.strava?.athleteId;
 
-    const fetchActivities = async () => {
+    const fetchActivities = async (showSyncingIndicator = true) => {
         if (!isStravaConnected) {
-          setError('Strava account not connected');
+          setError('Strava account not connected. Please connect it in your profile.');
           setLoading(false);
           return;
         }
 
-        setSyncing(true);
+        if (showSyncingIndicator) {
+            setSyncing(true);
+        }
         setError(null);
         
         try {
-            console.log('🔄 Fetching Strava activities (Activity Feed)...');
-            
             const auth = await getAuthInstance();
             const currentUser = auth.currentUser;
             
@@ -47,10 +47,8 @@ export default function ActivityFeedPage() {
                 throw new Error('User not authenticated');
             }
 
-            console.log('🎫 Getting fresh ID token...');
             const idToken = await currentUser.getIdToken(true);
             
-            console.log('📊 Making activities request with direct auth...');
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',
                 headers: {
@@ -60,16 +58,12 @@ export default function ActivityFeedPage() {
                 cache: 'no-cache'
             });
 
-            console.log('📊 Activities API response status:', response.status);
-
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                console.error('Activities API error:', errorData);
                 throw new Error(errorData.error || `Failed to fetch activities: ${response.statusText}`);
             }
 
             const fetchedActivities = await response.json();
-            console.log(`✅ Received ${fetchedActivities.length} activities.`);
             setActivities(fetchedActivities);
 
         } catch (err: any) {
@@ -81,11 +75,14 @@ export default function ActivityFeedPage() {
                 variant: 'destructive'
             });
         } finally {
-            setSyncing(false);
+             if (showSyncingIndicator) {
+                setSyncing(false);
+            }
             setLoading(false);
         }
     };
     
+    // Effect to get the user
     useEffect(() => {
         const initialize = async () => {
             const auth = await getAuthInstance();
@@ -93,11 +90,6 @@ export default function ActivityFeedPage() {
                 if (firebaseUser) {
                     const currentUser = await getUserClient(firebaseUser.uid);
                     setUser(currentUser);
-                    if (currentUser?.strava?.accessToken) {
-                       fetchActivities(); // Initial fetch
-                    } else {
-                        setLoading(false);
-                    }
                 } else {
                     setUser(null);
                     setLoading(false);
@@ -115,6 +107,17 @@ export default function ActivityFeedPage() {
             }
         };
     }, []);
+    
+    // Effect to fetch activities once user is loaded
+    useEffect(() => {
+        if (user) { // This will only run when the user state is set
+            if (user.strava?.accessToken) {
+                fetchActivities(false); // Initial fetch, don't show the "Syncing..." button state
+            } else {
+                setLoading(false); // If no Strava token, stop loading
+            }
+        }
+    }, [user]); // Dependency on user object
 
     const handleActivityClick = (activityId: number) => {
         setSelectedActivityId(activityId);
@@ -183,7 +186,7 @@ export default function ActivityFeedPage() {
                     <p className="text-muted-foreground">Your recent activities from Strava.</p>
                 </div>
                 {isStravaConnected && (
-                    <Button onClick={fetchActivities} disabled={syncing}>
+                    <Button onClick={() => fetchActivities(true)} disabled={syncing}>
                         {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                         Sync Now
                     </Button>
@@ -219,7 +222,7 @@ export default function ActivityFeedPage() {
                             <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-destructive" />
                             <div className="text-destructive mb-2 font-medium">Error Loading Activities</div>
                             <div className="text-sm text-muted-foreground mb-4">{error}</div>
-                            <Button variant="outline" onClick={fetchActivities}>
+                            <Button variant="outline" onClick={() => fetchActivities(true)}>
                             Try Again
                             </Button>
                         </div>
