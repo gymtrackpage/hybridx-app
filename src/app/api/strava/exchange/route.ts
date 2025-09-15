@@ -32,12 +32,9 @@ export async function GET(req: NextRequest) {
 
         if (!sessionCookie) {
             console.error('❌ NO SESSION COOKIE during Strava exchange.');
-            const loginUrl = new URL('/login', appUrl);
-            loginUrl.searchParams.set('reason', 'strava-auth-session-lost');
-            loginUrl.searchParams.set('strava-code', code);
-            loginUrl.searchParams.set('strava-scope', scope || '');
-            loginUrl.searchParams.set('redirect', '/profile');
-            return NextResponse.redirect(loginUrl);
+            // This is a critical failure. The user session was lost during the redirect.
+            // We cannot proceed safely.
+            throw new Error("Your session expired during the connection process. Please log in and try connecting to Strava again.");
         }
 
         const decodedToken = await getAdminAuth().verifySessionCookie(sessionCookie, true);
@@ -45,7 +42,7 @@ export async function GET(req: NextRequest) {
         
         const decodedState = JSON.parse(atob(state));
         if (decodedState.uid !== userId) {
-            throw new Error('State mismatch (CSRF protection).');
+            throw new Error('State mismatch (CSRF protection). Potential security issue.');
         }
 
         console.log('✅ Session verified for user:', userId);

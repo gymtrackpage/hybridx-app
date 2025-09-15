@@ -11,8 +11,7 @@ export async function GET(req: NextRequest) {
   
   try {
     const cookieStore = cookies();
-    // Try both cookie names (primary and fallback for different browser policies)
-    let sessionCookie = cookieStore.get('__session')?.value || cookieStore.get('__session_fallback')?.value;
+    const sessionCookie = cookieStore.get('__session')?.value;
     
     if (!sessionCookie) {
       console.error('❌ NO SESSION COOKIE in API route');

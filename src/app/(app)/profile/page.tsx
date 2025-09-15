@@ -63,10 +63,10 @@ export default function ProfilePage() {
     resolver: zodResolver(runningProfileSchema),
   });
 
-  useEffect(() => {
-    const initialize = async () => {
+  const fetchUserData = async () => {
+    try {
         const auth = await getAuthInstance();
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        const firebaseUser = auth.currentUser;
         if (firebaseUser) {
             const currentUser = await getUserClient(firebaseUser.uid);
             setUser(currentUser);
@@ -92,19 +92,24 @@ export default function ProfilePage() {
                 })
             }
         }
+    } catch (error) {
+        console.error("Failed to fetch user data", error);
+        toast({ title: "Error", description: "Could not load your profile data.", variant: "destructive" });
+    } finally {
         setLoading(false);
-        });
-        return unsubscribe;
-    };
-    
-    let unsubscribe: () => void;
-    initialize().then(unsub => unsubscribe = unsub);
+    }
+  };
 
-    return () => {
-        if (unsubscribe) {
-            unsubscribe();
+  useEffect(() => {
+    const auth = getAuthInstance();
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+        if (firebaseUser) {
+            fetchUserData();
+        } else {
+            setLoading(false);
         }
-    };
+    });
+    return () => unsubscribe();
   }, []);
 
   // Handle URL parameters for Strava auth feedback
@@ -120,21 +125,7 @@ export default function ProfilePage() {
         });
         
         // IMPORTANT: Refresh user data immediately after successful connection
-        const refreshUserData = async () => {
-            try {
-                const auth = await getAuthInstance();
-                const currentUser = auth.currentUser;
-                if (currentUser) {
-                    const updatedUser = await getUserClient(currentUser.uid);
-                    setUser(updatedUser);
-                    console.log('Updated user data after Strava connection:', updatedUser?.strava);
-                }
-            } catch (error) {
-                console.error('Failed to refresh user data:', error);
-            }
-        };
-        
-        refreshUserData();
+        fetchUserData();
         
         // Clean up URL
         window.history.replaceState({}, '', '/profile');
@@ -207,19 +198,24 @@ export default function ProfilePage() {
   const initiateStravaAuth = async () => {
     try {
       // First, ensure we have a fresh session cookie. This also verifies the user is logged in.
-      const auth = await getAuthInstance();
+      const auth = getAuthInstance();
       const currentUser = auth.currentUser;
       if (!currentUser) {
         toast({ title: 'Authentication Required', description: 'Please log in to connect your Strava account.', variant: 'destructive' });
         return;
       }
       const idToken = await currentUser.getIdToken(true);
-      await fetch('/api/auth/session', {
+      
+      const sessionResponse = await fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ idToken }),
         credentials: 'include',
       });
+      
+      if (!sessionResponse.ok) {
+        throw new Error("Failed to establish a server session.");
+      }
 
       // Now, call our new secure API route to get the Strava URL
       const response = await fetch('/api/strava/connect', {

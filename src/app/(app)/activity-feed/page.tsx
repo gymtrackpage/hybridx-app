@@ -38,7 +38,7 @@ export default function ActivityFeedPage() {
             console.log('🔄 Fetching Strava activities via API route...');
             
             // First, ensure we have a fresh session
-            const auth = await getAuthInstance();
+            const auth = getAuthInstance();
             const currentUser = auth.currentUser;
             
             if (!currentUser) {
@@ -106,33 +106,22 @@ export default function ActivityFeedPage() {
     };
     
     useEffect(() => {
-        const initialize = async () => {
-            const auth = await getAuthInstance();
-            const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-                if (firebaseUser) {
-                    const currentUser = await getUserClient(firebaseUser.uid);
-                    setUser(currentUser);
-                    if (currentUser?.strava?.accessToken) {
-                       fetchActivities(); // Initial fetch
-                    } else {
-                        setLoading(false);
-                    }
+        const auth = getAuthInstance();
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            if (firebaseUser) {
+                const currentUser = await getUserClient(firebaseUser.uid);
+                setUser(currentUser);
+                if (currentUser?.strava?.accessToken) {
+                   fetchActivities(); // Initial fetch
                 } else {
-                    setUser(null);
                     setLoading(false);
                 }
-            });
-            return unsubscribe;
-        };
-        
-        let unsubscribe: () => void;
-        initialize().then(unsub => unsubscribe = unsub);
-
-        return () => {
-            if (unsubscribe) {
-                unsubscribe();
+            } else {
+                setUser(null);
+                setLoading(false);
             }
-        };
+        });
+        return () => unsubscribe();
     }, []);
 
     // Helper to format duration from seconds to HH:MM
