@@ -106,22 +106,33 @@ export default function ActivityFeedPage() {
     };
     
     useEffect(() => {
-        const auth = getAuthInstance();
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-            if (firebaseUser) {
-                const currentUser = await getUserClient(firebaseUser.uid);
-                setUser(currentUser);
-                if (currentUser?.strava?.accessToken) {
-                   fetchActivities(); // Initial fetch
+        const initialize = async () => {
+            const auth = await getAuthInstance();
+            const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+                if (firebaseUser) {
+                    const currentUser = await getUserClient(firebaseUser.uid);
+                    setUser(currentUser);
+                    if (currentUser?.strava?.accessToken) {
+                       fetchActivities(); // Initial fetch
+                    } else {
+                        setLoading(false);
+                    }
                 } else {
+                    setUser(null);
                     setLoading(false);
                 }
-            } else {
-                setUser(null);
-                setLoading(false);
+            });
+            return unsubscribe;
+        };
+
+        let unsubscribe: (() => void) | undefined;
+        initialize().then(unsub => unsubscribe = unsub);
+
+        return () => {
+            if (unsubscribe) {
+                unsubscribe();
             }
-        });
-        return () => unsubscribe();
+        };
     }, []);
 
     // Helper to format duration from seconds to HH:MM
