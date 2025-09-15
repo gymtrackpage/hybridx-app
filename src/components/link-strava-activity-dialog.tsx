@@ -47,37 +47,47 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             if (!currentUser) {
                 throw new Error('You must be logged in to fetch activities.');
             }
+
+            // 2. Get a fresh ID token and set session cookie
+            console.log('Getting fresh ID token for activities fetch...');
             const idToken = await currentUser.getIdToken(true);
 
-            // 2. Refresh the session cookie
+            // 3. Set/refresh the session cookie
             const sessionResponse = await fetch('/api/auth/session', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
                 },
                 body: JSON.stringify({ idToken }),
                 credentials: 'include'
             });
 
             if (!sessionResponse.ok) {
+                const sessionError = await sessionResponse.text();
+                console.error('Session refresh failed:', sessionError);
                 throw new Error('Failed to refresh authentication session.');
             }
 
-            // 3. Now fetch the activities
+            console.log('Session cookie refreshed successfully');
+
+            // 4. Now fetch the activities with the fresh session
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                cache: 'no-cache'
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
+                },
             });
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
+                console.error('Activities fetch failed:', errorData);
                 throw new Error(errorData.error || 'Failed to fetch Strava activities');
             }
             
             const fetchedActivities = await response.json();
+            console.log(`Fetched ${fetchedActivities.length} activities from Strava`);
             
             // Filter activities to those around the workout date (within 24 hours either side)
             const workoutDate = new Date(session.workoutDate);
@@ -87,9 +97,10 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
                 return Math.abs(timeDiffHours) <= 24;
             });
             
+            console.log(`Filtered to ${filtered.length} activities within 24 hours of workout date`);
             setActivities(filtered);
         } catch (error: any) {
-            console.error(error);
+            console.error('Error fetching Strava activities:', error);
             toast({
                 title: 'Error',
                 description: error.message || 'Could not load your Strava activities. Please ensure you are connected in your profile.',

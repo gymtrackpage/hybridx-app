@@ -2,7 +2,7 @@
 // This file contains functions for client-side components. NO 'use server' here.
 
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, getAuthInstance } from '@/lib/firebase';
 import type { WorkoutSession, Workout, RunningWorkout, Exercise, ProgramType } from '@/models/types';
 import type { StravaActivity } from './strava-service';
 
@@ -201,7 +201,7 @@ export async function linkStravaActivityToSession(sessionId: string, activity: S
     
     const completedItems: { [key: string]: boolean } = { ...existingData?.completedItems };
 
-    if (existingData?.workoutDetails) {
+   if (existingData?.workoutDetails) {
         const items = existingData.workoutDetails.programType === 'running' 
             ? existingData.workoutDetails.runs 
             : existingData.workoutDetails.exercises;

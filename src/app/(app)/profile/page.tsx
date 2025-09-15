@@ -219,7 +219,7 @@ export default function ProfilePage() {
     }
 
     try {
-        // === ENSURE USER IS AUTHENTICATED ===
+        // 1. ENSURE USER IS AUTHENTICATED
         const auth = await getAuthInstance();
         const currentUser = auth.currentUser;
         
@@ -232,29 +232,34 @@ export default function ProfilePage() {
             return;
         }
 
-        console.log('🔐 Current user authenticated:', currentUser.uid);
+        console.log('Current user authenticated:', currentUser.uid);
 
-        // === SET SESSION COOKIE BEFORE REDIRECT ===
+        // 2. SET SESSION COOKIE BEFORE REDIRECT
         try {
             const idToken = await currentUser.getIdToken(true);
-            console.log('🎫 Got fresh ID token');
+            console.log('Got fresh ID token for Strava auth');
             
-            // Set the session cookie via API call
+            // Set the session cookie via our new API endpoint
             const sessionResponse = await fetch('/api/auth/session', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
                 },
-                body: JSON.stringify({ idToken })
+                body: JSON.stringify({ idToken }),
+                credentials: 'include'
             });
 
             if (!sessionResponse.ok) {
-                console.error('Failed to set session cookie:', await sessionResponse.text());
+                const errorText = await sessionResponse.text();
+                console.error('Failed to set session cookie:', errorText);
                 throw new Error('Failed to establish session');
             }
 
-            console.log('✅ Session cookie set successfully');
+            const sessionData = await sessionResponse.json();
+            console.log('Session cookie set successfully:', sessionData);
+            
+            // Small delay to ensure cookie is properly set
+            await new Promise(resolve => setTimeout(resolve, 100));
             
         } catch (sessionError) {
             console.error('Session setup failed:', sessionError);
@@ -266,7 +271,7 @@ export default function ProfilePage() {
             return;
         }
 
-        // === PROCEED WITH STRAVA AUTH ===
+        // 3. PROCEED WITH STRAVA AUTH
         const redirectUri = encodeURIComponent(`${appUrl}/api/strava/exchange`);
         const scope = 'read,activity:read_all,activity:write';
         
@@ -284,7 +289,14 @@ export default function ProfilePage() {
             `scope=${scope}&` +
             `state=${state}`;
             
-        console.log('🚀 Redirecting to Strava auth:', authUrl);
+        console.log('Redirecting to Strava auth:', authUrl);
+        
+        // Add a loading state to prevent double-clicks
+        toast({
+            title: 'Redirecting to Strava...',
+            description: 'Please wait while we connect to Strava.',
+        });
+        
         window.location.href = authUrl;
         
     } catch (error: any) {
@@ -295,7 +307,7 @@ export default function ProfilePage() {
             variant: 'destructive' 
         });
     }
-  };
+};
 
 
   if (loading) {
