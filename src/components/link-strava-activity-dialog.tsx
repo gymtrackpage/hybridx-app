@@ -18,6 +18,7 @@ import type { WorkoutSession } from '@/models/types';
 import type { StravaActivity } from '@/services/strava-service';
 import { linkStravaActivityToSession } from '@/services/session-service-client';
 import { Loader2, Activity, Clock, MapPin } from 'lucide-react';
+import { getAuthInstance } from '@/lib/firebase';
 
 interface LinkStravaActivityDialogProps {
   isOpen: boolean;
@@ -34,11 +35,35 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchActivities = async () => {
+    const fetchActivitiesWithAuthRefresh = async () => {
         if (!isOpen) return;
 
         setLoading(true);
         try {
+            // 1. Get user and fresh ID token
+            const auth = await getAuthInstance();
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
+                throw new Error('You must be logged in to fetch activities.');
+            }
+            const idToken = await currentUser.getIdToken(true);
+
+            // 2. Refresh the session cookie
+            const sessionResponse = await fetch('/api/auth/session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({ idToken }),
+                credentials: 'include'
+            });
+
+            if (!sessionResponse.ok) {
+                throw new Error('Failed to refresh authentication session.');
+            }
+
+            // 3. Now fetch the activities
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',
                 credentials: 'include',
@@ -47,15 +72,17 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             });
 
             if (!response.ok) {
-                throw new Error('Failed to fetch Strava activities');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Failed to fetch Strava activities');
             }
+            
             const data = await response.json();
             setActivities(data);
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
             toast({
                 title: 'Error',
-                description: 'Could not load your Strava activities. Please ensure you are connected in your profile.',
+                description: error.message || 'Could not load your Strava activities. Please ensure you are connected in your profile.',
                 variant: 'destructive',
             });
             setIsOpen(false);
@@ -64,7 +91,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
         }
     };
 
-    fetchActivities();
+    fetchActivitiesWithAuthRefresh();
   }, [isOpen, toast, setIsOpen]);
 
   const handleLink = async () => {
