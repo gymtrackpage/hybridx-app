@@ -1,11 +1,11 @@
 // src/app/api/strava/activities/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { cookies } from 'next/headers';
 import { getUser, updateUserAdmin } from '@/services/user-service';
 import axios from 'axios';
 import type { StravaTokens } from '@/models/types';
+import { getAdminAuth } from '@/lib/firebase-admin';
 
 export async function GET(req: NextRequest) {
   console.log('=== STRAVA ACTIVITIES API START ===');
@@ -20,8 +20,9 @@ export async function GET(req: NextRequest) {
     }
 
     let decodedToken;
+    const adminAuth = getAdminAuth();
     try {
-      decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
+      decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
     } catch (verifyError: any) {
       console.error('❌ Session verification failed:', verifyError.message);
       return NextResponse.json({ error: 'Invalid session. Please log in again.' }, { status: 401 });

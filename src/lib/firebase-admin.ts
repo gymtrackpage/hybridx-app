@@ -14,8 +14,7 @@ function initializeAdminApp() {
         const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
         if (!serviceAccountString) {
-            console.error('FIREBASE_SERVICE_ACCOUNT_KEY is not set. Admin SDK initialization failed.');
-            return;
+            throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY is not set. Admin SDK initialization failed.');
         }
 
         try {
@@ -25,8 +24,7 @@ function initializeAdminApp() {
             });
             console.log('Firebase Admin SDK initialized successfully.');
         } catch (e: any) {
-            console.error('Failed to parse or use FIREBASE_SERVICE_ACCOUNT_KEY:', e.message);
-            return;
+             throw new Error(`Failed to parse or use FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
         }
     }
     
@@ -34,18 +32,23 @@ function initializeAdminApp() {
     adminAuth = getAuth(adminApp);
 }
 
-initializeAdminApp();
+try {
+    initializeAdminApp();
+} catch (error: any) {
+    console.error("CRITICAL: Firebase Admin SDK failed to initialize.", error.message);
+}
+
 
 const getAdminDb = () => {
     if (!adminDb) {
-        throw new Error('Firebase Admin DB has not been initialized. Check server logs for errors.');
+        throw new Error('Firebase Admin DB has not been initialized. Check server logs for critical errors.');
     }
     return adminDb;
 };
 
 const getAdminAuth = () => {
     if (!adminAuth) {
-        throw new Error('Firebase Admin Auth has not been initialized. Check server logs for errors.');
+        throw new Error('Firebase Admin Auth has not been initialized. Check server logs for critical errors.');
     }
     return adminAuth;
 }

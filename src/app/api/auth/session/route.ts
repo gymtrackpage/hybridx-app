@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { cookies } from 'next/headers';
+import { getAdminAuth } from '@/lib/firebase-admin';
 
 export async function POST(req: NextRequest) {
     console.log('=== SESSION COOKIE ROUTE START ===');
@@ -19,14 +20,15 @@ export async function POST(req: NextRequest) {
         }
 
         console.log('🔍 Verifying ID token...');
+        const adminAuth = getAdminAuth();
         
         // Verify the ID token
-        const decodedToken = await getAuth().verifyIdToken(idToken, true);
+        const decodedToken = await adminAuth.verifyIdToken(idToken, true);
         console.log('✅ ID token verified for user:', decodedToken.uid);
 
         // Create session cookie (expires in 14 days)
         const expiresIn = 60 * 60 * 24 * 14 * 1000; // 14 days in milliseconds
-        const sessionCookie = await getAuth().createSessionCookie(idToken, { expiresIn });
+        const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
         
         console.log('🍪 Session cookie created successfully');
 
