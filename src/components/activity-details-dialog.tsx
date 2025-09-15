@@ -92,13 +92,13 @@ export function ActivityDetailsDialog({ activityId, isOpen, setIsOpen }: Activit
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-xl">
+           <DialogTitle>
             {loading ? <Skeleton className="h-8 w-3/4" /> : activity?.name || 'Activity Details'}
           </DialogTitle>
           <DialogDescription>
-            {loading ? <Skeleton className="h-4 w-1/2" /> : activity ? new Date(activity.start_date_local).toLocaleString('en-US', {
+            {loading ? 'Loading details...' : activity ? new Date(activity.start_date_local).toLocaleString('en-US', {
                 weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
-            }) : 'Loading details...'}
+            }) : 'Details could not be loaded.'}
           </DialogDescription>
         </DialogHeader>
         
