@@ -28,9 +28,18 @@ export interface StravaActivity {
     end_latlng: [number, number];
     map: {
         id: string;
-        summary_polyline: string;
+        summary_polyline: string | null;
         resource_state: number;
     };
+    // Detailed fields
+    description?: string;
+    average_speed: number;
+    max_speed: number;
+    average_cadence?: number;
+    average_heartrate?: number;
+    max_heartrate?: number;
+    suffer_score?: number;
+    embed_token?: string;
 }
 
 // Helper function to safely convert Firestore timestamp to Date
