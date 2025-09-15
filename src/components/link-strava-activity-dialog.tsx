@@ -17,8 +17,9 @@ import { useToast } from '@/hooks/use-toast';
 import type { WorkoutSession } from '@/models/types';
 import type { StravaActivity } from '@/services/strava-service';
 import { linkStravaActivityToSession } from '@/services/session-service-client';
-import { Loader2, Activity, Clock, MapPin } from 'lucide-react';
+import { Loader2, Activity, Clock, MapPin, Link as LinkIcon } from 'lucide-react';
 import { getAuthInstance } from '@/lib/firebase';
+import { differenceInHours } from 'date-fns';
 
 interface LinkStravaActivityDialogProps {
   isOpen: boolean;
@@ -76,8 +77,17 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
                 throw new Error(errorData.error || 'Failed to fetch Strava activities');
             }
             
-            const data = await response.json();
-            setActivities(data);
+            const fetchedActivities = await response.json();
+            
+            // Filter activities to those around the workout date (within 24 hours either side)
+            const workoutDate = new Date(session.workoutDate);
+            const filtered = fetchedActivities.filter((activity: StravaActivity) => {
+                const activityDate = new Date(activity.start_date);
+                const timeDiffHours = differenceInHours(activityDate, workoutDate);
+                return Math.abs(timeDiffHours) <= 24;
+            });
+            
+            setActivities(filtered);
         } catch (error: any) {
             console.error(error);
             toast({
@@ -92,7 +102,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
     };
 
     fetchActivitiesWithAuthRefresh();
-  }, [isOpen, toast, setIsOpen]);
+  }, [isOpen, session.workoutDate, toast, setIsOpen]);
 
   const handleLink = async () => {
     if (!selectedActivity) return;
@@ -104,10 +114,10 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             description: 'Workout has been linked to your Strava activity.',
         });
         onLinkSuccess();
-    } catch (error) {
+    } catch (error: any) {
         toast({
             title: 'Error',
-            description: 'Failed to link the activity.',
+            description: error.message || 'Failed to link the activity.',
             variant: 'destructive',
         });
     } finally {
@@ -152,7 +162,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
         <DialogHeader>
           <DialogTitle>Link Strava Activity</DialogTitle>
           <DialogDescription>
-            Select a recent Strava activity to mark this workout as complete.
+            Select a recent Strava activity to mark this workout as complete. We've filtered to activities within 24 hours of your scheduled workout.
           </DialogDescription>
         </DialogHeader>
 
@@ -194,6 +204,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
           <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
           <Button onClick={handleLink} disabled={!selectedActivity || linking}>
             {linking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <LinkIcon className="mr-2 h-4 w-4" />
             Link Activity
           </Button>
         </DialogFooter>

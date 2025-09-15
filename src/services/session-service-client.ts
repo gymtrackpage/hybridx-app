@@ -1,7 +1,7 @@
 // src/services/session-service-client.ts
 // This file contains functions for client-side components. NO 'use server' here.
 
-import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy } from 'firebase/firestore';
+import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { WorkoutSession, Workout, RunningWorkout, Exercise, ProgramType } from '@/models/types';
 import type { StravaActivity } from './strava-service';
@@ -168,31 +168,62 @@ export async function updateWorkoutSession(sessionId: string, data: Partial<Omit
 
 /**
  * Links a Strava activity to a workout session, marking it as complete.
+ * If a session for that day doesn't exist, it creates one.
  */
 export async function linkStravaActivityToSession(sessionId: string, activity: StravaActivity): Promise<void> {
-    const sessionRef = doc(sessionsCollection, sessionId);
     
-    const completedItems: { [key: string]: boolean } = {};
+    let sessionRef;
+
+    // A temporary session created on the fly in the calendar won't have an ID
+    if (sessionId) {
+        sessionRef = doc(sessionsCollection, sessionId);
+    } else {
+        // Need to find or create the session
+        const auth = await getAuthInstance();
+        const userId = auth.currentUser?.uid;
+        if (!userId) throw new Error("User not authenticated.");
+
+        const activityDate = new Date(activity.start_date_local);
+        activityDate.setHours(0,0,0,0);
+        
+        const newSession = await getOrCreateWorkoutSession(userId, 'strava-linked', activityDate, {
+            day: 0,
+            title: activity.name,
+            exercises: [], // This will be a shell, the activity details are what matter
+            programType: activity.sport_type.toLowerCase().includes('run') ? 'running' : 'hyrox'
+        });
+        
+        sessionRef = doc(sessionsCollection, newSession.id);
+    }
+    
     const existingSession = await getDoc(sessionRef);
-    if(existingSession.exists() && existingSession.data().completedItems) {
-        const items = existingSession.data().completedItems;
-        for (const key in items) {
-            completedItems[key] = true;
-        }
+    const existingData = existingSession.data();
+    
+    const completedItems: { [key: string]: boolean } = { ...existingData?.completedItems };
+
+    if (existingData?.workoutDetails) {
+        const items = existingData.workoutDetails.programType === 'running' 
+            ? existingData.workoutDetails.runs 
+            : existingData.workoutDetails.exercises;
+        items.forEach((item: any) => {
+            completedItems[item.name || item.description] = true;
+        });
     }
 
     const updateData = {
         finishedAt: Timestamp.fromDate(new Date(activity.start_date)),
         stravaId: activity.id.toString(),
-        uploadedToStrava: true,
-        stravaUploadedAt: Timestamp.now(),
+        uploadedToStrava: false, // It's not "uploaded from our app", it's linked
+        stravaUploadedAt: Timestamp.now(), // Timestamp for the link action
         notes: `Completed via Strava: ${activity.name}. Distance: ${(activity.distance / 1000).toFixed(2)} km.`,
         completedItems,
         stravaActivity: {
             distance: activity.distance,
             moving_time: activity.moving_time,
             name: activity.name
-        }
+        },
+        // If this session was just a placeholder, update its title
+        workoutTitle: existingData?.workoutTitle || activity.name,
     };
     await updateDoc(sessionRef, updateData);
 }

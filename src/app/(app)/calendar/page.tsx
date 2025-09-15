@@ -93,10 +93,13 @@ export default function CalendarPage() {
     const sessionsMap = new Map<string, WorkoutSession>();
     sessions.forEach(session => {
         let sessionDate: Date;
-        if (session.workoutDate instanceof Date) {
-          sessionDate = new Date(session.workoutDate);
+        // Use finishedAt for completed workouts, otherwise workoutDate
+        const dateSource = session.finishedAt || session.workoutDate;
+
+        if (dateSource instanceof Date) {
+          sessionDate = new Date(dateSource);
         } else {
-          sessionDate = parseISO(session.workoutDate.toString());
+          sessionDate = parseISO(dateSource.toString());
         }
 
         if (isValid(sessionDate)) {
@@ -136,7 +139,8 @@ export default function CalendarPage() {
     
     // Add any remaining completed sessions that were not part of the active program
     sessionsMap.forEach((session, dateKey) => {
-        const eventDate = new Date(dateKey + 'T12:00:00');
+        // Use an ISO date string with a time component to avoid timezone issues
+        const eventDate = parseISO(`${dateKey}T12:00:00.000Z`);
         events.push({
             date: eventDate,
             session: session,
@@ -149,8 +153,15 @@ export default function CalendarPage() {
   };
 
   const getCompletedExercises = (session: WorkoutSession): { name: string, details: string }[] => {
-    if (!session.completedItems) return [];
+    if (session.workoutDetails) {
+        const items = session.workoutDetails.programType === 'running' ? session.workoutDetails.runs : session.workoutDetails.exercises;
+        return items.map((item: any) => ({
+            name: item.name || item.description,
+            details: item.details || 'Completed'
+        }));
+    }
     
+    if (!session.completedItems) return [];
     const items: { name: string, details: string }[] = [];
     for (const itemName in session.completedItems) {
       if (session.completedItems[itemName]) {
@@ -315,13 +326,24 @@ export default function CalendarPage() {
               </div>
             ) : null}
 
-             {completedSession && !completedSession.finishedAt && (
+             {selectedWorkout && !completedSession && (
                 <div className="pt-4 mt-4 border-t">
                     <Button 
                         variant="outline" 
                         className="w-full"
                         onClick={() => {
-                            setSessionToLink(completedSession);
+                            // Create a temporary session object to pass to the linker
+                            const tempSession = {
+                                id: '', // No ID yet, it's just for context
+                                userId: '',
+                                programId: (selectedEvent as any)?.program?.id || '',
+                                workoutDate: selectedDate,
+                                workoutTitle: selectedWorkout.title,
+                                programType: selectedWorkout.programType,
+                                startedAt: new Date(),
+                                completedItems: {},
+                            };
+                            setSessionToLink(tempSession as WorkoutSession);
                             setIsLinkerOpen(true);
                         }}>
                         <LinkIcon className="mr-2" />
