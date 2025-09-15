@@ -151,11 +151,6 @@ export default function ProfilePage() {
     }
   }, [toast]);
 
-  // Debug log to see the current user state
-  useEffect(() => {
-    console.log('Current user strava state:', user?.strava);
-  }, [user]);
-
   const handleProfileSubmit = async (data: ProfileFormData) => {
     if (!user) return;
     try {
