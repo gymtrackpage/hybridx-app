@@ -11,7 +11,6 @@ export async function GET(req: NextRequest) {
   
   try {
     const cookieStore = cookies();
-    console.log('All cookies:', cookieStore.getAll());
     const sessionCookie = cookieStore.get('__session')?.value;
     
     if (!sessionCookie) {
