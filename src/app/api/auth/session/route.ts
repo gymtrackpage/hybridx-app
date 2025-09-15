@@ -1,8 +1,7 @@
 // src/app/api/auth/session/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { cookies } from 'next/headers';
 import { getAdminAuth } from '@/lib/firebase-admin';
+import { cookies } from 'next/headers';
 
 export async function POST(req: NextRequest) {
     console.log('=== SESSION COOKIE ROUTE START ===');
@@ -20,9 +19,9 @@ export async function POST(req: NextRequest) {
         }
 
         console.log('🔍 Verifying ID token...');
-        const adminAuth = getAdminAuth();
         
-        // Verify the ID token
+        // Use the same admin auth instance as your other routes
+        const adminAuth = getAdminAuth();
         const decodedToken = await adminAuth.verifyIdToken(idToken, true);
         console.log('✅ ID token verified for user:', decodedToken.uid);
 
@@ -32,9 +31,18 @@ export async function POST(req: NextRequest) {
         
         console.log('🍪 Session cookie created successfully');
 
-        // Set the session cookie
-        const cookieStore = cookies();
-        cookieStore.set('__session', sessionCookie, {
+        // Create the response
+        const response = NextResponse.json(
+            { 
+                success: true,
+                uid: decodedToken.uid,
+                expiresIn: expiresIn / 1000
+            },
+            { status: 200 }
+        );
+
+        // Set the session cookie with proper options
+        response.cookies.set('__session', sessionCookie, {
             maxAge: expiresIn / 1000, // maxAge expects seconds
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
@@ -45,14 +53,7 @@ export async function POST(req: NextRequest) {
         console.log('✅ Session cookie set in response');
         console.log('=== SESSION COOKIE ROUTE SUCCESS ===');
 
-        return NextResponse.json(
-            { 
-                success: true,
-                uid: decodedToken.uid,
-                expiresIn: expiresIn / 1000
-            },
-            { status: 200 }
-        );
+        return response;
 
     } catch (error: any) {
         console.error('❌ Session cookie creation failed:', {

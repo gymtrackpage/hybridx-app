@@ -1,6 +1,5 @@
 // src/app/api/strava/exchange/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
 import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 import axios from 'axios';
@@ -17,7 +16,7 @@ export async function GET(req: NextRequest) {
 
     console.log('URL params:', { code: code?.substring(0, 10) + '...', scope, error, state });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.hybridx.club';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
     
     // Handle authorization errors from Strava
     if (error) {

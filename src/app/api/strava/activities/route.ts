@@ -1,17 +1,17 @@
 // src/app/api/strava/activities/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { cookies } from 'next/headers';
 import { getUser, updateUserAdmin } from '@/services/user-service';
 import axios from 'axios';
 import type { StravaTokens } from '@/models/types';
 import { getAdminAuth } from '@/lib/firebase-admin';
+import { cookies } from 'next/headers';
 
 export async function GET(req: NextRequest) {
   console.log('=== STRAVA ACTIVITIES API START ===');
   
   try {
     const cookieStore = cookies();
+    console.log('All cookies:', cookieStore.getAll());
     const sessionCookie = cookieStore.get('__session')?.value;
     
     if (!sessionCookie) {

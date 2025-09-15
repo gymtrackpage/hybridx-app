@@ -41,6 +41,8 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
 
         setLoading(true);
         try {
+            console.log('🚀 Starting Strava activities fetch...');
+            
             // 1. Get user and fresh ID token
             const auth = await getAuthInstance();
             const currentUser = auth.currentUser;
@@ -48,11 +50,14 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
                 throw new Error('You must be logged in to fetch activities.');
             }
 
-            // 2. Get a fresh ID token and set session cookie
-            console.log('Getting fresh ID token for activities fetch...');
-            const idToken = await currentUser.getIdToken(true);
+            console.log('✅ Current user authenticated:', currentUser.uid);
 
-            // 3. Set/refresh the session cookie
+            // 2. Get a fresh ID token
+            const idToken = await currentUser.getIdToken(true);
+            console.log('🎫 Fresh ID token obtained');
+
+            // 3. Set/refresh the session cookie with more detailed error handling
+            console.log('🍪 Setting session cookie...');
             const sessionResponse = await fetch('/api/auth/session', {
                 method: 'POST',
                 headers: {
@@ -62,15 +67,28 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
                 credentials: 'include'
             });
 
+            console.log('Session response status:', sessionResponse.status);
+            console.log('Session response headers:', Object.fromEntries(sessionResponse.headers.entries()));
+
             if (!sessionResponse.ok) {
-                const sessionError = await sessionResponse.text();
-                console.error('Session refresh failed:', sessionError);
-                throw new Error('Failed to refresh authentication session.');
+                let sessionError;
+                try {
+                    sessionError = await sessionResponse.json();
+                } catch {
+                    sessionError = { error: await sessionResponse.text() };
+                }
+                console.error('❌ Session refresh failed:', sessionError);
+                throw new Error(`Failed to refresh authentication session: ${sessionError.error || 'Unknown error'}`);
             }
 
-            console.log('Session cookie refreshed successfully');
+            const sessionData = await sessionResponse.json();
+            console.log('✅ Session cookie refreshed successfully:', sessionData);
+
+            // Wait a moment for cookie to be set
+            await new Promise(resolve => setTimeout(resolve, 200));
 
             // 4. Now fetch the activities with the fresh session
+            console.log('📡 Fetching Strava activities...');
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',
                 credentials: 'include',
@@ -80,14 +98,22 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
                 },
             });
 
+            console.log('Activities response status:', response.status);
+            console.log('Activities response headers:', Object.fromEntries(response.headers.entries()));
+
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                console.error('Activities fetch failed:', errorData);
-                throw new Error(errorData.error || 'Failed to fetch Strava activities');
+                let errorData;
+                try {
+                    errorData = await response.json();
+                } catch {
+                    errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+                }
+                console.error('❌ Activities fetch failed:', errorData);
+                throw new Error(errorData.error || `Failed to fetch Strava activities (${response.status})`);
             }
             
             const fetchedActivities = await response.json();
-            console.log(`Fetched ${fetchedActivities.length} activities from Strava`);
+            console.log(`✅ Fetched ${fetchedActivities.length} activities from Strava`);
             
             // Filter activities to those around the workout date (within 24 hours either side)
             const workoutDate = new Date(session.workoutDate);
@@ -97,13 +123,23 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
                 return Math.abs(timeDiffHours) <= 24;
             });
             
-            console.log(`Filtered to ${filtered.length} activities within 24 hours of workout date`);
+            console.log(`🔽 Filtered to ${filtered.length} activities within 24 hours of workout date`);
             setActivities(filtered);
+            
         } catch (error: any) {
-            console.error('Error fetching Strava activities:', error);
+            console.error('❌ Error fetching Strava activities:', error);
+            
+            // Show more specific error messages based on the error
+            let errorMessage = error.message;
+            if (error.message.includes('session')) {
+                errorMessage += ' Please try refreshing the page and logging in again.';
+            } else if (error.message.includes('Strava account not connected')) {
+                errorMessage = 'Your Strava account is not connected. Please connect it in your profile settings first.';
+            }
+            
             toast({
-                title: 'Error',
-                description: error.message || 'Could not load your Strava activities. Please ensure you are connected in your profile.',
+                title: 'Error Loading Activities',
+                description: errorMessage,
                 variant: 'destructive',
             });
             setIsOpen(false);
@@ -166,7 +202,6 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
         }
     };
 
-
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-md">
@@ -205,7 +240,8 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             ) : (
                 <div className="text-center py-10 text-muted-foreground">
                     <Activity className="mx-auto h-8 w-8 mb-2" />
-                    <p>No recent Strava activities found.</p>
+                    <p>No recent Strava activities found within 24 hours of this workout.</p>
+                    <p className="text-xs mt-1">Activities may take a few minutes to sync from Strava.</p>
                 </div>
             )}
             </div>
