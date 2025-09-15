@@ -11,7 +11,8 @@ export async function GET(req: NextRequest) {
   
   try {
     const cookieStore = cookies();
-    const sessionCookie = cookieStore.get('__session')?.value;
+    // Try both cookie names (primary and fallback for different browser policies)
+    let sessionCookie = cookieStore.get('__session')?.value || cookieStore.get('__session_fallback')?.value;
     
     if (!sessionCookie) {
       console.error('❌ NO SESSION COOKIE in API route');
@@ -64,7 +65,7 @@ export async function GET(req: NextRequest) {
         
       } catch (refreshError: any) {
         console.error('❌ Token refresh failed:', refreshError.response?.data);
-        // If refresh fails, connection might be invalid. Log out user.
+        // If refresh fails, connection might be invalid.
         return NextResponse.json({ error: 'Strava connection expired. Please reconnect your account.' }, { status: 401 });
       }
     }

@@ -36,70 +36,29 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchActivitiesWithAuthRefresh = async () => {
+    const fetchActivities = async () => {
         if (!isOpen) return;
 
         setLoading(true);
         try {
             console.log('🚀 Starting Strava activities fetch...');
             
-            // 1. Get user and fresh ID token
+            // Ensure user is logged in before proceeding.
             const auth = await getAuthInstance();
-            const currentUser = auth.currentUser;
-            if (!currentUser) {
+            if (!auth.currentUser) {
                 throw new Error('You must be logged in to fetch activities.');
             }
 
-            console.log('✅ Current user authenticated:', currentUser.uid);
-
-            // 2. Get a fresh ID token
-            const idToken = await currentUser.getIdToken(true);
-            console.log('🎫 Fresh ID token obtained');
-
-            // 3. Set/refresh the session cookie with more detailed error handling
-            console.log('🍪 Setting session cookie...');
-            const sessionResponse = await fetch('/api/auth/session', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ idToken }),
-                credentials: 'include'
-            });
-
-            console.log('Session response status:', sessionResponse.status);
-            console.log('Session response headers:', Object.fromEntries(sessionResponse.headers.entries()));
-
-            if (!sessionResponse.ok) {
-                let sessionError;
-                try {
-                    sessionError = await sessionResponse.json();
-                } catch {
-                    sessionError = { error: await sessionResponse.text() };
-                }
-                console.error('❌ Session refresh failed:', sessionError);
-                throw new Error(`Failed to refresh authentication session: ${sessionError.error || 'Unknown error'}`);
-            }
-
-            const sessionData = await sessionResponse.json();
-            console.log('✅ Session cookie refreshed successfully:', sessionData);
-
-            // Wait a moment for cookie to be set
-            await new Promise(resolve => setTimeout(resolve, 200));
-
-            // 4. Now fetch the activities with the fresh session
+            // Directly fetch activities. The API route will handle session verification.
             console.log('📡 Fetching Strava activities...');
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',
-                credentials: 'include',
+                credentials: 'include', // This sends the session cookie
                 headers: { 
                     'Content-Type': 'application/json',
                     'Cache-Control': 'no-cache'
                 },
             });
-
-            console.log('Activities response status:', response.status);
-            console.log('Activities response headers:', Object.fromEntries(response.headers.entries()));
 
             if (!response.ok) {
                 let errorData;
@@ -128,18 +87,9 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             
         } catch (error: any) {
             console.error('❌ Error fetching Strava activities:', error);
-            
-            // Show more specific error messages based on the error
-            let errorMessage = error.message;
-            if (error.message.includes('session')) {
-                errorMessage += ' Please try refreshing the page and logging in again.';
-            } else if (error.message.includes('Strava account not connected')) {
-                errorMessage = 'Your Strava account is not connected. Please connect it in your profile settings first.';
-            }
-            
             toast({
                 title: 'Error Loading Activities',
-                description: errorMessage,
+                description: error.message || 'Could not load your Strava activities.',
                 variant: 'destructive',
             });
             setIsOpen(false);
@@ -148,7 +98,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
         }
     };
 
-    fetchActivitiesWithAuthRefresh();
+    fetchActivities();
   }, [isOpen, session.workoutDate, toast, setIsOpen]);
 
   const handleLink = async () => {
@@ -172,7 +122,6 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
     }
   };
   
-  // Helper to format duration from seconds to HH:MM
     const formatDuration = (seconds: number) => {
         if (!seconds) return '0m';
         const h = Math.floor(seconds / 3600);
@@ -183,7 +132,6 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
         return `${m}m`;
     };
 
-    // Helper to format distance from meters to km or m
     const formatDistance = (meters: number) => {
         if (!meters) return '0 km';
         const km = meters / 1000;
