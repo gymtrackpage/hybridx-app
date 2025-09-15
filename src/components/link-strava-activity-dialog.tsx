@@ -19,7 +19,6 @@ import type { StravaActivity } from '@/services/strava-service';
 import { linkStravaActivityToSession } from '@/services/session-service-client';
 import { Loader2, Activity, Clock, MapPin, Link as LinkIcon } from 'lucide-react';
 import { getAuthInstance } from '@/lib/firebase';
-import { differenceInHours } from 'date-fns';
 
 interface LinkStravaActivityDialogProps {
   isOpen: boolean;
@@ -36,29 +35,35 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchActivitiesDirectAuth = async () => {
+    const fetchStravaActivities = async () => {
         if (!isOpen) return;
 
         setLoading(true);
         try {
-            console.log('🚀 Starting Strava activities fetch...');
+            console.log('🚀 Starting Strava activities fetch for linking...');
             
             const auth = await getAuthInstance();
             const currentUser = auth.currentUser;
             if (!currentUser) {
                 throw new Error('You must be logged in to fetch activities.');
             }
-
-            console.log('✅ Current user authenticated:', currentUser.uid);
-
+            
+            // Proactively refresh the session cookie before making the API call.
+            // This is crucial for production environments.
             const idToken = await currentUser.getIdToken(true);
-            console.log('🎫 Fresh ID token obtained for direct auth');
-
+            await fetch('/api/auth/session', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken }),
+              credentials: 'include',
+            });
+            console.log('✅ Session cookie refreshed proactively.');
+            
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',
+                credentials: 'include', // This tells the browser to send the secure session cookie
                 headers: { 
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`,
                     'Cache-Control': 'no-cache'
                 },
             });
@@ -66,14 +71,9 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             console.log('📊 Activities API response status:', response.status);
 
             if (!response.ok) {
-                let errorData;
-                try {
-                    errorData = await response.json();
-                } catch {
-                    errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
-                }
+                const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
                 console.error('❌ Activities fetch failed with error data:', errorData);
-                throw new Error(errorData.error || `Failed to fetch Strava activities (${response.status})`);
+                throw new Error(errorData.error || `Failed to fetch Strava activities`);
             }
             
             const fetchedActivities = await response.json();
@@ -82,16 +82,10 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             setActivities(fetchedActivities);
             
         } catch (error: any) {
-            console.error('❌ Error in fetchActivitiesDirectAuth:', error);
-            
-            let errorMessage = error.message;
-             if (error.message.includes('Strava account not connected')) {
-                errorMessage = 'Your Strava account is not connected. Please connect it in your profile settings first.';
-            }
-            
+            console.error('❌ Error in fetchStravaActivities:', error);
             toast({
                 title: 'Error Loading Activities',
-                description: errorMessage,
+                description: error.message,
                 variant: 'destructive',
             });
             setIsOpen(false);
@@ -100,8 +94,8 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
         }
     };
 
-    fetchActivitiesDirectAuth();
-  }, [isOpen, session.workoutDate, toast, setIsOpen]);
+    fetchStravaActivities();
+  }, [isOpen, toast, setIsOpen]);
 
   const handleLink = async () => {
     if (!selectedActivity) return;

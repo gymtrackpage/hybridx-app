@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { StravaActivity } from '@/services/strava-service';
 import { getAuthInstance } from '@/lib/firebase';
 import { Badge } from './ui/badge';
-import { Activity, ArrowUp, Clock, Heart, Map, MapPin, Wind } from 'lucide-react';
+import { Activity, ArrowUp, Clock, Heart, MapPin, Wind } from 'lucide-react';
 import { Separator } from './ui/separator';
 
 interface ActivityDetailsDialogProps {
@@ -39,9 +39,17 @@ export function ActivityDetailsDialog({ activityId, isOpen, setIsOpen }: Activit
         const currentUser = auth.currentUser;
         if (!currentUser) throw new Error('Authentication required.');
 
+        // Proactively refresh the session before the API call
         const idToken = await currentUser.getIdToken(true);
+        await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+            credentials: 'include'
+        });
+
         const response = await fetch(`/api/strava/activities/${activityId}`, {
-          headers: { Authorization: `Bearer ${idToken}` },
+          credentials: 'include', // Send the secure session cookie
         });
 
         if (!response.ok) {
@@ -71,7 +79,7 @@ export function ActivityDetailsDialog({ activityId, isOpen, setIsOpen }: Activit
     if (!seconds) return '00:00:00';
     const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
     const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-    const s = String(seconds % 60).padStart(2, '0');
+    const s = String(Math.round(seconds % 60)).padStart(2, '0');
     return `${h}:${m}:${s}`;
   };
 
@@ -96,7 +104,7 @@ export function ActivityDetailsDialog({ activityId, isOpen, setIsOpen }: Activit
             {loading ? <Skeleton className="h-8 w-3/4" /> : activity?.name || 'Activity Details'}
           </DialogTitle>
           <DialogDescription>
-            {loading ? 'Loading details...' : activity ? new Date(activity.start_date_local).toLocaleString('en-US', {
+             {loading ? 'Loading details...' : activity ? new Date(activity.start_date_local).toLocaleString('en-US', {
                 weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
             }) : 'Details could not be loaded.'}
           </DialogDescription>

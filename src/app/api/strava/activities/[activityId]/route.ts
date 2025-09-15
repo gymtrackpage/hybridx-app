@@ -4,6 +4,7 @@ import { getUser, updateUserAdmin } from '@/services/user-service';
 import axios from 'axios';
 import type { StravaTokens } from '@/models/types';
 import { getAdminAuth } from '@/lib/firebase-admin';
+import { cookies } from 'next/headers';
 
 async function getValidAccessToken(userId: string): Promise<string> {
     const user = await getUser(userId);
@@ -50,13 +51,13 @@ export async function GET(
   }
 
   try {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get('__session')?.value;
+    if (!sessionCookie) {
+      return NextResponse.json({ error: 'Authentication required: No session cookie.' }, { status: 401 });
     }
 
-    const idToken = authHeader.replace('Bearer ', '');
-    const decodedToken = await getAdminAuth().verifyIdToken(idToken, true);
+    const decodedToken = await getAdminAuth().verifySessionCookie(sessionCookie, true);
     const userId = decodedToken.uid;
     console.log(`🔐 Authenticated user: ${userId} for activity ${activityId}`);
 
