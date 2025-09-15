@@ -4,6 +4,7 @@
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { WorkoutSession, Workout, RunningWorkout, Exercise, ProgramType } from '@/models/types';
+import type { StravaActivity } from './strava-service';
 
 function fromFirestore(doc: any): WorkoutSession {
     const data = doc.data();
@@ -20,9 +21,11 @@ function fromFirestore(doc: any): WorkoutSession {
         notes: data.notes || '',
         duration: data.duration,
         extendedExercises: data.extendedExercises || [],
+        workoutDetails: data.workoutDetails,
         stravaId: data.stravaId,
         uploadedToStrava: data.uploadedToStrava,
         stravaUploadedAt: data.stravaUploadedAt ? data.stravaUploadedAt.toDate() : undefined,
+        stravaActivity: data.stravaActivity,
     };
 }
 
@@ -123,6 +126,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         notes: '',
         duration: duration || null,
         extendedExercises: ['one-off-ai', 'custom-workout'].includes(programId) ? (workout as Workout).exercises : [],
+        workoutDetails: ['one-off-ai', 'custom-workout'].includes(programId) ? workout : null,
     };
 
     if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai' && programId !== 'custom-workout'))) {
@@ -146,6 +150,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         notes: '',
         duration: newSessionData.duration,
         extendedExercises: newSessionData.extendedExercises,
+        workoutDetails: newSessionData.workoutDetails,
     };
 }
 
@@ -159,4 +164,35 @@ export async function updateWorkoutSession(sessionId: string, data: Partial<Omit
     }
 
     await updateDoc(docRef, dataToUpdate);
+}
+
+/**
+ * Links a Strava activity to a workout session, marking it as complete.
+ */
+export async function linkStravaActivityToSession(sessionId: string, activity: StravaActivity): Promise<void> {
+    const sessionRef = doc(sessionsCollection, sessionId);
+    
+    const completedItems: { [key: string]: boolean } = {};
+    const existingSession = await getDoc(sessionRef);
+    if(existingSession.exists() && existingSession.data().completedItems) {
+        const items = existingSession.data().completedItems;
+        for (const key in items) {
+            completedItems[key] = true;
+        }
+    }
+
+    const updateData = {
+        finishedAt: Timestamp.fromDate(new Date(activity.start_date)),
+        stravaId: activity.id.toString(),
+        uploadedToStrava: true,
+        stravaUploadedAt: Timestamp.now(),
+        notes: `Completed via Strava: ${activity.name}. Distance: ${(activity.distance / 1000).toFixed(2)} km.`,
+        completedItems,
+        stravaActivity: {
+            distance: activity.distance,
+            moving_time: activity.moving_time,
+            name: activity.name
+        }
+    };
+    await updateDoc(sessionRef, updateData);
 }

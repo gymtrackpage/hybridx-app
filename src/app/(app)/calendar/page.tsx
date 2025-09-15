@@ -14,6 +14,9 @@ import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getAllUserSessions } from '@/services/session-service-client';
 import type { User, Program, Workout, WorkoutSession, RunningWorkout, Exercise } from '@/models/types';
 import { addDays, format, isSameDay, parseISO, isValid } from 'date-fns';
+import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
+import { Button } from '@/components/ui/button';
+import { Link as LinkIcon } from 'lucide-react';
 
 interface WorkoutEvent {
   date: Date;
@@ -26,7 +29,9 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [loading, setLoading] = useState(true);
   const [workoutEvents, setWorkoutEvents] = useState<WorkoutEvent[]>([]);
-  
+  const [isLinkerOpen, setIsLinkerOpen] = useState(false);
+  const [sessionToLink, setSessionToLink] = useState<WorkoutSession | null>(null);
+
   const selectedEvent = workoutEvents.find(event => 
     selectedDate && isSameDay(event.date, selectedDate)
   );
@@ -34,23 +39,35 @@ export default function CalendarPage() {
   const selectedWorkout = selectedEvent?.workout;
   const completedSession = selectedEvent?.session;
 
+  const fetchCalendarData = async (firebaseUser: any) => {
+    try {
+      const user = await getUserClient(firebaseUser.uid);
+      const sessions = await getAllUserSessions(firebaseUser.uid);
+      
+      let program = null;
+      if (user?.programId && user.startDate) {
+        program = await getProgramClient(user.programId);
+      }
+      
+      generateWorkoutEvents(program, user?.startDate, sessions);
+    } catch (error) {
+        console.error('❌ Error fetching calendar data:', error);
+    } finally {
+        setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const initialize = async () => {
       try {
+        setLoading(true);
         const auth = await getAuthInstance();
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
           if (firebaseUser) {
-            const user = await getUserClient(firebaseUser.uid);
-            const sessions = await getAllUserSessions(firebaseUser.uid);
-            
-            let program = null;
-            if (user?.programId && user.startDate) {
-              program = await getProgramClient(user.programId);
-            }
-            
-            generateWorkoutEvents(program, user?.startDate, sessions);
+            await fetchCalendarData(firebaseUser);
+          } else {
+            setLoading(false);
           }
-          setLoading(false);
         });
         return unsubscribe;
       } catch (error) {
@@ -72,22 +89,19 @@ export default function CalendarPage() {
   const generateWorkoutEvents = (program: Program | null, startDate: Date | undefined, sessions: WorkoutSession[]) => {
     const events: WorkoutEvent[] = [];
     
-    // Create a map of completed sessions by date for quick lookup
+    // Create a map of sessions by date for quick lookup
     const sessionsMap = new Map<string, WorkoutSession>();
     sessions.forEach(session => {
-        if (session.finishedAt && session.workoutDate) {
-            let sessionDate: Date;
-            if (session.workoutDate instanceof Date) {
-              sessionDate = new Date(session.workoutDate);
-            } else {
-              // Handle Firestore Timestamp or string dates
-              sessionDate = parseISO(session.workoutDate.toString());
-            }
+        let sessionDate: Date;
+        if (session.workoutDate instanceof Date) {
+          sessionDate = new Date(session.workoutDate);
+        } else {
+          sessionDate = parseISO(session.workoutDate.toString());
+        }
 
-            if (isValid(sessionDate)) {
-                const dateKey = format(sessionDate, 'yyyy-MM-dd');
-                sessionsMap.set(dateKey, session);
-            }
+        if (isValid(sessionDate)) {
+            const dateKey = format(sessionDate, 'yyyy-MM-dd');
+            sessionsMap.set(dateKey, session);
         }
     });
 
@@ -98,6 +112,7 @@ export default function CalendarPage() {
       
       const programDuration = Math.max(...program.workouts.map(w => w.day), 0);
 
+      // We generate events for the whole duration of the program
       for (let i = 0; i < programDuration; i++) {
         const currentDate = addDays(normalizedStartDate, i);
         const dateKey = format(currentDate, 'yyyy-MM-dd');
@@ -107,9 +122,9 @@ export default function CalendarPage() {
         if (workout || session) {
           events.push({
             date: currentDate,
-            workout: workout || undefined,
+            workout: workout || session?.workoutDetails || undefined,
             session: session,
-            type: workout && session ? 'both' : (session ? 'completed' : 'programmed')
+            type: workout && session?.finishedAt ? 'both' : (session?.finishedAt ? 'completed' : 'programmed')
           });
           // Remove from map to avoid duplication
           if (session) {
@@ -121,12 +136,11 @@ export default function CalendarPage() {
     
     // Add any remaining completed sessions that were not part of the active program
     sessionsMap.forEach((session, dateKey) => {
-        const eventDate = new Date(dateKey + 'T12:00:00'); // Use noon to avoid timezone issues
+        const eventDate = new Date(dateKey + 'T12:00:00');
         events.push({
             date: eventDate,
             session: session,
-            // If there's no program, workout will be undefined
-            workout: undefined,
+            workout: session.workoutDetails,
             type: 'completed'
         });
     });
@@ -169,7 +183,19 @@ export default function CalendarPage() {
     }
   };
 
+  const handleLinkSuccess = async () => {
+    setIsLinkerOpen(false);
+    setSessionToLink(null);
+    setLoading(true);
+    const auth = await getAuthInstance();
+    if (auth.currentUser) {
+        await fetchCalendarData(auth.currentUser);
+    }
+    setLoading(false);
+  };
+
   return (
+    <>
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Workout Calendar</h1>
@@ -192,18 +218,12 @@ export default function CalendarPage() {
                 DayContent: ({ date }) => {
                   const event = workoutEvents.find(e => isSameDay(e.date, date));
                   if (event) {
-                    let badgeColor = "bg-gray-400"; // default
+                    let badgeColor = "bg-gray-400";
                     
                     switch (event.type) {
-                      case 'completed':
-                        badgeColor = "bg-green-500"; // Completed sessions
-                        break;
-                      case 'programmed':
-                        badgeColor = "bg-blue-500"; // Planned workouts
-                        break;
-                      case 'both':
-                        badgeColor = "bg-primary"; // Both planned and completed
-                        break;
+                      case 'completed': badgeColor = "bg-green-500"; break;
+                      case 'programmed': badgeColor = "bg-blue-500"; break;
+                      case 'both': badgeColor = "bg-primary"; break;
                     }
                     
                     return (
@@ -232,7 +252,7 @@ export default function CalendarPage() {
             <CardTitle>
               {completedSession?.workoutTitle || selectedWorkout?.title || 'Completed Workout'}
             </CardTitle>
-            {completedSession && (
+            {completedSession?.finishedAt ? (
               <div className="space-y-2 mt-2">
                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                   Completed
@@ -241,8 +261,7 @@ export default function CalendarPage() {
                   {formatSessionDate(completedSession)}
                 </CardDescription>
               </div>
-            )}
-            {!completedSession && selectedWorkout && (
+            ) : (
                <div className="mt-2">
                 <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 w-fit">
                     Planned
@@ -251,7 +270,7 @@ export default function CalendarPage() {
             )}
           </CardHeader>
           <CardContent>
-            {completedSession ? (
+            {completedSession?.finishedAt ? (
               <div className="space-y-4">
                 <div>
                   <h4 className="font-semibold mb-2">Completed Items</h4>
@@ -295,6 +314,22 @@ export default function CalendarPage() {
                 </ul>
               </div>
             ) : null}
+
+             {completedSession && !completedSession.finishedAt && (
+                <div className="pt-4 mt-4 border-t">
+                    <Button 
+                        variant="outline" 
+                        className="w-full"
+                        onClick={() => {
+                            setSessionToLink(completedSession);
+                            setIsLinkerOpen(true);
+                        }}>
+                        <LinkIcon className="mr-2" />
+                        Link Strava Activity
+                    </Button>
+                </div>
+             )}
+
           </CardContent>
         </Card>
       )}
@@ -309,5 +344,14 @@ export default function CalendarPage() {
         </Card>
       )}
     </div>
+    {sessionToLink && (
+        <LinkStravaActivityDialog
+            isOpen={isLinkerOpen}
+            setIsOpen={setIsLinkerOpen}
+            session={sessionToLink}
+            onLinkSuccess={handleLinkSuccess}
+        />
+    )}
+    </>
   );
 }

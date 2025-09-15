@@ -119,10 +119,18 @@ export interface WorkoutSession {
     duration?: string; // Optional duration for custom workouts
     extendedExercises?: Exercise[]; // AI-generated exercises
     
+    // Details of the workout that was performed, for sessions not linked to a program
+    workoutDetails?: Workout | RunningWorkout;
+    
     // Strava integration fields
     stravaId?: string;
     uploadedToStrava?: boolean;
     stravaUploadedAt?: Date;
+    stravaActivity?: { // Store key details from the linked activity
+        distance?: number; // in meters
+        moving_time?: number; // in seconds
+        name?: string;
+    };
 }
 
 export interface Article {
