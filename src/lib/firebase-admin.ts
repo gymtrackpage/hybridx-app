@@ -1,50 +1,53 @@
 // src/lib/firebase-admin.ts
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 
-let adminApp: App | undefined = undefined;
-let adminDb: ReturnType<typeof getFirestore> | undefined = undefined;
+let adminApp: App;
+let adminDb: ReturnType<typeof getFirestore>;
+let adminAuth: ReturnType<typeof getAuth>;
 
 function initializeAdminApp() {
     if (getApps().length > 0) {
         adminApp = getApps()[0];
-        adminDb = getFirestore(adminApp);
-        return;
-    }
+    } else {
+        const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
-    const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+        if (!serviceAccountString) {
+            console.error('FIREBASE_SERVICE_ACCOUNT_KEY is not set. Admin SDK initialization failed.');
+            return;
+        }
 
-    if (serviceAccountString) {
         try {
             const serviceAccount = JSON.parse(serviceAccountString);
-            console.log('Initializing Firebase Admin SDK with service account credentials.');
             adminApp = initializeApp({
                 credential: cert(serviceAccount)
             });
-            adminDb = getFirestore(adminApp);
+            console.log('Firebase Admin SDK initialized successfully.');
         } catch (e: any) {
-             console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Ensure it is a valid JSON string.', e.message);
-        }
-    } else {
-         try {
-            console.log('Initializing Firebase Admin SDK with default credentials.');
-            adminApp = initializeApp();
-            adminDb = getFirestore(adminApp);
-        } catch (e: any) {
-            console.error('Failed to initialize Firebase Admin SDK with default credentials. This can happen when service account permissions are insufficient.', e.message);
+            console.error('Failed to parse or use FIREBASE_SERVICE_ACCOUNT_KEY:', e.message);
+            return;
         }
     }
+    
+    adminDb = getFirestore(adminApp);
+    adminAuth = getAuth(adminApp);
 }
 
-// Call initialization
 initializeAdminApp();
 
-// Export a function that throws an error if the db is not initialized
 const getAdminDb = () => {
     if (!adminDb) {
-        throw new Error('Firebase Admin has not been initialized. Check server logs for initialization errors.');
+        throw new Error('Firebase Admin DB has not been initialized. Check server logs for errors.');
     }
     return adminDb;
+};
+
+const getAdminAuth = () => {
+    if (!adminAuth) {
+        throw new Error('Firebase Admin Auth has not been initialized. Check server logs for errors.');
+    }
+    return adminAuth;
 }
 
-export { adminApp, getAdminDb };
+export { adminApp, getAdminDb, getAdminAuth };
