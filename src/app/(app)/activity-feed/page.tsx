@@ -243,15 +243,13 @@ export default function ActivityFeedPage() {
                                             <BarChart className="h-5 w-5 text-primary" />
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-start justify-between">
-                                                <div>
+                                            <div className="min-w-0">
                                                 <h4 className="font-medium truncate">{activity.name}</h4>
-                                                <p className="text-sm text-muted-foreground">
+                                                <p className="text-sm text-muted-foreground truncate">
                                                     {activity.sport_type} • {formatDate(activity.start_date_local)}
                                                 </p>
-                                                </div>
                                             </div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 text-sm text-muted-foreground">
+                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                                                 <span className="flex items-center gap-1.5">
                                                     <MapPin className="h-3.5 w-3.5" />
                                                     {formatDistance(activity.distance)}
