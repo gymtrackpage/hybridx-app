@@ -40,8 +40,6 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
 
         setLoading(true);
         try {
-            console.log('🚀 Starting Strava activities fetch for linking...');
-            
             const auth = await getAuthInstance();
             const currentUser = auth.currentUser;
             if (!currentUser) {
@@ -49,7 +47,6 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             }
             
             // Proactively refresh the session cookie before making the API call.
-            // This is crucial for production environments.
             const idToken = await currentUser.getIdToken(true);
             await fetch('/api/auth/session', {
               method: 'POST',
@@ -57,28 +54,22 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
               body: JSON.stringify({ idToken }),
               credentials: 'include',
             });
-            console.log('✅ Session cookie refreshed proactively.');
             
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',
-                credentials: 'include', // This tells the browser to send the secure session cookie
+                credentials: 'include',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Cache-Control': 'no-cache'
                 },
             });
 
-            console.log('📊 Activities API response status:', response.status);
-
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
-                console.error('❌ Activities fetch failed with error data:', errorData);
                 throw new Error(errorData.error || `Failed to fetch Strava activities`);
             }
             
             const fetchedActivities = await response.json();
-            console.log(`✅ Fetched ${fetchedActivities.length} activities from Strava`);
-            
             setActivities(fetchedActivities);
             
         } catch (error: any) {
