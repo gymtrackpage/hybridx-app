@@ -7,6 +7,15 @@ import { getAdminDb } from '@/lib/firebase-admin'; // Use Admin SDK for server-s
 import { getAuth } from 'firebase-admin/auth';
 import type { User } from '@/models/types';
 
+// Helper function to safely convert Firestore timestamp to Date
+function safeToDate(timestamp: any): Date | undefined {
+  if (!timestamp) return undefined;
+  if (timestamp instanceof Date) return timestamp;
+  if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+  if (typeof timestamp === 'string' || typeof timestamp === 'number') return new Date(timestamp);
+  return undefined;
+}
+
 // SERVER-SIDE function using Admin SDK
 export async function getUser(userId: string): Promise<User | null> {
     const adminDb = getAdminDb();
@@ -18,6 +27,12 @@ export async function getUser(userId: string): Promise<User | null> {
         const data = docSnap.data();
         if (!data) return null;
         
+        // Critical fix: Ensure strava.expiresAt is correctly converted to a Date object.
+        const stravaData = data.strava ? { 
+            ...data.strava, 
+            expiresAt: safeToDate(data.strava.expiresAt)! 
+        } : undefined;
+
         const user: User = {
             id: docSnap.id,
             email: data.email,
@@ -27,16 +42,18 @@ export async function getUser(userId: string): Promise<User | null> {
             frequency: data.frequency,
             goal: data.goal,
             programId: data.programId,
-            startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
+            startDate: safeToDate(data.startDate),
             personalRecords: data.personalRecords || {},
             runningProfile: data.runningProfile || { benchmarkPaces: {} },
-            strava: data.strava ? { ...data.strava, expiresAt: data.strava.toDate() } : undefined,
-            lastStravaSync: data.lastStravaSync instanceof Timestamp ? data.lastStravaSync.toDate() : undefined,
+            strava: stravaData,
+            lastStravaSync: safeToDate(data.lastStravaSync),
             isAdmin: data.isAdmin || false,
             subscriptionStatus: data.subscriptionStatus || 'trial',
             stripeCustomerId: data.stripeCustomerId,
             subscriptionId: data.subscriptionId,
-            trialStartDate: data.trialStartDate instanceof Timestamp ? data.trialStartDate.toDate() : undefined,
+            trialStartDate: safeToDate(data.trialStartDate),
+            cancel_at_period_end: data.cancel_at_period_end,
+            cancellation_effective_date: safeToDate(data.cancellation_effective_date),
         };
         return user;
     } else {
@@ -88,6 +105,7 @@ export async function updateUserAdmin(userId: string, data: Partial<Omit<User, '
     const userRef = adminDb.collection('users').doc(userId);
     const dataToUpdate: { [key: string]: any } = { ...data };
 
+    // Convert any Date objects to Firestore Timestamps before updating
     if (data.startDate) {
         dataToUpdate.startDate = Timestamp.fromDate(data.startDate);
     }
@@ -95,11 +113,19 @@ export async function updateUserAdmin(userId: string, data: Partial<Omit<User, '
         dataToUpdate.trialStartDate = Timestamp.fromDate(data.trialStartDate);
     }
     if (data.strava?.expiresAt) {
-        dataToUpdate.strava.expiresAt = Timestamp.fromDate(data.strava.expiresAt);
+        // Ensure nested objects are handled correctly
+        dataToUpdate.strava = {
+            ...data.strava,
+            expiresAt: Timestamp.fromDate(data.strava.expiresAt)
+        };
     }
     if (data.lastStravaSync) {
         dataToUpdate.lastStravaSync = Timestamp.fromDate(data.lastStravaSync);
     }
+    if (data.cancellation_effective_date) {
+        dataToUpdate.cancellation_effective_date = Timestamp.fromDate(data.cancellation_effective_date);
+    }
+
 
     await userRef.update(dataToUpdate);
 }
