@@ -101,15 +101,26 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    const auth = getAuthInstance();
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-        if (firebaseUser) {
-            fetchUserData();
-        } else {
-            setLoading(false);
+    const initialize = async () => {
+        const auth = await getAuthInstance();
+        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+            if (firebaseUser) {
+                fetchUserData();
+            } else {
+                setLoading(false);
+            }
+        });
+        return unsubscribe;
+    };
+
+    let unsubscribe: (() => void) | undefined;
+    initialize().then(unsub => unsubscribe = unsub);
+
+    return () => {
+        if (unsubscribe) {
+            unsubscribe();
         }
-    });
-    return () => unsubscribe();
+    };
   }, []);
 
   // Handle URL parameters for Strava auth feedback
