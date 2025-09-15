@@ -38,7 +38,7 @@ export default function ActivityFeedPage() {
             console.log('🔄 Fetching Strava activities via API route...');
             
             // First, ensure we have a fresh session
-            const auth = getAuthInstance();
+            const auth = await getAuthInstance();
             const currentUser = auth.currentUser;
             
             if (!currentUser) {
