@@ -205,105 +205,50 @@ export default function ProfilePage() {
   };
 
   const initiateStravaAuth = async () => {
-    const clientId = process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-
-    if (!clientId || !appUrl) {
-        toast({ title: 'Error', description: 'Strava integration is not configured correctly.', variant: 'destructive' });
-        return;
-    }
-
     try {
-        // 1. ENSURE USER IS AUTHENTICATED
-        const auth = await getAuthInstance();
-        const currentUser = auth.currentUser;
-        
-        if (!currentUser) {
-            toast({ 
-                title: 'Authentication Required', 
-                description: 'Please log in to connect your Strava account.', 
-                variant: 'destructive' 
-            });
-            return;
-        }
+      // First, ensure we have a fresh session cookie. This also verifies the user is logged in.
+      const auth = await getAuthInstance();
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        toast({ title: 'Authentication Required', description: 'Please log in to connect your Strava account.', variant: 'destructive' });
+        return;
+      }
+      const idToken = await currentUser.getIdToken(true);
+      await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ idToken }),
+        credentials: 'include',
+      });
 
-        console.log('Current user authenticated:', currentUser.uid);
+      // Now, call our new secure API route to get the Strava URL
+      const response = await fetch('/api/strava/connect', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      
+      const data = await response.json();
 
-        // 2. SET SESSION COOKIE BEFORE REDIRECT
-        try {
-            const idToken = await currentUser.getIdToken(true);
-            console.log('Got fresh ID token for Strava auth');
-            
-            // Set the session cookie via our new API endpoint
-            const sessionResponse = await fetch('/api/auth/session', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
-                },
-                body: JSON.stringify({ idToken }),
-                credentials: 'include'
-            });
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initiate Strava connection.');
+      }
 
-            if (!sessionResponse.ok) {
-                const errorText = await sessionResponse.text();
-                console.error('Failed to set session cookie:', errorText);
-                throw new Error('Failed to establish session');
-            }
+      toast({
+        title: 'Redirecting to Strava...',
+        description: 'Please wait while we connect to Strava.',
+      });
 
-            const sessionData = await sessionResponse.json();
-            console.log('Session cookie set successfully:', sessionData);
-            
-            // Small delay to ensure cookie is properly set
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-        } catch (sessionError) {
-            console.error('Session setup failed:', sessionError);
-            toast({ 
-                title: 'Session Error', 
-                description: 'Failed to establish session. Please try logging out and back in.', 
-                variant: 'destructive' 
-            });
-            return;
-        }
+      window.location.href = data.url;
 
-        // 3. PROCEED WITH STRAVA AUTH
-        const redirectUri = encodeURIComponent(`${appUrl}/api/strava/exchange`);
-        const scope = 'read,activity:read_all,activity:write';
-        
-        // Add state for CSRF protection
-        const state = btoa(JSON.stringify({
-            userId: currentUser.uid,
-            timestamp: Date.now()
-        }));
-        
-        const authUrl = `https://www.strava.com/oauth/authorize?` +
-            `client_id=${clientId}&` +
-            `response_type=code&` +
-            `redirect_uri=${redirectUri}&` +
-            `approval_prompt=force&` +
-            `scope=${scope}&` +
-            `state=${state}`;
-            
-        console.log('Redirecting to Strava auth:', authUrl);
-        
-        // Add a loading state to prevent double-clicks
-        toast({
-            title: 'Redirecting to Strava...',
-            description: 'Please wait while we connect to Strava.',
-        });
-        
-        window.location.href = authUrl;
-        
     } catch (error: any) {
-        console.error('Error initiating Strava auth:', error);
-        toast({ 
-            title: 'Authentication Error', 
-            description: 'Failed to initiate Strava connection. Please try again.', 
-            variant: 'destructive' 
-        });
+      console.error('Error initiating Strava auth:', error);
+      toast({
+        title: 'Connection Error',
+        description: error.message,
+        variant: 'destructive',
+      });
     }
-};
+  };
 
 
   if (loading) {
