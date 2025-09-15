@@ -27,7 +27,7 @@ export async function getUser(userId: string): Promise<User | null> {
         const data = docSnap.data();
         if (!data) return null;
         
-        // Critical fix: Ensure strava.expiresAt is correctly converted to a Date object.
+        // Correctly handle the nested expiresAt timestamp within the strava object
         const stravaData = data.strava ? { 
             ...data.strava, 
             expiresAt: safeToDate(data.strava.expiresAt)! 
