@@ -36,48 +36,56 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchActivities = async () => {
+    const fetchActivitiesDirectAuth = async () => {
         if (!isOpen) return;
 
         setLoading(true);
         try {
-            console.log('🚀 Starting Strava activities fetch...');
+            console.log('🚀 Starting cookieless Strava activities fetch...');
             
+            // 1. Get user and fresh ID token
             const auth = await getAuthInstance();
             const currentUser = auth.currentUser;
             if (!currentUser) {
                 throw new Error('You must be logged in to fetch activities.');
             }
-            
+
+            console.log('✅ Current user authenticated:', currentUser.uid);
+
+            // 2. Get a fresh ID token for direct verification
             const idToken = await currentUser.getIdToken(true);
+            console.log('🎫 Fresh ID token obtained for direct auth');
 
-            const sessionResponse = await fetch('/api/auth/session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-                body: JSON.stringify({ idToken }),
-                credentials: 'include'
-            });
-
-            if (!sessionResponse.ok) {
-                throw new Error('Failed to refresh authentication session.');
-            }
-
+            // 3. Call activities API with ID token in Authorization header (no cookies needed)
+            console.log('📡 Fetching Strava activities with direct token auth...');
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',
-                credentials: 'include',
                 headers: { 
                     'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`,  // Send ID token directly
                     'Cache-Control': 'no-cache'
                 },
+                // Don't include credentials since we're not using cookies
             });
 
+            console.log('Activities response status:', response.status);
+            console.log('Activities response headers:', Object.fromEntries(response.headers.entries()));
+
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || 'Failed to fetch Strava activities');
+                let errorData;
+                try {
+                    errorData = await response.json();
+                } catch {
+                    errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+                }
+                console.error('❌ Activities fetch failed:', errorData);
+                throw new Error(errorData.error || `Failed to fetch Strava activities (${response.status})`);
             }
             
             const fetchedActivities = await response.json();
+            console.log(`✅ Fetched ${fetchedActivities.length} activities from Strava`);
             
+            // Filter activities to those around the workout date (within 24 hours either side)
             const workoutDate = new Date(session.workoutDate);
             const filtered = fetchedActivities.filter((activity: StravaActivity) => {
                 const activityDate = new Date(activity.start_date);
@@ -85,12 +93,25 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
                 return Math.abs(timeDiffHours) <= 24;
             });
             
+            console.log(`🔽 Filtered to ${filtered.length} activities within 24 hours of workout date`);
             setActivities(filtered);
             
         } catch (error: any) {
+            console.error('❌ Error fetching Strava activities:', error);
+            
+            // Show more specific error messages based on the error
+            let errorMessage = error.message;
+            if (error.message.includes('Authentication required')) {
+                errorMessage = 'Authentication failed. Please try refreshing the page and logging in again.';
+            } else if (error.message.includes('Strava account not connected')) {
+                errorMessage = 'Your Strava account is not connected. Please connect it in your profile settings first.';
+            } else if (error.message.includes('Network error')) {
+                errorMessage = 'Network error. Please check your connection and try again.';
+            }
+            
             toast({
                 title: 'Error Loading Activities',
-                description: error.message || 'Could not load your Strava activities.',
+                description: errorMessage,
                 variant: 'destructive',
             });
             setIsOpen(false);
@@ -99,9 +120,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
         }
     };
 
-    if (isOpen) {
-        fetchActivities();
-    }
+    fetchActivitiesDirectAuth();
   }, [isOpen, session.workoutDate, toast, setIsOpen]);
 
   const handleLink = async () => {
@@ -125,6 +144,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
     }
   };
   
+  // Helper to format duration from seconds to HH:MM
     const formatDuration = (seconds: number) => {
         if (!seconds) return '0m';
         const h = Math.floor(seconds / 3600);
@@ -135,6 +155,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
         return `${m}m`;
     };
 
+    // Helper to format distance from meters to km or m
     const formatDistance = (meters: number) => {
         if (!meters) return '0 km';
         const km = meters / 1000;
