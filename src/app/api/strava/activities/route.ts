@@ -6,26 +6,61 @@ import type { StravaTokens } from '@/models/types';
 import { getAdminAuth } from '@/lib/firebase-admin';
 
 export async function GET(req: NextRequest) {
-  console.log('=== COOKIELESS STRAVA ACTIVITIES API START ===');
+  console.log('=== ENHANCED DEBUG STRAVA ACTIVITIES API START ===');
+  console.log('Request URL:', req.url);
+  console.log('Request method:', req.method);
   
   try {
-    // Skip cookie authentication entirely - use Authorization header instead
+    // Debug ALL headers
+    console.log('🔍 ALL REQUEST HEADERS:');
+    req.headers.forEach((value, key) => {
+      if (key.toLowerCase() === 'authorization') {
+        console.log(`  ${key}: Bearer ${value.substring(7, 27)}...`);
+      } else {
+        console.log(`  ${key}: ${value}`);
+      }
+    });
+
+    // Check for Authorization header specifically
     const authHeader = req.headers.get('authorization');
+    console.log('🎫 Authorization header details:', {
+      exists: !!authHeader,
+      format: authHeader ? (authHeader.startsWith('Bearer ') ? 'correct' : 'invalid format') : 'missing',
+      length: authHeader?.length || 0
+    });
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader) {
       console.error('❌ No Authorization header found');
+      console.log('🔍 Available headers:', Array.from(req.headers.keys()));
       return NextResponse.json({ 
         error: 'Authentication required: No Authorization header found.',
         debug: {
-          hasAuthHeader: !!authHeader,
-          authHeaderFormat: authHeader ? 'present but invalid format' : 'missing'
+          availableHeaders: Array.from(req.headers.keys()),
+          authHeaderExists: false,
+          requestMethod: req.method,
+          requestUrl: req.url,
+          timestamp: new Date().toISOString()
+        }
+      }, { status: 401 });
+    }
+
+    if (!authHeader.startsWith('Bearer ')) {
+      console.error('❌ Authorization header has wrong format:', authHeader.substring(0, 20));
+      return NextResponse.json({ 
+        error: 'Authentication required: Invalid Authorization header format.',
+        debug: {
+          authHeaderFormat: authHeader.substring(0, 20) + '...',
+          expectedFormat: 'Bearer {token}'
         }
       }, { status: 401 });
     }
 
     // Extract ID token from Authorization header
     const idToken = authHeader.replace('Bearer ', '');
-    console.log('🎫 ID token received via header, length:', idToken.length);
+    console.log('🎫 ID token extracted:', {
+      length: idToken.length,
+      preview: idToken.substring(0, 20) + '...'
+    });
 
     // Verify ID token directly with Firebase Admin
     let decodedToken;
@@ -37,13 +72,15 @@ export async function GET(req: NextRequest) {
     } catch (verifyError: any) {
       console.error('❌ ID token verification failed:', {
         code: verifyError.code,
-        message: verifyError.message
+        message: verifyError.message,
+        tokenLength: idToken.length
       });
       return NextResponse.json({ 
         error: 'Invalid authentication token. Please log in again.',
         debug: {
           verificationError: verifyError.code,
-          message: verifyError.message
+          message: verifyError.message,
+          tokenLength: idToken.length
         }
       }, { status: 401 });
     }

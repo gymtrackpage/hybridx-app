@@ -54,22 +54,41 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
 
             // 2. Get a fresh ID token for direct verification
             const idToken = await currentUser.getIdToken(true);
-            console.log('🎫 Fresh ID token obtained for direct auth');
-
-            // 3. Call activities API with ID token in Authorization header (no cookies needed)
-            console.log('📡 Fetching Strava activities with direct token auth...');
-            const response = await fetch('/api/strava/activities', {
-                method: 'GET',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`,  // Send ID token directly
-                    'Cache-Control': 'no-cache'
-                },
-                // Don't include credentials since we're not using cookies
+            console.log('🎫 Fresh ID token obtained:', {
+                length: idToken.length,
+                starts: idToken.substring(0, 20) + '...'
             });
 
-            console.log('Activities response status:', response.status);
-            console.log('Activities response headers:', Object.fromEntries(response.headers.entries()));
+            // 3. Prepare headers with debugging
+            const requestHeaders = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`,
+                'Cache-Control': 'no-cache'
+            };
+
+            console.log('📋 Request headers prepared:', {
+                'Content-Type': requestHeaders['Content-Type'],
+                'Authorization': `Bearer ${requestHeaders.Authorization.substring(7, 27)}...`,
+                'Cache-Control': requestHeaders['Cache-Control']
+            });
+
+            // 4. Call activities API with ID token in Authorization header
+            console.log('📡 Fetching Strava activities with direct token auth...');
+            console.log('🌐 Request URL:', '/api/strava/activities');
+            
+            const response = await fetch('/api/strava/activities', {
+                method: 'GET',
+                headers: requestHeaders,
+                // Explicitly don't include credentials
+            });
+
+            console.log('📊 Response received:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+
+            console.log('📋 Response headers:', Object.fromEntries(response.headers.entries()));
 
             if (!response.ok) {
                 let errorData;
@@ -78,7 +97,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
                 } catch {
                     errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
                 }
-                console.error('❌ Activities fetch failed:', errorData);
+                console.error('❌ Activities fetch failed with error data:', errorData);
                 throw new Error(errorData.error || `Failed to fetch Strava activities (${response.status})`);
             }
             
@@ -97,16 +116,18 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             setActivities(filtered);
             
         } catch (error: any) {
-            console.error('❌ Error fetching Strava activities:', error);
+            console.error('❌ Error in fetchActivitiesDirectAuth:', {
+                name: error.name,
+                message: error.message,
+                stack: error.stack?.split('\n').slice(0, 5)
+            });
             
             // Show more specific error messages based on the error
             let errorMessage = error.message;
-            if (error.message.includes('Authentication required')) {
-                errorMessage = 'Authentication failed. Please try refreshing the page and logging in again.';
+            if (error.message.includes('Authorization header')) {
+                errorMessage = 'Authentication header missing. This may be a development environment issue.';
             } else if (error.message.includes('Strava account not connected')) {
                 errorMessage = 'Your Strava account is not connected. Please connect it in your profile settings first.';
-            } else if (error.message.includes('Network error')) {
-                errorMessage = 'Network error. Please check your connection and try again.';
             }
             
             toast({
