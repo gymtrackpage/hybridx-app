@@ -91,10 +91,19 @@ export function ActivityDetailsDialog({ activityId, isOpen, setIsOpen }: Activit
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="text-xl">
+            {loading ? <Skeleton className="h-8 w-3/4" /> : activity?.name || 'Activity Details'}
+          </DialogTitle>
+          <DialogDescription>
+            {loading ? <Skeleton className="h-4 w-1/2" /> : activity ? new Date(activity.start_date_local).toLocaleString('en-US', {
+                weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            }) : 'Loading details...'}
+          </DialogDescription>
+        </DialogHeader>
+        
         {loading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
+          <div className="space-y-4 pt-4">
             <Skeleton className="h-48 w-full" />
             <div className="grid grid-cols-2 gap-4">
                 <Skeleton className="h-12 w-full" />
@@ -104,51 +113,40 @@ export function ActivityDetailsDialog({ activityId, isOpen, setIsOpen }: Activit
             </div>
           </div>
         ) : activity ? (
-          <>
-            <DialogHeader>
-              <DialogTitle className="text-xl">{activity.name}</DialogTitle>
-              <DialogDescription>
-                {new Date(activity.start_date_local).toLocaleString('en-US', {
-                    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                })}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-                <Badge variant="outline">{activity.sport_type}</Badge>
+          <div className="space-y-4">
+              <Badge variant="outline">{activity.sport_type}</Badge>
 
-                {activity.map?.summary_polyline && activity.embed_token && (
-                    <div className="rounded-lg overflow-hidden border">
-                         <iframe
-                            src={`https://www.strava.com/activities/${activity.id}/embed/${activity.embed_token}`}
-                            width="100%"
-                            height="350"
-                            frameBorder="0"
-                            scrolling="no"
-                            title={`${activity.name} Map`}
-                            allowFullScreen
-                        ></iframe>
-                    </div>
-                )}
-                
-                <Separator />
+              {activity.map?.summary_polyline && activity.embed_token && (
+                  <div className="rounded-lg overflow-hidden border">
+                        <iframe
+                          src={`https://www.strava.com/activities/${activity.id}/embed/${activity.embed_token}`}
+                          width="100%"
+                          height="350"
+                          frameBorder="0"
+                          scrolling="no"
+                          title={`${activity.name} Map`}
+                          allowFullScreen
+                      ></iframe>
+                  </div>
+              )}
+              
+              <Separator />
 
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                    <MetricCard icon={MapPin} label="Distance" value={formatDistance(activity.distance)} />
-                    <MetricCard icon={Clock} label="Moving Time" value={formatDuration(activity.moving_time)} />
-                    <MetricCard icon={ArrowUp} label="Elevation Gain" value={`${Math.round(activity.total_elevation_gain)} m`} />
-                    <MetricCard icon={Wind} label="Avg. Speed" value={formatSpeed(activity.average_speed)} />
-                    {activity.average_heartrate && (
-                        <MetricCard icon={Heart} label="Avg. Heart Rate" value={`${Math.round(activity.average_heartrate)} bpm`} />
-                    )}
-                     {activity.suffer_score && (
-                        <MetricCard icon={Activity} label="Suffer Score" value={Math.round(activity.suffer_score)} />
-                    )}
-                </div>
-
-            </div>
-          </>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                  <MetricCard icon={MapPin} label="Distance" value={formatDistance(activity.distance)} />
+                  <MetricCard icon={Clock} label="Moving Time" value={formatDuration(activity.moving_time)} />
+                  <MetricCard icon={ArrowUp} label="Elevation Gain" value={`${Math.round(activity.total_elevation_gain)} m`} />
+                  <MetricCard icon={Wind} label="Avg. Speed" value={formatSpeed(activity.average_speed)} />
+                  {activity.average_heartrate && (
+                      <MetricCard icon={Heart} label="Avg. Heart Rate" value={`${Math.round(activity.average_heartrate)} bpm`} />
+                  )}
+                    {activity.suffer_score && (
+                      <MetricCard icon={Activity} label="Suffer Score" value={Math.round(activity.suffer_score)} />
+                  )}
+              </div>
+          </div>
         ) : (
-          <p>Activity details could not be loaded.</p>
+          <p className="py-8 text-center text-muted-foreground">Activity details could not be loaded.</p>
         )}
       </DialogContent>
     </Dialog>
