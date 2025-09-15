@@ -164,7 +164,7 @@ export default function ActivityFeedPage() {
                         <Skeleton className="h-8 w-48" />
                         <Skeleton className="h-4 w-64 mt-2" />
                     </div>
-                    <Skeleton className="h-10 w-28" />
+                    <Skeleton className="h-10 w-10 md:w-28" />
                 </div>
                 <Card>
                     <CardContent className="p-6 space-y-4">
@@ -186,9 +186,9 @@ export default function ActivityFeedPage() {
                     <p className="text-muted-foreground">Your recent activities from Strava.</p>
                 </div>
                 {isStravaConnected && (
-                    <Button onClick={() => fetchActivities(true)} disabled={syncing}>
-                        {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                        Sync Now
+                     <Button onClick={() => fetchActivities(true)} disabled={syncing} size="icon" className="md:size-auto md:px-4 md:py-2">
+                        {syncing ? <Loader2 className="h-4 w-4 animate-spin md:mr-2" /> : <RefreshCw className="h-4 w-4 md:mr-2" />}
+                        <span className="hidden md:inline">Sync Now</span>
                     </Button>
                 )}
             </div>
@@ -232,14 +232,14 @@ export default function ActivityFeedPage() {
                             <p>No recent activities found.</p>
                         </div>
                     ) : (
-                         <ul className="space-y-4">
+                         <ul className="space-y-2">
                             {activities.map((activity) => (
                                 <li key={activity.id}>
                                     <button
                                         onClick={() => handleActivityClick(activity.id)}
-                                        className="w-full text-left flex items-start space-x-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full text-left flex items-start space-x-4 p-3 rounded-lg hover:bg-muted/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
                                     >
-                                        <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                                        <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center mt-1">
                                             <BarChart className="h-5 w-5 text-primary" />
                                         </div>
                                         <div className="flex-1 min-w-0">
