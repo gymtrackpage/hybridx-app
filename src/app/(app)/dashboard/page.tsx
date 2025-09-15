@@ -419,14 +419,17 @@ export default function DashboardPage() {
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>Your Daily Boost</DialogTitle>
+                      <DialogDescription>
+                        A personalized message from your AI coach to keep you going.
+                      </DialogDescription>
                       {motivationLoading ? (
                           <div className="flex items-center justify-center p-8">
                               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                           </div>
                       ) : (
-                          <DialogDescription>
+                          <p className="pt-4 text-foreground">
                               {motivation || "Click 'Get Motivation' to see your message."}
-                          </DialogDescription>
+                          </p>
                       )}
                     </DialogHeader>
                   </DialogContent>

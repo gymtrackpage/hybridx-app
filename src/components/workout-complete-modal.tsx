@@ -23,7 +23,7 @@ export default function WorkoutCompleteModal({ isOpen, onClose, session, userHas
                 <DialogHeader>
                     <DialogTitle>Workout Complete! 🎉</DialogTitle>
                     <DialogDescription>
-                        Great job finishing your workout. Here's your summary.
+                        Great job finishing your workout. Here's your summary and sharing options.
                     </DialogDescription>
                 </DialogHeader>
                 
