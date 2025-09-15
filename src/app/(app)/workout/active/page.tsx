@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Share2, Sparkles, Clock } from 'lucide-react';
+import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -23,6 +23,7 @@ import type { Workout, RunningWorkout, User, Exercise } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
 import { Separator } from '@/components/ui/separator';
+import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
 
 // Lazy load the modal component
 const WorkoutCompleteModal = lazy(() => import('@/components/workout-complete-modal'));
@@ -39,6 +40,7 @@ export default function ActiveWorkoutPage() {
   const [summaryText, setSummaryText] = useState('');
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
+  const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   
   const today = useMemo(() => {
       const d = new Date();
@@ -46,82 +48,86 @@ export default function ActiveWorkoutPage() {
       return d;
   }, []);
 
+  const fetchWorkoutData = async (firebaseUser: any) => {
+    const currentUser = await getUserClient(firebaseUser.uid);
+    setUser(currentUser);
+
+    if (currentUser) {
+        if (currentUser.runningProfile) {
+            const paces = calculateTrainingPaces(currentUser);
+            setTrainingPaces(paces);
+        }
+
+        let workoutSession;
+        let currentWorkoutInfo;
+
+        // First, check for a one-off or custom workout for today
+        const oneOffSession = await getTodaysOneOffSession(firebaseUser.uid, today);
+
+        if (oneOffSession) {
+            workoutSession = oneOffSession;
+            // Reconstruct a temporary workout object for display from the session data
+            currentWorkoutInfo = {
+                day: 0,
+                workout: {
+                    title: oneOffSession.workoutTitle,
+                    programType: oneOffSession.programType,
+                    day: 0,
+                    exercises: oneOffSession.extendedExercises || [], 
+                    runs: [] // Custom/AI runs not supported yet
+                } as Workout
+            };
+            setExtendedExercises([]); 
+        } else if (currentUser.programId && currentUser.startDate) {
+            // If no one-off workout, look for a scheduled program workout
+            const program = await getProgramClient(currentUser.programId);
+            if (program) {
+                currentWorkoutInfo = getWorkoutForDay(program, currentUser.startDate, today);
+                if (currentWorkoutInfo.workout) {
+                   workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
+                }
+            }
+        }
+        
+        setWorkoutInfo(currentWorkoutInfo);
+
+        if (workoutSession) {
+            setSession(workoutSession);
+            setNotes(workoutSession.notes || '');
+            // Only set extended exercises if it's NOT a one-off/custom workout
+            if (!['one-off-ai', 'custom-workout'].includes(workoutSession.programId)) {
+                 setExtendedExercises(workoutSession.extendedExercises || []);
+            }
+
+            if (currentWorkoutInfo?.workout) {
+                 const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
+                    ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
+                    : [...(currentWorkoutInfo.workout as Workout).exercises, ...(workoutSession.extendedExercises || [])].map(e => e.name).join(', ');
+
+                try {
+                    const summaryResult = await workoutSummary({
+                    userName: currentUser.firstName,
+                    workoutTitle: currentWorkoutInfo.workout.title,
+                    exercises: exercisesForSummary,
+                    });
+                    setSummaryText(summaryResult.summary);
+                } catch (error) {
+                    console.error("Failed to generate AI workout summary:", error);
+                    setSummaryText(currentWorkoutInfo.workout.title); // Fallback
+                }
+            }
+        }
+        setSummaryLoading(false);
+    }
+  };
+
   useEffect(() => {
     const initialize = async () => {
         setLoading(true);
         const auth = await getAuthInstance();
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
-            const currentUser = await getUserClient(firebaseUser.uid);
-            setUser(currentUser);
-
-            if (currentUser) {
-                if (currentUser.runningProfile) {
-                    const paces = calculateTrainingPaces(currentUser);
-                    setTrainingPaces(paces);
-                }
-
-                let workoutSession;
-                let currentWorkoutInfo;
-
-                // First, check for a one-off or custom workout for today
-                const oneOffSession = await getTodaysOneOffSession(firebaseUser.uid, today);
-
-                if (oneOffSession) {
-                    workoutSession = oneOffSession;
-                    // Reconstruct a temporary workout object for display from the session data
-                    currentWorkoutInfo = {
-                        day: 0,
-                        workout: {
-                            title: oneOffSession.workoutTitle,
-                            programType: oneOffSession.programType,
-                            day: 0,
-                            exercises: oneOffSession.extendedExercises || [], 
-                            runs: [] // Custom/AI runs not supported yet
-                        } as Workout
-                    };
-                    setExtendedExercises([]); 
-                } else if (currentUser.programId && currentUser.startDate) {
-                    // If no one-off workout, look for a scheduled program workout
-                    const program = await getProgramClient(currentUser.programId);
-                    if (program) {
-                        currentWorkoutInfo = getWorkoutForDay(program, currentUser.startDate, today);
-                        if (currentWorkoutInfo.workout) {
-                           workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
-                        }
-                    }
-                }
-                
-                setWorkoutInfo(currentWorkoutInfo);
-
-                if (workoutSession) {
-                    setSession(workoutSession);
-                    setNotes(workoutSession.notes || '');
-                    // Only set extended exercises if it's NOT a one-off/custom workout
-                    if (!['one-off-ai', 'custom-workout'].includes(workoutSession.programId)) {
-                         setExtendedExercises(workoutSession.extendedExercises || []);
-                    }
-
-                    if (currentWorkoutInfo?.workout) {
-                         const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
-                            ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
-                            : [...(currentWorkoutInfo.workout as Workout).exercises, ...(workoutSession.extendedExercises || [])].map(e => e.name).join(', ');
-
-                        try {
-                            const summaryResult = await workoutSummary({
-                            userName: currentUser.firstName,
-                            workoutTitle: currentWorkoutInfo.workout.title,
-                            exercises: exercisesForSummary,
-                            });
-                            setSummaryText(summaryResult.summary);
-                        } catch (error) {
-                            console.error("Failed to generate AI workout summary:", error);
-                            setSummaryText(currentWorkoutInfo.workout.title); // Fallback
-                        }
-                    }
-                }
-                setSummaryLoading(false);
-            }
+           await fetchWorkoutData(firebaseUser);
         }
         setLoading(false);
         });
@@ -205,6 +211,18 @@ export default function ActiveWorkoutPage() {
       });
       setIsCompleteModalOpen(true);
   }
+
+  const handleLinkSuccess = async () => {
+    setIsLinkerOpen(false);
+    setLoading(true);
+    const auth = await getAuthInstance();
+    if (auth.currentUser) {
+        await fetchWorkoutData(auth.currentUser);
+    }
+    setLoading(false);
+    setIsCompleteModalOpen(true); // Show completion modal after successful link
+  };
+
 
   if (loading) {
     return (
@@ -392,10 +410,16 @@ export default function ActiveWorkoutPage() {
 
                 <div className="flex flex-col sm:flex-row gap-2 pt-4">
                     {!session.finishedAt ? (
+                        <>
                         <Button className="w-full" onClick={handleFinishWorkout}>
                             <Flag className="mr-2" />
                             Finish Workout
                         </Button>
+                        <Button variant="outline" className="w-full" onClick={() => setIsLinkerOpen(true)}>
+                            <LinkIcon className="mr-2" />
+                            Link Strava Activity
+                        </Button>
+                        </>
                     ) : (
                         <Button className="w-full" variant="secondary" onClick={() => setIsCompleteModalOpen(true)}>
                             <Share2 className="mr-2" />
@@ -407,20 +431,30 @@ export default function ActiveWorkoutPage() {
         </Card>
     </div>
 
-    {session.finishedAt && workout && (
-        <Suspense fallback={
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <Loader2 className="h-8 w-8 animate-spin text-white" />
-            </div>
-        }>
-            <WorkoutCompleteModal
-                isOpen={isCompleteModalOpen}
-                onClose={() => setIsCompleteModalOpen(false)}
-                session={session}
-                userHasStrava={!!user?.strava?.accessToken}
-                workout={workout}
-            />
-        </Suspense>
+    {session && workout && (
+        <>
+        {session.finishedAt && (
+             <Suspense fallback={
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <Loader2 className="h-8 w-8 animate-spin text-white" />
+                </div>
+            }>
+                <WorkoutCompleteModal
+                    isOpen={isCompleteModalOpen}
+                    onClose={() => setIsCompleteModalOpen(false)}
+                    session={session}
+                    userHasStrava={!!user?.strava?.accessToken}
+                    workout={workout}
+                />
+            </Suspense>
+        )}
+        <LinkStravaActivityDialog
+            isOpen={isLinkerOpen}
+            setIsOpen={setIsLinkerOpen}
+            session={session}
+            onLinkSuccess={handleLinkSuccess}
+        />
+        </>
     )}
     </>
   );
