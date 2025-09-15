@@ -16,7 +16,7 @@ import type { User, Program, Workout, WorkoutSession, RunningWorkout, Exercise }
 import { addDays, format, isSameDay, parseISO, isValid } from 'date-fns';
 import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
 import { Button } from '@/components/ui/button';
-import { Link as LinkIcon } from 'lucide-react';
+import { Link as LinkIcon, Activity, Clock, MapPin } from 'lucide-react';
 
 interface WorkoutEvent {
   date: Date;
@@ -204,6 +204,25 @@ export default function CalendarPage() {
     }
     setLoading(false);
   };
+  
+    // Helper to format duration from seconds to HH:MM
+    const formatDuration = (seconds: number) => {
+        if (!seconds) return '0m';
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        if (h > 0) {
+            return `${h}h ${m}m`;
+        }
+        return `${m}m`;
+    };
+
+    // Helper to format distance from meters to km or m
+    const formatDistance = (meters: number) => {
+        if (!meters) return '0 km';
+        const km = meters / 1000;
+        return km >= 1 ? `${km.toFixed(1)} km` : `${meters.toFixed(0)} m`;
+    };
+
 
   return (
     <>
@@ -261,7 +280,7 @@ export default function CalendarPage() {
               {format(selectedDate, "EEEE, MMMM do")}
             </p>
             <CardTitle>
-              {completedSession?.workoutTitle || selectedWorkout?.title || 'Completed Workout'}
+              {completedSession?.stravaActivity?.name || completedSession?.workoutTitle || selectedWorkout?.title || 'Workout Details'}
             </CardTitle>
             {completedSession?.finishedAt ? (
               <div className="space-y-2 mt-2">
@@ -281,7 +300,28 @@ export default function CalendarPage() {
             )}
           </CardHeader>
           <CardContent>
-            {completedSession?.finishedAt ? (
+            {completedSession?.stravaActivity ? (
+                <div className="space-y-4">
+                    <div className="flex items-center justify-around p-4 border rounded-lg bg-muted/50">
+                        <div className="text-center">
+                            <div className="text-2xl font-bold">{formatDistance(completedSession.stravaActivity.distance || 0)}</div>
+                            <div className="text-xs text-muted-foreground">DISTANCE</div>
+                        </div>
+                         <div className="text-center">
+                            <div className="text-2xl font-bold">{formatDuration(completedSession.stravaActivity.moving_time || 0)}</div>
+                            <div className="text-xs text-muted-foreground">TIME</div>
+                        </div>
+                    </div>
+                     {completedSession.notes && (
+                        <div>
+                            <h4 className="font-semibold mb-2">Your Notes</h4>
+                            <p className="text-sm text-muted-foreground border-l-2 pl-4 italic">
+                            {completedSession.notes}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            ) : completedSession?.finishedAt ? (
               <div className="space-y-4">
                 <div>
                   <h4 className="font-semibold mb-2">Completed Items</h4>

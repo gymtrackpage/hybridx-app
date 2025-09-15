@@ -41,9 +41,8 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
 
         setLoading(true);
         try {
-            console.log('🚀 Starting cookieless Strava activities fetch...');
+            console.log('🚀 Starting Strava activities fetch...');
             
-            // 1. Get user and fresh ID token
             const auth = await getAuthInstance();
             const currentUser = auth.currentUser;
             if (!currentUser) {
@@ -52,43 +51,19 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
 
             console.log('✅ Current user authenticated:', currentUser.uid);
 
-            // 2. Get a fresh ID token for direct verification
             const idToken = await currentUser.getIdToken(true);
-            console.log('🎫 Fresh ID token obtained:', {
-                length: idToken.length,
-                starts: idToken.substring(0, 20) + '...'
-            });
+            console.log('🎫 Fresh ID token obtained for direct auth');
 
-            // 3. Prepare headers with debugging
-            const requestHeaders = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`,
-                'Cache-Control': 'no-cache'
-            };
-
-            console.log('📋 Request headers prepared:', {
-                'Content-Type': requestHeaders['Content-Type'],
-                'Authorization': `Bearer ${requestHeaders.Authorization.substring(7, 27)}...`,
-                'Cache-Control': requestHeaders['Cache-Control']
-            });
-
-            // 4. Call activities API with ID token in Authorization header
-            console.log('📡 Fetching Strava activities with direct token auth...');
-            console.log('🌐 Request URL:', '/api/strava/activities');
-            
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',
-                headers: requestHeaders,
-                // Explicitly don't include credentials
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`,
+                    'Cache-Control': 'no-cache'
+                },
             });
 
-            console.log('📊 Response received:', {
-                status: response.status,
-                statusText: response.statusText,
-                ok: response.ok
-            });
-
-            console.log('📋 Response headers:', Object.fromEntries(response.headers.entries()));
+            console.log('📊 Activities API response status:', response.status);
 
             if (!response.ok) {
                 let errorData;
@@ -104,29 +79,13 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             const fetchedActivities = await response.json();
             console.log(`✅ Fetched ${fetchedActivities.length} activities from Strava`);
             
-            // Filter activities to those around the workout date (within 24 hours either side)
-            const workoutDate = new Date(session.workoutDate);
-            const filtered = fetchedActivities.filter((activity: StravaActivity) => {
-                const activityDate = new Date(activity.start_date);
-                const timeDiffHours = differenceInHours(activityDate, workoutDate);
-                return Math.abs(timeDiffHours) <= 24;
-            });
-            
-            console.log(`🔽 Filtered to ${filtered.length} activities within 24 hours of workout date`);
-            setActivities(filtered);
+            setActivities(fetchedActivities);
             
         } catch (error: any) {
-            console.error('❌ Error in fetchActivitiesDirectAuth:', {
-                name: error.name,
-                message: error.message,
-                stack: error.stack?.split('\n').slice(0, 5)
-            });
+            console.error('❌ Error in fetchActivitiesDirectAuth:', error);
             
-            // Show more specific error messages based on the error
             let errorMessage = error.message;
-            if (error.message.includes('Authorization header')) {
-                errorMessage = 'Authentication header missing. This may be a development environment issue.';
-            } else if (error.message.includes('Strava account not connected')) {
+             if (error.message.includes('Strava account not connected')) {
                 errorMessage = 'Your Strava account is not connected. Please connect it in your profile settings first.';
             }
             
@@ -201,7 +160,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
         <DialogHeader>
           <DialogTitle>Link Strava Activity</DialogTitle>
           <DialogDescription>
-            Select a recent Strava activity to mark this workout as complete. We've filtered to activities within 24 hours of your scheduled workout.
+            Select a recent Strava activity to mark this workout as complete.
           </DialogDescription>
         </DialogHeader>
 
@@ -233,7 +192,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             ) : (
                 <div className="text-center py-10 text-muted-foreground">
                     <Activity className="mx-auto h-8 w-8 mb-2" />
-                    <p>No recent Strava activities found within 24 hours of this workout.</p>
+                    <p>No recent Strava activities found.</p>
                     <p className="text-xs mt-1">Activities may take a few minutes to sync from Strava.</p>
                 </div>
             )}
