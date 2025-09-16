@@ -41,6 +41,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { InstallPwaBanner } from '@/components/install-pwa-banner';
 import { getUserClient } from '@/services/user-service-client';
 import { addMonths, isAfter } from 'date-fns';
+import { MobileNavBar } from '@/components/mobile-nav-bar';
 
 
 const navItems = [
@@ -207,8 +208,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {/* Header content can go here, like breadcrumbs */}
             </div>
         </header>
-        <main className="flex-1 overflow-auto p-4 lg:p-6 pb-28">{children}</main>
-        <InstallPwaBanner />
+        <main className="flex-1 overflow-auto p-4 lg:p-6 pb-28 md:pb-6">{children}</main>
+        <div className="hidden md:block">
+            <InstallPwaBanner />
+        </div>
+        <MobileNavBar />
       </SidebarInset>
     </SidebarProvider>
   );
