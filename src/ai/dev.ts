@@ -8,3 +8,4 @@ import '@/ai/flows/workout-summary.ts';
 import '@/ai/flows/extend-workout.ts';
 import '@/ai/flows/generate-workout.ts';
 import '@/ai/flows/generate-article.ts';
+import '@/ai/schemas.ts';

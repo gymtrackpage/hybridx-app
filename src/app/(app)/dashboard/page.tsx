@@ -406,10 +406,10 @@ export default function DashboardPage() {
                   <Sparkles className="h-6 w-6 text-yellow-400" />
                   Motivational Coach
                 </CardTitle>
-                <CardDescription>Your AI partner for a mental boost.</CardDescription>
+                <CardDescription>Need some motivation or guidance?</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">Feeling stuck? Get a personalized message from your AI coach based on your recent progress.</p>
+                <p className="text-sm text-muted-foreground">Get your message from your coach based on your recent progress.</p>
               </CardContent>
               <CardFooter>
                 <Dialog>

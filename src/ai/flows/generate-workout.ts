@@ -10,17 +10,13 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { ExerciseSchema } from '@/ai/schemas';
 
 const GenerateWorkoutInputSchema = z.object({
   userName: z.string().describe("The user's first name."),
   experience: z.enum(['beginner', 'intermediate', 'advanced']).describe('The user fitness experience level.'),
 });
 export type GenerateWorkoutInput = z.infer<typeof GenerateWorkoutInputSchema>;
-
-const ExerciseSchema = z.object({
-    name: z.string().describe('The name of the exercise.'),
-    details: z.string().describe('The sets, reps, or duration for the exercise (e.g., 3x10 reps, 5 min AMRAP).'),
-});
 
 const GenerateWorkoutOutputSchema = z.object({
   title: z.string().describe("A creative and motivating title for the workout (e.g., 'Engine Builder', 'Grip Gauntlet', 'Full Body Blitz')."),

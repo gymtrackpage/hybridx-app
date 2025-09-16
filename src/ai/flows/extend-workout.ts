@@ -10,11 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-
-const ExerciseSchema = z.object({
-    name: z.string().describe('The name of the exercise.'),
-    details: z.string().describe('The sets, reps, or duration for the exercise (e.g., 3x10 reps, 5 min AMRAP).'),
-});
+import { ExerciseSchema } from '@/ai/schemas';
 
 const ExtendWorkoutInputSchema = z.object({
   workoutTitle: z.string().describe('The title of the workout.'),
