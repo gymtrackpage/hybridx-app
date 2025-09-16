@@ -3,13 +3,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Calendar, User, BookOpenCheck, Repeat } from 'lucide-react';
+import { Home, Calendar, User, BookOpenCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CustomWorkoutIcon } from './icons';
 
 const navItems = [
   { href: '/dashboard', icon: Home, label: 'Home' },
   { href: '/calendar', icon: Calendar, label: 'Calendar' },
-  { href: '/workout/active', icon: Repeat, label: 'Workout', isCentral: true },
+  { href: '/workout/active', icon: CustomWorkoutIcon, label: 'Workout', isCentral: true },
   { href: '/programs', icon: BookOpenCheck, label: 'Programs' },
   { href: '/profile', icon: User, label: 'Profile' },
 ];
