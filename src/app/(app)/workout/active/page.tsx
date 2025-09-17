@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Check, Flag, Loader2, CalendarDays, Route, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon } from 'lucide-react';
+import { Flag, Loader2, CalendarDays, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon, ChevronLeft } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -38,7 +38,7 @@ export default function ActiveWorkoutPage() {
   const [isExtending, setIsExtending] = useState(false);
   const [notes, setNotes] = useState('');
   const [summaryText, setSummaryText] = useState('');
-  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   
@@ -99,25 +99,41 @@ export default function ActiveWorkoutPage() {
                  setExtendedExercises(workoutSession.extendedExercises || []);
             }
 
-            if (currentWorkoutInfo?.workout) {
-                 const exercisesForSummary = currentWorkoutInfo.workout.programType === 'running'
-                    ? (currentWorkoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
-                    : [...(currentWorkoutInfo.workout as Workout).exercises, ...(workoutSession.extendedExercises || [])].map(e => e.name).join(', ');
-
-                try {
-                    const summaryResult = await workoutSummary({
-                    userName: currentUser.firstName,
-                    workoutTitle: currentWorkoutInfo.workout.title,
-                    exercises: exercisesForSummary,
-                    });
-                    setSummaryText(summaryResult.summary);
-                } catch (error) {
-                    console.error("Failed to generate AI workout summary:", error);
-                    setSummaryText(currentWorkoutInfo.workout.title); // Fallback
-                }
-            }
         }
-        setSummaryLoading(false);
+        // Note: AI summary will be loaded separately to improve initial page load speed
+    }
+  };
+
+  const loadWorkoutSummary = async (currentUser: User, workoutInfo: { workout: Workout | RunningWorkout }, session: WorkoutSession) => {
+    if (!workoutInfo?.workout || summaryText) return; // Don't reload if already loaded
+
+    // Show that we're enhancing the summary
+    setSummaryLoading(true);
+
+    try {
+      const exercisesForSummary = workoutInfo.workout.programType === 'running'
+        ? (workoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
+        : [...(workoutInfo.workout as Workout).exercises, ...(session.extendedExercises || [])].map(e => e.name).join(', ');
+
+      // Add a timeout to prevent the AI call from hanging indefinitely
+      const summaryPromise = workoutSummary({
+        userName: currentUser.firstName,
+        workoutTitle: workoutInfo.workout.title,
+        exercises: exercisesForSummary,
+      });
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('AI summary timeout')), 10000) // 10 second timeout
+      );
+
+      const summaryResult = await Promise.race([summaryPromise, timeoutPromise]) as any;
+      setSummaryText(summaryResult.summary);
+    } catch (error) {
+      console.error("Failed to generate AI workout summary:", error);
+      // Silently fall back - the UI will continue showing the workout title
+      // which is already visible, so no jarring experience for the user
+    } finally {
+      setSummaryLoading(false);
     }
   };
 
@@ -143,6 +159,18 @@ export default function ActiveWorkoutPage() {
         }
     };
   }, [today]);
+
+  // Separate effect to load AI summary after main data is ready (lazy loading)
+  useEffect(() => {
+    if (user && workoutInfo && session && !loading) {
+      // Add a small delay to ensure the UI renders first
+      const timer = setTimeout(() => {
+        loadWorkoutSummary(user, workoutInfo, session);
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [user, workoutInfo, session, loading, summaryText]);
 
   const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
     if (!session) return;
@@ -195,19 +223,44 @@ export default function ActiveWorkoutPage() {
       // Final save of notes before finishing
       debouncedSaveNotes.flush();
       const finishedAt = new Date();
-      const updatedSessionData = { 
-          ...session, 
-          finishedAt, 
-          notes, 
+      const updatedSessionData = {
+          ...session,
+          finishedAt,
+          notes,
           workoutTitle: workoutInfo.workout.title,
           programType: workoutInfo.workout.programType
       };
       setSession(updatedSessionData);
-      await updateWorkoutSession(session.id, { 
-          finishedAt, 
-          notes, 
+      await updateWorkoutSession(session.id, {
+          finishedAt,
+          notes,
           workoutTitle: workoutInfo.workout.title,
           programType: workoutInfo.workout.programType
+      });
+      setIsCompleteModalOpen(true);
+  }
+
+  const handleSkipWorkout = async () => {
+      if(!session || !workoutInfo?.workout) return;
+      // Final save of notes before skipping
+      debouncedSaveNotes.flush();
+      const finishedAt = new Date();
+      const skipNotes = notes ? `${notes}\n\n[WORKOUT SKIPPED]` : '[WORKOUT SKIPPED]';
+      const updatedSessionData = {
+          ...session,
+          finishedAt,
+          notes: skipNotes,
+          workoutTitle: workoutInfo.workout.title,
+          programType: workoutInfo.workout.programType,
+          skipped: true
+      };
+      setSession(updatedSessionData);
+      await updateWorkoutSession(session.id, {
+          finishedAt,
+          notes: skipNotes,
+          workoutTitle: workoutInfo.workout.title,
+          programType: workoutInfo.workout.programType,
+          skipped: true
       });
       setIsCompleteModalOpen(true);
   }
@@ -263,12 +316,37 @@ export default function ActiveWorkoutPage() {
   return (
     <>
     <div className="space-y-6 max-w-2xl mx-auto">
+        {/* Back to Dashboard Button */}
+        <div className="flex items-center justify-start">
+            <Button asChild variant="outline" className="mb-4">
+                <Link href="/dashboard">
+                    <ChevronLeft className="mr-2 h-4 w-4" />
+                    Back to Dashboard
+                </Link>
+            </Button>
+        </div>
+
         <Card className="bg-accent/20 border-accent">
             <CardHeader>
                 <div className="flex-1">
                     <CardTitle className="text-2xl font-bold tracking-tight">{workout.title}</CardTitle>
                     <CardDescription className="font-medium text-foreground/80">
-                        {summaryLoading ? <Skeleton className="h-5 w-full mt-1" /> : summaryText}
+                        {summaryLoading ? (
+                            <div className="space-y-2">
+                                <Skeleton className="h-4 w-full" />
+                                <Skeleton className="h-4 w-3/4" />
+                            </div>
+                        ) : summaryText ? (
+                            <div className="relative">
+                                {summaryText}
+                                <span className="text-xs text-muted-foreground/60 ml-2">✨ AI enhanced</span>
+                            </div>
+                        ) : (
+                            <div className="relative">
+                                {workoutInfo.workout.title}
+                                <span className="text-xs text-muted-foreground/60 ml-2">⏳ Enhancing...</span>
+                            </div>
+                        )}
                     </CardDescription>
                 </div>
             </CardHeader>
@@ -418,6 +496,10 @@ export default function ActiveWorkoutPage() {
                         <Button variant="outline" className="w-full" onClick={() => setIsLinkerOpen(true)}>
                             <LinkIcon className="mr-2" />
                             Link Strava Activity
+                        </Button>
+                        <Button variant="outline" className="w-full" onClick={handleSkipWorkout}>
+                            <X className="mr-2" />
+                            Skip Workout
                         </Button>
                         </>
                     ) : (

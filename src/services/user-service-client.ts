@@ -98,3 +98,119 @@ export async function updateUser(userId: string, data: Partial<Omit<User, 'id'>>
     
     await updateDoc(userRef, dataToUpdate);
 }
+
+// Helper function to wait for auth state
+async function waitForAuth(auth: any, timeoutMs = 10000): Promise<any> {
+    return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            unsubscribe();
+            reject(new Error('Authentication timeout'));
+        }, timeoutMs);
+
+        const unsubscribe = auth.onAuthStateChanged((user: any) => {
+            if (user) {
+                clearTimeout(timeout);
+                unsubscribe();
+                resolve(user);
+            }
+        });
+
+        // If user is already available, resolve immediately
+        if (auth.currentUser) {
+            clearTimeout(timeout);
+            unsubscribe();
+            resolve(auth.currentUser);
+        }
+    });
+}
+
+// Admin function to get all users
+export async function getAllUsersClient(): Promise<User[]> {
+    console.log('🔄 Starting getAllUsersClient...');
+
+    try {
+        // First ensure we have a valid session cookie
+        const { getAuthInstance } = await import('@/lib/firebase');
+        const auth = await getAuthInstance();
+
+        console.log('🔐 Auth instance created, checking current user...');
+        console.log('👤 Current user exists:', !!auth.currentUser);
+
+        let currentUser = auth.currentUser;
+
+        // If no current user, wait for auth state to be ready
+        if (!currentUser) {
+            console.log('⏳ No current user, waiting for auth state...');
+            try {
+                currentUser = await waitForAuth(auth, 5000); // 5 second timeout
+                console.log('✅ Auth state resolved, user found:', !!currentUser);
+            } catch (authError) {
+                console.error('❌ Auth state timeout or error:', authError);
+                throw new Error('Please log in to access admin features');
+            }
+        }
+
+        // Create session cookie if needed
+        console.log('🔑 Getting fresh ID token...');
+        const idToken = await currentUser.getIdToken(true);
+
+        console.log('🍪 Creating session cookie...');
+        const sessionResponse = await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+            credentials: 'include',
+        });
+
+        if (!sessionResponse.ok) {
+            console.error('❌ Session creation failed:', sessionResponse.status);
+            throw new Error('Failed to create authentication session');
+        }
+
+        console.log('✅ Session cookie created successfully');
+
+        // First try the cookie-based approach
+        console.log('🔄 Making API call to /api/admin/users (cookie-based)...');
+        let response = await fetch('/api/admin/users', {
+            method: 'GET',
+            credentials: 'include',
+        });
+
+        console.log('📡 API response status:', response.status, response.statusText);
+
+        // If cookie-based fails, try the alternative approach with direct token
+        if (!response.ok && response.status === 401) {
+            console.log('🔄 Cookie approach failed, trying alternative with direct token...');
+            response = await fetch('/api/admin/users-alt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idToken }),
+                credentials: 'include',
+            });
+            console.log('📡 Alternative API response status:', response.status, response.statusText);
+        }
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('❌ API error response:', errorData);
+            throw new Error(errorData.error || 'Failed to fetch users');
+        }
+
+        const userData = await response.json();
+        console.log('📊 Received user data:', {
+            isArray: Array.isArray(userData),
+            length: userData?.length,
+            firstUser: userData?.[0] ? {
+                id: userData[0].id,
+                email: userData[0].email,
+                hasRequiredFields: !!(userData[0].email && userData[0].experience && userData[0].goal)
+            } : null
+        });
+
+        return userData;
+
+    } catch (error) {
+        console.error('❌ getAllUsersClient error:', error);
+        throw error;
+    }
+}

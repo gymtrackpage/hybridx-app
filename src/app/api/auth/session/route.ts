@@ -27,10 +27,22 @@ export async function POST(req: NextRequest) {
             { status: 200 }
         );
 
+        // Determine if we're in a secure environment
+        const isSecure = process.env.NODE_ENV === 'production' || req.headers.host?.includes('cloudworkstations.dev');
+
+        console.log('🍪 Setting cookie with config:', {
+            secure: isSecure,
+            sameSite: 'lax',
+            httpOnly: true,
+            path: '/',
+            maxAge: expiresIn / 1000,
+            domain: req.headers.host?.includes('cloudworkstations.dev') ? undefined : undefined // Let browser determine
+        });
+
         response.cookies.set('__session', sessionCookie, {
             maxAge: expiresIn / 1000, // maxAge expects seconds
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: isSecure,
             sameSite: 'lax',
             path: '/'
         });

@@ -118,10 +118,11 @@ export interface WorkoutSession {
     notes?: string;
     duration?: string; // Optional duration for custom workouts
     extendedExercises?: Exercise[]; // AI-generated exercises
-    
+    skipped?: boolean; // Flag to indicate if workout was skipped
+
     // Details of the workout that was performed, for sessions not linked to a program
     workoutDetails?: Workout | RunningWorkout;
-    
+
     // Strava integration fields
     stravaId?: string;
     uploadedToStrava?: boolean;

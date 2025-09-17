@@ -17,6 +17,11 @@ export const metadata: Metadata = {
   title: 'HYBRIDX.CLUB',
   description: 'Your AI-powered partner for peak HYROX performance.',
   manifest: '/manifest.json',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    viewportFit: 'cover', // Important for PWA with safe areas
+  },
 };
 
 export default function RootLayout({

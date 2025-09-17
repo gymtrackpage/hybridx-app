@@ -21,6 +21,7 @@ function fromFirestore(doc: any): WorkoutSession {
         notes: data.notes || '',
         duration: data.duration,
         extendedExercises: data.extendedExercises || [],
+        skipped: data.skipped || false,
         workoutDetails: data.workoutDetails,
         stravaId: data.stravaId,
         uploadedToStrava: data.uploadedToStrava,
