@@ -105,10 +105,10 @@ const withPWA = require('next-pwa')({
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
-    ignoreBuildErrors: false, // Stricter builds
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: false, // Stricter builds
+    ignoreDuringBuilds: false,
   },
   images: {
     remotePatterns: [

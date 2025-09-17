@@ -305,7 +305,7 @@ export default function DashboardPage() {
       <div className="space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-            Welcome back, {user?.firstName || 'Athlete'}!
+            Welcome back, {user?.firstName || 'Athlete'}
           </h1>
           {summaryLoading ? (
               <Skeleton className="h-5 w-2/3" />
