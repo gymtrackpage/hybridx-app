@@ -5,9 +5,9 @@ import {
   getAuth, 
   indexedDBLocalPersistence, 
   browserLocalPersistence,
+  initializeAuth as initializeFirebaseAuth,
   Auth,
-  onAuthStateChanged,
-  setPersistence
+  onAuthStateChanged
 } from "firebase/auth";
 
 // Your web app's Firebase configuration
@@ -24,130 +24,64 @@ const firebaseConfig = {
 const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 
-// Single auth instance - no double initialization
-let authInstance: Auth | null = null;
-let persistenceSet = false;
+// Singleton promise to ensure auth is only initialized once
+let authInstancePromise: Promise<Auth> | null = null;
 
 /**
- * Gets the Firebase Auth instance with proper persistence.
- * Safe to call multiple times - only initializes once.
+ * Gets the initialized Firebase Auth instance using a promise-based singleton pattern.
+ * Ensures persistence is set for PWA functionality and that it's only initialized once.
  */
-const getAuthInstance = async (): Promise<Auth> => {
-  // Return existing instance if already created
-  if (authInstance) {
-    return authInstance;
+const getAuthInstance = (): Promise<Auth> => {
+  if (authInstancePromise) {
+    return authInstancePromise;
   }
 
-  // Server-side: return basic auth
-  if (typeof window === 'undefined') {
-    authInstance = getAuth(app);
-    return authInstance;
-  }
-
-  try {
-    console.log('Initializing Firebase Auth...');
-    
-    // Get the auth instance (this is safe to call multiple times)
-    authInstance = getAuth(app);
-    
-    // Set persistence only if not already set
-    if (!persistenceSet) {
-      try {
-        await setPersistence(authInstance, indexedDBLocalPersistence);
-        console.log('IndexedDB persistence set successfully');
-        persistenceSet = true;
-      } catch (indexedDBError) {
-        console.warn('IndexedDB persistence failed, trying localStorage:', indexedDBError);
-        try {
-          await setPersistence(authInstance, browserLocalPersistence);
-          console.log('LocalStorage persistence set successfully');
-          persistenceSet = true;
-        } catch (localStorageError) {
-          console.error('Both persistence methods failed:', localStorageError);
-          // Continue anyway - auth will work without persistence
-        }
+  authInstancePromise = new Promise((resolve, reject) => {
+    try {
+      if (typeof window !== 'undefined') {
+        // For client-side, initialize with persistence.
+        const auth = initializeFirebaseAuth(app, {
+          persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+        });
+        resolve(auth);
+      } else {
+        // For server-side, just get the auth instance without persistence.
+        const auth = getAuth(app);
+        resolve(auth);
       }
-    }
-
-    console.log('Firebase Auth initialized successfully');
-    return authInstance;
-
-  } catch (error) {
-    console.error('Firebase Auth initialization error:', error);
-    
-    // Fallback: return basic auth instance
-    if (!authInstance) {
-      authInstance = getAuth(app);
-    }
-    return authInstance;
-  }
-};
-
-/**
- * Synchronous getter for cases where auth is already initialized.
- * Use getAuthInstance() instead when possible.
- */
-const getAuthInstanceSync = (): Auth => {
-  if (!authInstance) {
-    authInstance = getAuth(app);
-  }
-  return authInstance;
-};
-
-/**
- * Wait for initial auth state determination.
- */
-const waitForAuthState = async (timeoutMs: number = 10000): Promise<boolean> => {
-  return new Promise((resolve, reject) => {
-    let resolved = false;
-    
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        console.warn('Auth state check timed out');
-        resolve(false);
-      }
-    }, timeoutMs);
-
-    getAuthInstance().then(auth => {
-      if (resolved) return;
-      
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeout);
-          unsubscribe();
-          console.log(`Auth state determined: ${user ? 'authenticated' : 'not authenticated'}`);
-          resolve(!!user);
-        }
-      }, (error) => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeout);
-          console.error('Auth state check failed:', error);
-          reject(error);
-        }
-      });
-    }).catch(error => {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeout);
-        console.error('Failed to get auth instance:', error);
+    } catch (error) {
+      // If initialization fails, fall back to the basic getAuth.
+      // This can happen with hot-reloading in development.
+      if ((error as any).code === 'auth/already-initialized') {
+        resolve(getAuth(app));
+      } else {
+        console.error("Firebase Auth initialization error:", error);
         reject(error);
       }
-    });
+    }
+  });
+
+  return authInstancePromise;
+};
+
+
+/**
+ * A helper function that resolves when the auth state is first determined.
+ * Resolves with `true` if a user is logged in, `false` otherwise.
+ */
+const waitForAuthState = (): Promise<boolean> => {
+  return new Promise((resolve, reject) => {
+    getAuthInstance().then(auth => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            unsubscribe(); // Unsubscribe after the first emission
+            resolve(!!user);
+        }, reject); // Pass reject to handle errors during auth state observation
+    }).catch(reject);
   });
 };
 
-// Legacy sync export for backward compatibility
-// DO NOT USE - prefer getAuthInstance()
+// Maintain a direct export for any legacy code that might still use it,
+// but getAuthInstance is the preferred method.
 const auth = getAuth(app);
 
-export { 
-  app, 
-  db, 
-  auth, // Legacy - avoid using this
-  getAuthInstance, 
-  getAuthInstanceSync,
-  waitForAuthState
-};
+export { app, db, auth, getAuthInstance, waitForAuthState };

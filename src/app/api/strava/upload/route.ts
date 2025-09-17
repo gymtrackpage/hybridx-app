@@ -1,12 +1,11 @@
-{// src/app/api/strava/upload/route.ts
+// src/app/api/strava/upload/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { cookies } from 'next/headers';
 import { getUser, updateUserAdmin } from '@/services/user-service';
 import { getAdminDb } from '@/lib/firebase-admin';
 import axios from 'axios';
-import type { StravaTokens, WorkoutSession } from '@/models/types';
-import { differenceInSeconds } from 'date-fns';
+import type { StravaTokens, WorkoutSession, ProgramType } from '@/models/types';
 
 // Helper function to safely convert Firestore timestamp to Date
 function toDate(timestamp: any): Date {
@@ -19,21 +18,11 @@ function toDate(timestamp: any): Date {
 }
 
 // Map your app's activity types to Strava activity types
-function mapActivityTypeToStrava(title: string): string {
-    const lowerTitle = title.toLowerCase();
-    if (lowerTitle.includes('run') || lowerTitle.includes('running')) return 'Run';
-    if (lowerTitle.includes('cycle') || lowerTitle.includes('bike')) return 'Ride';
-    if (lowerTitle.includes('swim')) return 'Swim';
-    if (lowerTitle.includes('row')) return 'Rowing';
-    if (lowerTitle.includes('strength')) return 'WeightTraining';
-    if (lowerTitle.includes('crossfit')) return 'CrossFit';
-    if (lowerTitle.includes('hiit')) return 'Workout';
-    if (lowerTitle.includes('cardio')) return 'Workout';
-    if (lowerTitle.includes('yoga')) return 'Yoga';
-    if (lowerTitle.includes('pilates')) return 'Pilates';
-    if (lowerTitle.includes('walk')) return 'Walk';
-    if (lowerTitle.includes('hike')) return 'Hike';
-    return 'Workout';
+function mapActivityTypeToStrava(programType: ProgramType): string {
+    if (programType === 'running') {
+        return 'Run';
+    }
+    return 'WeightTraining';
 }
 
 async function getValidAccessToken(userId: string): Promise<string> {
@@ -118,12 +107,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Create the activity on Strava
-    const duration = differenceInSeconds(toDate(session.finishedAt), toDate(session.startedAt));
+    const estimatedDuration = 3600; // Strava requires a time, default to 1 hour
     const stravaActivityPayload = {
       name: session.workoutTitle,
-      type: mapActivityTypeToStrava(session.workoutTitle),
+      type: mapActivityTypeToStrava(session.programType),
       start_date_local: toDate(session.startedAt).toISOString(),
-      elapsed_time: duration,
+      elapsed_time: estimatedDuration,
       description: `Workout from HYBRIDX.CLUB.\n\nNotes:\n${session.notes || 'No notes.'}`,
       trainer: true,
       commute: false
