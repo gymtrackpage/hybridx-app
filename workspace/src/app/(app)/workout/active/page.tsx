@@ -46,6 +46,7 @@ export default function ActiveWorkoutPage() {
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   const { toast } = useToast();
   
+  // Correctly initialize the date only once on component mount
   const [today] = useState(() => {
       const d = new Date();
       d.setHours(0,0,0,0);
@@ -70,7 +71,7 @@ export default function ActiveWorkoutPage() {
         let workoutSession;
         let currentWorkoutInfo;
 
-        // First, check for a one-off or custom workout for today
+        // First, check for a one-off or custom workout for today using the isolated query
         const oneOffSession = await getTodaysOneOffSession(firebaseUser.uid, today);
 
         if (oneOffSession) {
