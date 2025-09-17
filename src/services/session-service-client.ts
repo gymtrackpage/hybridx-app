@@ -128,6 +128,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         duration: duration || null,
         extendedExercises: ['one-off-ai', 'custom-workout'].includes(programId) ? (workout as Workout).exercises : [],
         workoutDetails: ['one-off-ai', 'custom-workout'].includes(programId) ? workout : null,
+        skipped: false,
     };
 
     if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai' && programId !== 'custom-workout'))) {
@@ -152,6 +153,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         duration: newSessionData.duration,
         extendedExercises: newSessionData.extendedExercises,
         workoutDetails: newSessionData.workoutDetails,
+        skipped: false,
     };
 }
 
@@ -209,9 +211,7 @@ export async function linkStravaActivityToSession(sessionId: string, activity: S
     // Mark all original exercises as complete
     const completedItems: { [key: string]: boolean } = { ...sessionData.completedItems };
    if (sessionData.workoutDetails) {
-        const items = sessionData.workoutDetails.programType === 'running' 
-            ? sessionData.workoutDetails.runs 
-            : sessionData.workoutDetails.exercises;
+        const items = sessionData.workoutDetails.programType === 'running' ? sessionData.workoutDetails.runs : sessionData.workoutDetails.exercises;
         items.forEach((item: any) => {
             completedItems[item.name || item.description] = true;
         });
@@ -230,6 +230,7 @@ export async function linkStravaActivityToSession(sessionId: string, activity: S
             name: activity.name
         },
         workoutTitle: activity.name, // Overwrite with Strava activity name
+        skipped: false,
     };
     await updateDoc(sessionRef, updateData);
 }
