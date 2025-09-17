@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Home, Calendar, User, BookOpenCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CustomWorkoutIcon } from './icons';
+import { useScrollDirection } from '@/hooks/use-scroll-direction';
 
 const navItems = [
   { href: '/dashboard', icon: Home, label: 'Home' },
@@ -17,9 +18,13 @@ const navItems = [
 
 export function MobileNavBar() {
   const pathname = usePathname();
+  const scrollDirection = useScrollDirection();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-sm md:hidden safe-area-inset-bottom">
+    <nav className={cn(
+        "fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-sm md:hidden safe-area-inset-bottom transition-transform duration-300 ease-in-out",
+        scrollDirection === 'down' ? 'translate-y-full' : 'translate-y-0'
+    )}>
       <div className="flex h-16 items-center justify-around px-safe">
         {navItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
