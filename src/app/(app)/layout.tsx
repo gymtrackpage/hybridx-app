@@ -208,7 +208,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {/* Header content can go here, like breadcrumbs */}
             </div>
         </header>
-        <main className="flex-1 overflow-auto p-4 lg:p-6 pb-28 md:pb-6 pb-safe">{children}</main>
+        <main className="flex-1 overflow-auto p-4 lg:p-6 pb-28 md:pb-6">{children}</main>
         <div className="hidden md:block">
             <InstallPwaBanner />
         </div>
