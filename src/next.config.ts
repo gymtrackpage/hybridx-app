@@ -98,6 +98,7 @@ const withPWA = require('next-pwa')({
   ],
    workboxOptions: {
     disableDevLogs: true,
+    clientsClaim: true,
   },
 });
 
