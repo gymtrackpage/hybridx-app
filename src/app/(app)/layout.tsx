@@ -212,7 +212,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="hidden md:block">
             <InstallPwaBanner />
         </div>
-        <MobileNavBar />
+         <div className="md:hidden">
+          <MobileNavBar />
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
