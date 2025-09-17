@@ -1,4 +1,3 @@
-
 // src/services/user-service.ts
 'use server';
 
@@ -16,7 +15,6 @@ function safeToDate(timestamp: any): Date | undefined {
   return undefined;
 }
 
-
 // SERVER-SIDE function using Admin SDK
 export async function getUser(userId: string): Promise<User | null> {
     const adminDb = getAdminDb();
@@ -28,6 +26,12 @@ export async function getUser(userId: string): Promise<User | null> {
         const data = docSnap.data();
         if (!data) return null;
         
+        // Correctly handle the nested expiresAt timestamp within the strava object
+        const stravaData = data.strava ? { 
+            ...data.strava, 
+            expiresAt: safeToDate(data.strava.expiresAt)! 
+        } : undefined;
+
         const user: User = {
             id: docSnap.id,
             email: data.email,
@@ -40,13 +44,15 @@ export async function getUser(userId: string): Promise<User | null> {
             startDate: safeToDate(data.startDate),
             personalRecords: data.personalRecords || {},
             runningProfile: data.runningProfile || { benchmarkPaces: {} },
-            strava: data.strava ? { ...data.strava, expiresAt: safeToDate(data.strava.expiresAt)! } : undefined,
+            strava: stravaData,
             lastStravaSync: safeToDate(data.lastStravaSync),
             isAdmin: data.isAdmin || false,
             subscriptionStatus: data.subscriptionStatus || 'trial',
             stripeCustomerId: data.stripeCustomerId,
             subscriptionId: data.subscriptionId,
             trialStartDate: safeToDate(data.trialStartDate),
+            cancel_at_period_end: data.cancel_at_period_end,
+            cancellation_effective_date: safeToDate(data.cancellation_effective_date),
         };
         return user;
     } else {
@@ -98,6 +104,7 @@ export async function updateUserAdmin(userId: string, data: Partial<Omit<User, '
     const userRef = adminDb.collection('users').doc(userId);
     const dataToUpdate: { [key: string]: any } = { ...data };
 
+    // Convert any Date objects to Firestore Timestamps before updating
     if (data.startDate) {
         dataToUpdate.startDate = Timestamp.fromDate(data.startDate);
     }
@@ -105,11 +112,19 @@ export async function updateUserAdmin(userId: string, data: Partial<Omit<User, '
         dataToUpdate.trialStartDate = Timestamp.fromDate(data.trialStartDate);
     }
     if (data.strava?.expiresAt) {
-        dataToUpdate.strava.expiresAt = Timestamp.fromDate(data.strava.expiresAt);
+        // Ensure nested objects are handled correctly
+        dataToUpdate.strava = {
+            ...data.strava,
+            expiresAt: Timestamp.fromDate(data.strava.expiresAt)
+        };
     }
     if (data.lastStravaSync) {
         dataToUpdate.lastStravaSync = Timestamp.fromDate(data.lastStravaSync);
     }
+    if (data.cancellation_effective_date) {
+        dataToUpdate.cancellation_effective_date = Timestamp.fromDate(data.cancellation_effective_date);
+    }
+
 
     await userRef.update(dataToUpdate);
 }
