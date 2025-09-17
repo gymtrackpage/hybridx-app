@@ -5,16 +5,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Calendar,
-  LayoutDashboard,
   LogOut,
-  MessageSquare,
   Shield,
-  BookOpenCheck,
-  User as UserIcon,
-  CreditCard,
-  Zap,
-  Newspaper,
 } from 'lucide-react';
 import { signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
@@ -41,19 +33,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { InstallPwaBanner } from '@/components/install-pwa-banner';
 import { getUserClient } from '@/services/user-service-client';
 import { addMonths, isAfter } from 'date-fns';
-import { MobileNavBar } from '@/components/mobile-nav-bar';
+import { MobileNavBar, mobileNavItems } from '@/components/mobile-nav-bar';
 
-
-const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/assistant', icon: MessageSquare, label: 'AI Assistant' },
-  { href: '/activity-feed', icon: Zap, label: 'Activity Feed' },
-  { href: '/articles', icon: Newspaper, label: 'Training Articles' },
-  { href: '/calendar', icon: Calendar, label: 'Calendar' },
-  { href: '/programs', icon: BookOpenCheck, label: 'Programs' },
-  { href: '/profile', icon: UserIcon, label: 'Profile' },
-  { href: '/subscription', icon: CreditCard, label: 'Subscription' },
-];
 
 const adminNavItems = [
     { href: '/admin/programs', icon: Shield, label: 'Manage Programs' },
@@ -70,15 +51,18 @@ function NavMenu() {
     return (
         <>
             <SidebarMenu>
-                {navItems.map((item) => (
-                    <SidebarMenuItem key={item.href}>
-                        <SidebarMenuButton asChild tooltip={item.label} isActive={pathname.startsWith(item.href)}>
-                            <Link href={item.href} onClick={handleLinkClick}>
-                                <item.icon />
-                                <span>{item.label}</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
+                {mobileNavItems.map((item) => (
+                    // Hide the central workout button from the sidebar list
+                    !item.isCentral && (
+                        <SidebarMenuItem key={item.href}>
+                            <SidebarMenuButton asChild tooltip={item.label} isActive={pathname.startsWith(item.href)}>
+                                <Link href={item.href} onClick={handleLinkClick}>
+                                    <item.icon />
+                                    <span>{item.label}</span>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    )
                 ))}
             </SidebarMenu>
             <SidebarSeparator />

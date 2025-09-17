@@ -3,16 +3,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Calendar, User, BookOpenCheck } from 'lucide-react';
+import { Home, Calendar, User, Newspaper, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CustomWorkoutIcon } from './icons';
 import { useScrollDirection } from '@/hooks/use-scroll-direction';
 
-const navItems = [
-  { href: '/dashboard', icon: Home, label: 'Home' },
+export const mobileNavItems = [
+  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/calendar', icon: Calendar, label: 'Calendar' },
   { href: '/workout/active', icon: CustomWorkoutIcon, label: 'Workout', isCentral: true },
-  { href: '/programs', icon: BookOpenCheck, label: 'Programs' },
+  { href: '/articles', icon: Newspaper, label: 'Articles' },
   { href: '/profile', icon: User, label: 'Profile' },
 ];
 
@@ -26,7 +26,7 @@ export function MobileNavBar() {
         scrollDirection === 'down' ? 'translate-y-full' : 'translate-y-0'
     )}>
       <div className="flex h-16 items-center justify-around px-safe">
-        {navItems.map((item) => {
+        {mobileNavItems.map((item) => {
           const isActive = pathname.startsWith(item.href);
           
           if (item.isCentral) {
