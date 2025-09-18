@@ -33,7 +33,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { InstallPwaBanner } from '@/components/install-pwa-banner';
 import { getUserClient } from '@/services/user-service-client';
 import { addMonths, isAfter } from 'date-fns';
-import { MobileNavBar, mobileNavItems } from '@/components/mobile-nav-bar';
+import { MobileNavBar, mobileNavItems, secondaryNavItems } from '@/components/mobile-nav-bar';
 
 
 const adminNavItems = [
@@ -63,6 +63,19 @@ function NavMenu() {
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     )
+                ))}
+            </SidebarMenu>
+            <SidebarSeparator />
+            <SidebarMenu>
+                 {secondaryNavItems.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                        <SidebarMenuButton asChild tooltip={item.label} isActive={pathname.startsWith(item.href)}>
+                            <Link href={item.href} onClick={handleLinkClick}>
+                                <item.icon />
+                                <span>{item.label}</span>
+                            </Link>
+                        </SidebarMenuButton>
+                    </SidebarMenuItem>
                 ))}
             </SidebarMenu>
             <SidebarSeparator />

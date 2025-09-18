@@ -4,18 +4,23 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, Newspaper, LayoutDashboard, Calendar } from 'lucide-react';
+import { User, Newspaper, LayoutDashboard, Calendar, Sparkles, BookOpen, CreditCard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CustomWorkoutIcon } from './icons';
 import { useScrollDirection } from '@/hooks/use-scroll-direction';
 
 export const mobileNavItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/calendar', icon: Calendar, label: 'Calendar' },
+  { href: '/programs', icon: BookOpen, label: 'Programs' },
   { href: '/workout/active', icon: CustomWorkoutIcon, label: 'Workout', isCentral: true },
-  { href: '/articles', icon: Newspaper, label: 'Articles' },
+  { href: '/assistant', icon: Sparkles, label: 'Edge Coach' },
   { href: '/profile', icon: User, label: 'Profile' },
 ];
+
+export const secondaryNavItems = [
+  { href: '/articles', icon: Newspaper, label: 'Articles' },
+  { href: '/subscription', icon: CreditCard, label: 'Subscription' },
+]
 
 export function MobileNavBar() {
   const pathname = usePathname();
