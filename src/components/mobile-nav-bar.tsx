@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, Newspaper, LayoutDashboard, Sparkles, BookOpen, CreditCard } from 'lucide-react';
+import { User, Newspaper, LayoutDashboard, Sparkles, BookOpen, CreditCard, Dumbbell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CustomWorkoutIcon } from './icons';
 import { useScrollDirection } from '@/hooks/use-scroll-direction';
@@ -22,7 +22,7 @@ export const secondaryNavItems = [
 ]
 
 // Combine primary and secondary for sidebar usage
-export const mobileNavItems = [...primaryNavItems.filter(item => !item.isCentral), ...secondaryNavItems];
+export const mobileNavItems = [...primaryNavItems, ...secondaryNavItems];
 
 
 export function MobileNavBar() {

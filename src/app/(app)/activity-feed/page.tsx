@@ -239,7 +239,7 @@ export default function ActivityFeedPage() {
                         </div>
                     ) : (
                          <ul className="space-y-2">
-                            {activities.map((activity) => (
+                            {Array.isArray(activities) && activities.map((activity) => (
                                 <li key={activity.id}>
                                     <button
                                         onClick={() => handleActivityClick(activity.id)}
