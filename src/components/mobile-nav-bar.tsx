@@ -3,14 +3,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, Newspaper, LayoutDashboard, Sparkles, BookOpen, CreditCard, Dumbbell } from 'lucide-react';
+import { User, Newspaper, LayoutDashboard, Sparkles, BookOpen, CreditCard, Dumbbell, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CustomWorkoutIcon } from './icons';
 import { useScrollDirection } from '@/hooks/use-scroll-direction';
 
 export const primaryNavItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/programs', icon: BookOpen, label: 'Programs' },
+  { href: '/calendar', icon: Calendar, label: 'Calendar' },
   { href: '/workout/active', icon: CustomWorkoutIcon, label: 'Workout', isCentral: true },
   { href: '/assistant', icon: Sparkles, label: 'Edge Coach' },
   { href: '/profile', icon: User, label: 'Profile' },
@@ -18,6 +18,7 @@ export const primaryNavItems = [
 
 export const secondaryNavItems = [
   { href: '/articles', icon: Newspaper, label: 'Articles' },
+  { href: '/programs', icon: BookOpen, label: 'Programs' },
   { href: '/subscription', icon: CreditCard, label: 'Subscription' },
 ]
 
