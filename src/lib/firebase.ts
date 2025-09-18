@@ -80,6 +80,49 @@ const waitForAuthState = (): Promise<boolean> => {
   });
 };
 
+// Function to get a specific cookie by name
+const getCookie = (name: string): string | undefined => {
+    if (typeof document === 'undefined') return undefined;
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift();
+};
+
+/**
+ * Provides a comprehensive diagnosis of the current authentication state.
+ * Safe to call from client-side components.
+ */
+export async function diagnoseAuth() {
+    try {
+        const auth = await getAuthInstance();
+        const sessionCookie = getCookie('__session');
+        const currentUser = auth.currentUser;
+
+        return {
+            timestamp: new Date().toISOString(),
+            authProviderInitialized: !!auth,
+            currentUser: currentUser ? {
+                uid: currentUser.uid,
+                email: currentUser.email,
+                emailVerified: currentUser.emailVerified,
+            } : null,
+            cookies: {
+                sessionCookieExists: !!sessionCookie,
+                sessionCookieLength: sessionCookie?.length || 0,
+                allCookies: typeof document !== 'undefined' ? document.cookie : 'N/A (server-side)',
+            },
+        };
+    } catch (error: any) {
+        console.error('Auth diagnosis failed:', error);
+        return {
+            error: true,
+            errorMessage: error.message,
+            stack: error.stack,
+        };
+    }
+}
+
+
 // Maintain a direct export for any legacy code that might still use it,
 // but getAuthInstance is the preferred method.
 const auth = getAuth(app);

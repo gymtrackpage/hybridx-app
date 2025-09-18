@@ -1,5 +1,5 @@
 
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
@@ -18,11 +18,12 @@ export const metadata: Metadata = {
   title: 'HYBRIDX.CLUB',
   description: 'Your AI-powered partner for peak HYROX performance.',
   manifest: '/manifest.json',
-  viewport: {
+};
+
+export const viewport: Viewport = {
     width: 'device-width',
     initialScale: 1,
     viewportFit: 'cover', // Important for PWA with safe areas
-  },
 };
 
 export default function RootLayout({

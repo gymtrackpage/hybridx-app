@@ -3,16 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { getAuthInstance } from '@/lib/firebase';
+import { diagnoseAuth, getAuthInstance } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-
-// Function to get a specific cookie by name
-const getCookie = (name: string): string | undefined => {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop()?.split(';').shift();
-};
-
 
 export function AuthDiagnostics() {
   const [diagnosis, setDiagnosis] = useState<any>(null);
@@ -21,26 +13,7 @@ export function AuthDiagnostics() {
   const runDiagnosis = async () => {
     setLoading(true);
     try {
-        const auth = await getAuthInstance();
-        const sessionCookie = getCookie('__session');
-
-        const result = {
-            timestamp: new Date().toISOString(),
-            authInstance: {
-                appName: auth.app.name,
-                currentUser: auth.currentUser ? {
-                    uid: auth.currentUser.uid,
-                    email: auth.currentUser.email,
-                    emailVerified: auth.currentUser.emailVerified,
-                } : null,
-            },
-            cookies: {
-                sessionCookieExists: !!sessionCookie,
-                sessionCookieLength: sessionCookie?.length || 0,
-                allCookies: document.cookie,
-            },
-        };
-      
+      const result = await diagnoseAuth();
       setDiagnosis(result);
       console.log('🔍 Auth Diagnosis:', result);
     } catch (error) {
