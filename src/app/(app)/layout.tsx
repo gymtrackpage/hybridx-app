@@ -193,10 +193,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
         </header>
         <main className="flex-1 overflow-auto p-4 lg:p-6 pb-28 md:pb-6">{children}</main>
+        
+        {/* PWA Banner for Desktop */}
         <div className="hidden md:block">
             <InstallPwaBanner />
         </div>
-         <div className="md:hidden">
+        
+         {/* Mobile Nav Bar for smaller screens */}
+        <div className="md:hidden">
           <MobileNavBar />
         </div>
       </SidebarInset>
