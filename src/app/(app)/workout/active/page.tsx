@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { Flag, Loader2, CalendarDays, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon, ChevronLeft } from 'lucide-react';
+import { Flag, Loader2, CalendarDays, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -316,16 +316,6 @@ export default function ActiveWorkoutPage() {
   return (
     <>
     <div className="space-y-6 max-w-2xl mx-auto">
-        {/* Back to Dashboard Button */}
-        <div className="flex items-center justify-start">
-            <Button asChild variant="outline" className="mb-4">
-                <Link href="/dashboard">
-                    <ChevronLeft className="mr-2 h-4 w-4" />
-                    Back to Dashboard
-                </Link>
-            </Button>
-        </div>
-
         <Card className="bg-accent/20 border-accent">
             <CardHeader>
                 <div className="flex-1">
@@ -339,7 +329,6 @@ export default function ActiveWorkoutPage() {
                         ) : summaryText ? (
                             <div className="relative">
                                 {summaryText}
-                                <span className="text-xs text-muted-foreground/60 ml-2">✨ AI enhanced</span>
                             </div>
                         ) : (
                             <div className="relative">
