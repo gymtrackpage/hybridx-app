@@ -1,9 +1,10 @@
+
 // src/components/mobile-nav-bar.tsx
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Calendar, User, Newspaper, LayoutDashboard } from 'lucide-react';
+import { User, Newspaper, LayoutDashboard, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CustomWorkoutIcon } from './icons';
 import { useScrollDirection } from '@/hooks/use-scroll-direction';
