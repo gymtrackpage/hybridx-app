@@ -14,6 +14,7 @@ interface WorkoutImageGeneratorProps {
     calories?: number;
     startTime: Date;
     notes?: string;
+    duration?: string; // New optional duration
   };
 }
 
@@ -142,6 +143,12 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
                 justifyContent: 'flex-start',
                 gap: '80px',
             }}>
+                {workout.duration && (
+                    <div>
+                        <div style={{ fontSize: '20px', color: 'rgba(255, 255, 255, 0.6)', textTransform: 'uppercase', marginBottom: '8px' }}>Duration</div>
+                        <div style={{ fontSize: '56px', fontWeight: '700' }}>{workout.duration}</div>
+                    </div>
+                )}
                 {distance && (
                     <div>
                         <div style={{ fontSize: '20px', color: 'rgba(255, 255, 255, 0.6)', textTransform: 'uppercase', marginBottom: '8px' }}>Distance</div>

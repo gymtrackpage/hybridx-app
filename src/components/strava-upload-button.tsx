@@ -94,6 +94,15 @@ export function StravaUploadButton({
     }
   };
 
+  if (disabled) {
+      return (
+        <Button disabled className="w-full" variant="outline">
+            <Upload className="h-4 w-4 mr-2" />
+            Upload to Strava (Skipped Workout)
+        </Button>
+      )
+  }
+
   if (uploaded && uploadedStravaId) {
     return (
       <Button

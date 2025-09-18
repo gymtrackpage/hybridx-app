@@ -1,12 +1,16 @@
 // src/components/workout-complete-modal.tsx
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { StravaUploadButton } from '@/components/strava-upload-button';
 import { WorkoutImageGenerator } from '@/components/WorkoutImageGenerator';
 import type { WorkoutSession, Workout, RunningWorkout } from '@/models/types';
+import { Label } from './ui/label';
+import { Input } from './ui/input';
+import { differenceInMinutes } from 'date-fns';
 
 interface WorkoutCompleteModalProps {
     isOpen: boolean;
@@ -17,6 +21,27 @@ interface WorkoutCompleteModalProps {
 }
 
 export default function WorkoutCompleteModal({ isOpen, onClose, session, userHasStrava, workout }: WorkoutCompleteModalProps) {
+    const [duration, setDuration] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            let initialDuration = '';
+            if (session.stravaActivity?.moving_time) {
+                const minutes = Math.floor(session.stravaActivity.moving_time / 60);
+                initialDuration = `${minutes} mins`;
+            } else if (session.duration) {
+                initialDuration = session.duration;
+            } else if (session.finishedAt) {
+                const minutes = differenceInMinutes(session.finishedAt, session.startedAt);
+                initialDuration = `${minutes} mins`;
+            }
+            setDuration(initialDuration);
+        }
+    }, [isOpen, session]);
+    
+    // Don't show the manual duration input if the activity was linked from Strava
+    const showDurationInput = !session.stravaActivity?.moving_time;
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-lg">
@@ -39,12 +64,25 @@ export default function WorkoutCompleteModal({ isOpen, onClose, session, userHas
                             Share your achievement
                          </p>
                         
+                        {showDurationInput && (
+                            <div className="space-y-2">
+                                <Label htmlFor="duration-input">Duration (Optional)</Label>
+                                <Input
+                                    id="duration-input"
+                                    value={duration}
+                                    onChange={(e) => setDuration(e.target.value)}
+                                    placeholder="e.g., 45 mins"
+                                />
+                            </div>
+                        )}
+                        
                         {userHasStrava && (
                             <StravaUploadButton
                                 sessionId={session.id}
                                 activityName={session.workoutTitle}
                                 isUploaded={session.uploadedToStrava}
                                 stravaId={session.stravaId}
+                                disabled={session.skipped}
                             />
                         )}
                         <WorkoutImageGenerator 
@@ -53,6 +91,8 @@ export default function WorkoutCompleteModal({ isOpen, onClose, session, userHas
                                 type: workout.programType,
                                 startTime: session.startedAt,
                                 notes: session.notes,
+                                duration: duration, // Pass the duration to the image generator
+                                distance: session.stravaActivity?.distance,
                             }}
                         />
                     </div>
