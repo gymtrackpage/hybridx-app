@@ -5,7 +5,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { BarChart, Target, Sparkles, Loader2, Route, Zap, PlusSquare } from 'lucide-react';
+import { BarChart, Target, Sparkles, Loader2, Route, Zap, PlusSquare, Link as LinkIcon } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval, isFuture, isToday } from 'date-fns';
 
 import { motivationalCoach } from '@/ai/flows/motivational-coach';
@@ -324,6 +324,7 @@ export default function DashboardPage() {
   }
 
   const isRunningProgram = todaysWorkout?.workout?.programType === 'running';
+  const isStravaConnected = user?.strava?.accessToken;
 
   return (
     <>
@@ -425,6 +426,27 @@ export default function DashboardPage() {
           </Card>
 
           <div className="space-y-6">
+            {!isStravaConnected && (
+              <Card className="bg-orange-50 border-orange-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-orange-800">
+                    <LinkIcon className="h-5 w-5" />
+                    Connect to Strava
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-orange-700">
+                    Automatically sync your activities to track progress and get personalized insights.
+                  </p>
+                </CardContent>
+                <CardFooter>
+                  <Button asChild variant="outline" className="w-full border-orange-300 text-orange-800 hover:bg-orange-100 hover:text-orange-900">
+                    <Link href="/profile">Connect Account</Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
