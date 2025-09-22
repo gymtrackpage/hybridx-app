@@ -37,7 +37,7 @@ import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getOrCreateWorkoutSession, getAllUserSessions, type WorkoutSession } from '@/services/session-service-client';
+import { getTodaysOneOffSession, getTodaysProgramSession, getOrCreateWorkoutSession, getAllUserSessions, type WorkoutSession } from '@/services/session-service-client';
 import type { User, Program, Workout, RunningWorkout, PlannedRun } from '@/models/types';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -88,22 +88,47 @@ export default function DashboardPage() {
       const weeklyProgress = generateProgressData(sessions);
       setProgressData(weeklyProgress);
 
-      if (currentUser.programId && currentUser.startDate) {
-        const currentProgram = await getProgramClient(currentUser.programId);
-        setProgram(currentProgram);
+      let workoutSession;
+      let currentWorkoutInfo;
+      const today = new Date();
+      today.setHours(0,0,0,0);
 
-        if (currentProgram) {
-          const workoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, new Date());
-          setTodaysWorkout(workoutInfo);
+      // Priority 1: Check for a one-off or custom workout for today
+      const oneOffSession = await getTodaysOneOffSession(userId, today);
 
-          if (workoutInfo.workout) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const session = await getOrCreateWorkoutSession(userId, currentProgram.id, today, workoutInfo.workout);
-            setTodaysSession(session);
+      if (oneOffSession) {
+          workoutSession = oneOffSession;
+          currentWorkoutInfo = {
+              day: 0,
+              workout: oneOffSession.workoutDetails as Workout,
+          };
+      } else if (currentUser.programId && currentUser.startDate) {
+          const currentProgram = await getProgramClient(currentUser.programId);
+          setProgram(currentProgram);
+
+          // Priority 2: Check for an existing program session (which could be swapped)
+          const programSession = await getTodaysProgramSession(userId, today);
+          
+          if (programSession && programSession.workoutDetails) {
+              workoutSession = programSession;
+              // Use the details from the session itself, which will reflect any swaps
+              currentWorkoutInfo = {
+                  day: getWorkoutForDay({ id: programSession.programId, name: '', description: '', programType: 'hyrox', workouts: [programSession.workoutDetails] }, currentUser.startDate, today).day,
+                  workout: programSession.workoutDetails,
+              };
+          } else if (currentProgram) {
+              // Priority 3: No session exists, so create one based on the original program schedule
+              const scheduledWorkoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, today);
+              if (scheduledWorkoutInfo.workout) {
+                 workoutSession = await getOrCreateWorkoutSession(userId, currentProgram.id, today, scheduledWorkoutInfo.workout);
+                 currentWorkoutInfo = scheduledWorkoutInfo;
+              }
           }
-        }
       }
+      
+      setTodaysWorkout(currentWorkoutInfo);
+      setTodaysSession(workoutSession);
+
     } catch (error) {
         console.error("Error fetching core dashboard data:", error);
     } finally {
@@ -274,7 +299,7 @@ export default function DashboardPage() {
   const progressPercentage = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
   
   const programStartsInFuture = user?.startDate && isFuture(user.startDate);
-  const showGenerateWorkoutButton = !program || programStartsInFuture;
+  const showGenerateWorkoutButton = !program || programStartsInFuture || !todaysWorkout?.workout;
   
   if (loading) {
     return (
