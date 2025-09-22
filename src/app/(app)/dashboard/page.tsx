@@ -20,17 +20,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, ChartTooltip, CartesianGrid, ChartTooltipContent } from '@/components/ui/chart';
+import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, ChartTooltip, CartesianGrid, ChartTooltipContent } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
