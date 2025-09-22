@@ -2,7 +2,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -11,12 +12,13 @@ import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getAllUserSessions } from '@/services/session-service-client';
+import { getAllUserSessions, getOrCreateWorkoutSession } from '@/services/session-service-client';
 import type { User, Program, Workout, WorkoutSession, RunningWorkout, Exercise } from '@/models/types';
-import { addDays, format, isSameDay, parseISO, isValid } from 'date-fns';
+import { addDays, format, isSameDay, parseISO, isValid, isToday } from 'date-fns';
 import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
 import { Button } from '@/components/ui/button';
-import { Link as LinkIcon, Activity, Clock, MapPin } from 'lucide-react';
+import { Link as LinkIcon, Activity, Clock, MapPin, Forward } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface WorkoutEvent {
   date: Date;
@@ -31,6 +33,9 @@ export default function CalendarPage() {
   const [workoutEvents, setWorkoutEvents] = useState<WorkoutEvent[]>([]);
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   const [sessionToLink, setSessionToLink] = useState<WorkoutSession | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const router = useRouter();
+  const { toast } = useToast();
 
   const selectedEvent = workoutEvents.find(event => 
     selectedDate && isSameDay(event.date, selectedDate)
@@ -39,10 +44,11 @@ export default function CalendarPage() {
   const selectedWorkout = selectedEvent?.workout;
   const completedSession = selectedEvent?.session;
 
-  const fetchCalendarData = async (firebaseUser: any) => {
+  const fetchCalendarData = async (fbUser: FirebaseUser) => {
     try {
-      const user = await getUserClient(firebaseUser.uid);
-      const sessions = await getAllUserSessions(firebaseUser.uid);
+      setFirebaseUser(fbUser);
+      const user = await getUserClient(fbUser.uid);
+      const sessions = await getAllUserSessions(fbUser.uid);
       
       let program = null;
       if (user?.programId && user.startDate) {
@@ -62,9 +68,9 @@ export default function CalendarPage() {
       try {
         setLoading(true);
         const auth = await getAuthInstance();
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-          if (firebaseUser) {
-            await fetchCalendarData(firebaseUser);
+        const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+          if (fbUser) {
+            await fetchCalendarData(fbUser);
           } else {
             setLoading(false);
           }
@@ -89,11 +95,9 @@ export default function CalendarPage() {
   const generateWorkoutEvents = (program: Program | null, startDate: Date | undefined, sessions: WorkoutSession[]) => {
     const events: WorkoutEvent[] = [];
     
-    // Create a map of sessions by date for quick lookup
     const sessionsMap = new Map<string, WorkoutSession>();
     sessions.forEach(session => {
         let sessionDate: Date;
-        // Use finishedAt for completed workouts, otherwise workoutDate
         const dateSource = session.finishedAt || session.workoutDate;
 
         if (dateSource instanceof Date) {
@@ -108,15 +112,13 @@ export default function CalendarPage() {
         }
     });
 
-    // Add programmed workouts if a program is active
     if (program && startDate) {
       const normalizedStartDate = new Date(startDate);
       normalizedStartDate.setHours(0, 0, 0, 0);
       
       const programDuration = Math.max(...program.workouts.map(w => w.day), 0);
 
-      // We generate events for the whole duration of the program
-      for (let i = 0; i < programDuration; i++) {
+      for (let i = 0; i < programDuration + 365; i++) { // Generate events for a year past program end
         const currentDate = addDays(normalizedStartDate, i);
         const dateKey = format(currentDate, 'yyyy-MM-dd');
         const { workout } = getWorkoutForDay(program, normalizedStartDate, currentDate);
@@ -129,7 +131,6 @@ export default function CalendarPage() {
             session: session,
             type: workout && session?.finishedAt ? 'both' : (session?.finishedAt ? 'completed' : 'programmed')
           });
-          // Remove from map to avoid duplication
           if (session) {
             sessionsMap.delete(dateKey);
           }
@@ -137,9 +138,7 @@ export default function CalendarPage() {
       }
     }
     
-    // Add any remaining completed sessions that were not part of the active program
     sessionsMap.forEach((session, dateKey) => {
-        // Use an ISO date string with a time component to avoid timezone issues
         const eventDate = parseISO(`${dateKey}T12:00:00.000Z`);
         events.push({
             date: eventDate,
@@ -150,6 +149,27 @@ export default function CalendarPage() {
     });
 
     setWorkoutEvents(events);
+  };
+
+  const handleDoToday = async () => {
+    if (!firebaseUser || !selectedWorkout || !program) {
+        toast({ title: "Error", description: "Cannot assign workout. User or workout data is missing.", variant: "destructive" });
+        return;
+    }
+
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, selectedWorkout, true);
+        
+        toast({ title: "Workout Assigned!", description: `"${selectedWorkout.title}" is set for today. Let's go!` });
+        router.push('/workout/active');
+
+    } catch (error) {
+        console.error("Failed to assign workout for today:", error);
+        toast({ title: "Error", description: "Could not assign the workout. Please try again.", variant: "destructive" });
+    }
   };
 
   const getCompletedExercises = (session: WorkoutSession): { name: string, details: string }[] => {
@@ -205,7 +225,6 @@ export default function CalendarPage() {
     setLoading(false);
   };
   
-    // Helper to format duration from seconds to HH:MM
     const formatDuration = (seconds: number) => {
         if (!seconds) return '0m';
         const h = Math.floor(seconds / 3600);
@@ -216,12 +235,26 @@ export default function CalendarPage() {
         return `${m}m`;
     };
 
-    // Helper to format distance from meters to km or m
     const formatDistance = (meters: number) => {
         if (!meters) return '0 km';
         const km = meters / 1000;
         return km >= 1 ? `${km.toFixed(1)} km` : `${meters.toFixed(0)} m`;
     };
+
+    // Need access to the program to create a session on-the-fly
+    const [program, setProgram] = useState<Program | null>(null);
+    useEffect(() => {
+        const getProg = async (user: FirebaseUser) => {
+            const appUser = await getUserClient(user.uid);
+            if (appUser?.programId) {
+                const p = await getProgramClient(appUser.programId);
+                setProgram(p);
+            }
+        }
+        if (firebaseUser) {
+            getProg(firebaseUser);
+        }
+    }, [firebaseUser]);
 
 
   return (
@@ -367,14 +400,23 @@ export default function CalendarPage() {
             ) : null}
 
              {selectedWorkout && !completedSession && (
-                <div className="pt-4 mt-4 border-t">
+                <div className="pt-4 mt-4 border-t flex flex-col sm:flex-row gap-2">
+                    {!isToday(selectedDate) && program && (
+                        <Button
+                            variant="accent"
+                            className="w-full"
+                            onClick={handleDoToday}
+                        >
+                            <Forward className="mr-2 h-4 w-4" />
+                            Do This Workout Today
+                        </Button>
+                    )}
                     <Button 
                         variant="outline" 
                         className="w-full"
                         onClick={() => {
-                            // Create a temporary session object to pass to the linker
                             const tempSession = {
-                                id: '', // No ID yet, it's just for context
+                                id: '',
                                 userId: '',
                                 programId: (selectedEvent as any)?.program?.id || '',
                                 workoutDate: selectedDate,
