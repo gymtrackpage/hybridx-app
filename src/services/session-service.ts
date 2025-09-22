@@ -13,10 +13,19 @@ function fromFirestore(doc: any): WorkoutSession {
         userId: data.userId,
         programId: data.programId,
         workoutDate: data.workoutDate.toDate(),
+        workoutTitle: data.workoutTitle,
+        programType: data.programType,
         startedAt: data.startedAt.toDate(),
         finishedAt: data.finishedAt ? data.finishedAt.toDate() : undefined,
-        completedExercises: data.completedExercises,
+        completedItems: data.completedItems,
         notes: data.notes || '',
+        extendedExercises: data.extendedExercises,
+        skipped: data.skipped,
+        workoutDetails: data.workoutDetails,
+        stravaId: data.stravaId,
+        uploadedToStrava: data.uploadedToStrava,
+        stravaUploadedAt: data.stravaUploadedAt,
+        stravaActivity: data.stravaActivity,
     };
 }
 
@@ -45,9 +54,12 @@ export async function getOrCreateWorkoutSessionAdmin(userId: string, programId: 
         programId,
         workoutDate: Timestamp.fromDate(workoutDate),
         startedAt: Timestamp.now(),
-        completedExercises: initialCompleted,
+        completedItems: initialCompleted,
         finishedAt: null,
         notes: '',
+        workoutTitle: workout.title,
+        programType: workout.programType,
+        workoutDetails: workout, // Store the full workout details
     };
 
     const docRef = await sessionsCollectionAdmin.add(newSessionData);
@@ -57,9 +69,12 @@ export async function getOrCreateWorkoutSessionAdmin(userId: string, programId: 
         userId,
         programId,
         workoutDate,
+        workoutTitle: workout.title,
+        programType: workout.programType,
         startedAt: new Date(),
-        completedExercises: initialCompleted,
+        completedItems: initialCompleted,
         notes: '',
+        workoutDetails: workout,
     };
 }
 
@@ -142,7 +157,7 @@ function createSessionData(userId: string, programId: string, date: Date, workou
       completedItems,
       finishedAt: null,
       notes: '',
-      workoutDetails: workout,
+      workoutDetails: workout, // <-- CRITICAL FIX: Ensure full workout object is saved
       skipped: false,
     };
 

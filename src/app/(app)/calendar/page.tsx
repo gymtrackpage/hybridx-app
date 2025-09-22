@@ -124,9 +124,12 @@ export default function CalendarPage() {
       for (let i = 0; i < programDuration + 365; i++) { // Generate events for a year past program end
         const currentDate = addDays(normalizedStartDate, i);
         const dateKey = format(currentDate, 'yyyy-MM-dd');
-        const { workout } = getWorkoutForDay(program, normalizedStartDate, currentDate);
+        const { workout: programmedWorkout } = getWorkoutForDay(program, normalizedStartDate, currentDate);
         const session = sessionsMap.get(dateKey);
         
+        // Prioritize the workout details from the session if it exists (for swaps), otherwise use the programmed one.
+        const workout = session?.workoutDetails || programmedWorkout;
+
         if (workout || session) {
           events.push({
             date: currentDate,
@@ -163,15 +166,17 @@ export default function CalendarPage() {
       try {
           const today = startOfDay(new Date());
           const sourceDate = startOfDay(selectedDate);
+          
+          // Use the event's workout data, which correctly reflects any previous swaps
           const todaysOriginalWorkout = todaysEvent?.workout || null;
 
           await swapWorkouts({
               userId: firebaseUser.uid,
               programId: program.id,
-              date1: today,
-              workout1: selectedWorkout,
-              date2: sourceDate,
-              workout2: todaysOriginalWorkout
+              date1: today, // today
+              workout1: selectedWorkout, // The workout from the selected day
+              date2: sourceDate, // the selected day
+              workout2: todaysOriginalWorkout // The workout that was originally on today
           });
           
           toast({ title: "Workouts Swapped!", description: `"${selectedWorkout.title}" is now scheduled for today.` });
@@ -325,7 +330,7 @@ export default function CalendarPage() {
               {format(selectedDate, "EEEE, MMMM do")}
             </p>
             <CardTitle>
-              {completedSession?.stravaActivity?.name || completedSession?.workoutTitle || selectedWorkout?.title || 'Workout Details'}
+              {completedSession?.stravaActivity?.name || selectedWorkout?.title || 'Workout Details'}
             </CardTitle>
             {completedSession?.finishedAt ? (
               <div className="space-y-2 mt-2">
