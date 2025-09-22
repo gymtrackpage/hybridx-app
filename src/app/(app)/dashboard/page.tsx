@@ -8,7 +8,6 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { BarChart, Target, Sparkles, Loader2, Route, Zap, PlusSquare, Link as LinkIcon } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval, isFuture, isToday } from 'date-fns';
 
-import { motivationalCoach } from '@/ai/flows/motivational-coach';
 import { dashboardSummary } from '@/ai/flows/dashboard-summary';
 import { workoutSummary } from '@/ai/flows/workout-summary';
 import { generateWorkout } from '@/ai/flows/generate-workout';
@@ -60,8 +59,6 @@ export default function DashboardPage() {
   const [progressData, setProgressData] = useState<{ week: string, workouts: number }[]>([]);
   const [trainingPaces, setTrainingPaces] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [motivation, setMotivation] = useState('');
-  const [motivationLoading, setMotivationLoading] = useState(false);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
   const [isCustomWorkoutDialogOpen, setIsCustomWorkoutDialogOpen] = useState(false);
   const [summary, setSummary] = useState("Here's your plan for today. Let's get it done.");
@@ -228,25 +225,6 @@ export default function DashboardPage() {
       }
       return weeklyData;
   }
-
-  const handleGetMotivation = async () => {
-    if (!user || !program) return;
-    setMotivationLoading(true);
-    try {
-      // Create a simple workout history summary for the AI
-      const workoutHistory = `User has completed ${todaysWorkout?.day || 0} days of the "${program.name}" program.`;
-      const result = await motivationalCoach({
-        userName: user.firstName,
-        workoutHistory,
-      });
-      setMotivation(result.message);
-    } catch (error) {
-      console.error("Failed to get motivation:", error);
-      setMotivation("There was an error getting your motivation. But you're still awesome!");
-    } finally {
-      setMotivationLoading(false);
-    }
-  };
   
   const handleStartWorkout = () => {
       if (todaysWorkout?.workout) {
@@ -446,43 +424,6 @@ export default function DashboardPage() {
                 </CardFooter>
               </Card>
             )}
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-6 w-6 text-yellow-400" />
-                  Motivational Coach
-                </CardTitle>
-                <CardDescription>Need some motivation or guidance?</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">Get your message from your coach based on your recent progress.</p>
-              </CardContent>
-              <CardFooter>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="secondary" className="w-full" onClick={handleGetMotivation} disabled={!user || !program}>Get Motivation</Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Your Daily Boost</DialogTitle>
-                      <DialogDescription>
-                        A personalized message from your AI coach to keep you going.
-                      </DialogDescription>
-                      {motivationLoading ? (
-                          <div className="flex items-center justify-center p-8">
-                              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                          </div>
-                      ) : (
-                          <p className="pt-4 text-foreground">
-                              {motivation || "Click 'Get Motivation' to see your message."}
-                          </p>
-                      )}
-                    </DialogHeader>
-                  </DialogContent>
-                </Dialog>
-              </CardFooter>
-            </Card>
 
             <Card>
               <CardHeader>
