@@ -143,7 +143,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         notes: '',
         duration: duration || null,
         extendedExercises: ['one-off-ai', 'custom-workout'].includes(programId) ? (workout as Workout).exercises : [],
-        workoutDetails: ['one-off-ai', 'custom-workout'].includes(programId) ? workout : null,
+        workoutDetails: workout,
         skipped: false,
     };
 

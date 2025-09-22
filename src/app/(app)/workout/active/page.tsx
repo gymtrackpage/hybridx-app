@@ -310,6 +310,8 @@ export default function ActiveWorkoutPage() {
   
   const isRunningProgram = workout.programType === 'running';
   const isOneOffWorkout = ['one-off-ai', 'custom-workout'].includes(session.programId);
+  const canExtendWorkout = workout.programType === 'hyrox' || isOneOffWorkout;
+
 
   return (
     <>
@@ -442,7 +444,7 @@ export default function ActiveWorkoutPage() {
                     </div>
                 </div>
 
-                 {!isRunningProgram && !session.finishedAt && (
+                 {canExtendWorkout && !session.finishedAt && (
                     <div className="pt-2">
                         <Button
                             variant="outline"
