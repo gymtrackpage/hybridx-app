@@ -25,7 +25,8 @@ interface WorkoutEvent {
   date: Date;
   workout?: Workout | RunningWorkout;
   session?: WorkoutSession;
-  type: 'programmed' | 'completed' | 'both';
+  isCompleted: boolean;
+  color: string;
 }
 
 export default function CalendarPage() {
@@ -95,6 +96,24 @@ export default function CalendarPage() {
     };
   }, []);
 
+    const getEventColor = (workout: Workout | RunningWorkout, isCompleted: boolean): string => {
+        if (isCompleted) return 'bg-green-500'; // Completed workouts are always green
+
+        if (workout.programType === 'running') {
+            const primaryRunType = (workout as RunningWorkout).runs[0]?.type;
+            switch (primaryRunType) {
+                case 'intervals': return 'bg-red-500';
+                case 'tempo': return 'bg-orange-500';
+                case 'easy':
+                case 'long':
+                    return 'bg-blue-500';
+                default: return 'bg-gray-400';
+            }
+        }
+        
+        return 'bg-purple-500'; // Default for HYROX/hybrid
+    };
+
   const generateWorkoutEvents = (program: Program | null, startDate: Date | undefined, sessions: WorkoutSession[]) => {
     const events: WorkoutEvent[] = [];
     
@@ -110,14 +129,13 @@ export default function CalendarPage() {
         }
 
         if (isValid(sessionDate)) {
-            const dateKey = format(sessionDate, 'yyyy-MM-dd');
+            const dateKey = format(startOfDay(sessionDate), 'yyyy-MM-dd');
             sessionsMap.set(dateKey, session);
         }
     });
 
     if (program && startDate) {
-      const normalizedStartDate = new Date(startDate);
-      normalizedStartDate.setHours(0, 0, 0, 0);
+      const normalizedStartDate = startOfDay(new Date(startDate));
       
       const programDuration = Math.max(...program.workouts.map(w => w.day), 0);
 
@@ -127,31 +145,41 @@ export default function CalendarPage() {
         const { workout: programmedWorkout } = getWorkoutForDay(program, normalizedStartDate, currentDate);
         const session = sessionsMap.get(dateKey);
         
-        // Prioritize the workout details from the session if it exists (for swaps), otherwise use the programmed one.
         const workout = session?.workoutDetails || programmedWorkout;
 
-        if (workout || session) {
-          events.push({
-            date: currentDate,
-            workout: workout || session?.workoutDetails || undefined,
-            session: session,
-            type: workout && session?.finishedAt ? 'both' : (session?.finishedAt ? 'completed' : 'programmed')
-          });
-          if (session) {
-            sessionsMap.delete(dateKey);
-          }
+        if (workout) {
+            const isRestDay = workout.title.toLowerCase().includes('rest') || workout.title.toLowerCase().includes('recover');
+            if (isRestDay) continue; // Skip rest days from getting an indicator
+
+            const isCompleted = !!session?.finishedAt;
+            events.push({
+                date: currentDate,
+                workout: workout,
+                session: session,
+                isCompleted,
+                color: getEventColor(workout, isCompleted)
+            });
+            if (session) {
+                sessionsMap.delete(dateKey);
+            }
         }
       }
     }
     
     sessionsMap.forEach((session, dateKey) => {
-        const eventDate = parseISO(`${dateKey}T12:00:00.000Z`);
-        events.push({
-            date: eventDate,
-            session: session,
-            workout: session.workoutDetails,
-            type: 'completed'
-        });
+        if (session.workoutDetails) {
+            const isRestDay = session.workoutDetails.title.toLowerCase().includes('rest') || session.workoutDetails.title.toLowerCase().includes('recover');
+            if (!isRestDay) {
+                const eventDate = parseISO(`${dateKey}T12:00:00.000Z`);
+                 events.push({
+                    date: eventDate,
+                    session: session,
+                    workout: session.workoutDetails,
+                    isCompleted: true,
+                    color: 'bg-green-500'
+                });
+            }
+        }
     });
 
     setWorkoutEvents(events);
@@ -167,16 +195,15 @@ export default function CalendarPage() {
           const today = startOfDay(new Date());
           const sourceDate = startOfDay(selectedDate);
           
-          // Use the event's workout data, which correctly reflects any previous swaps
           const todaysOriginalWorkout = todaysEvent?.workout || null;
 
           await swapWorkouts({
               userId: firebaseUser.uid,
               programId: program.id,
-              date1: today, // today
-              workout1: selectedWorkout, // The workout from the selected day
-              date2: sourceDate, // the selected day
-              workout2: todaysOriginalWorkout // The workout that was originally on today
+              date1: today, 
+              workout1: selectedWorkout,
+              date2: sourceDate,
+              workout2: todaysOriginalWorkout
           });
           
           toast({ title: "Workouts Swapped!", description: `"${selectedWorkout.title}" is now scheduled for today.` });
@@ -258,7 +285,6 @@ export default function CalendarPage() {
         return km >= 1 ? `${km.toFixed(1)} km` : `${meters.toFixed(0)} m`;
     };
 
-    // Need access to the program to create a session on-the-fly
     const [program, setProgram] = useState<Program | null>(null);
     useEffect(() => {
         const getProg = async (user: FirebaseUser) => {
@@ -298,19 +324,11 @@ export default function CalendarPage() {
                 DayContent: ({ date }) => {
                   const event = workoutEvents.find(e => isSameDay(e.date, date));
                   if (event) {
-                    let badgeColor = "bg-gray-400";
-                    
-                    switch (event.type) {
-                      case 'completed': badgeColor = "bg-green-500"; break;
-                      case 'programmed': badgeColor = "bg-blue-500"; break;
-                      case 'both': badgeColor = "bg-primary"; break;
-                    }
-                    
                     return (
                       <div className="relative h-full w-full flex items-center justify-center">
                         <span className="relative z-10">{date.getDate()}</span>
                         <div
-                          className={`absolute bottom-1 h-1.5 w-1.5 rounded-full ${badgeColor}`}
+                          className={`absolute bottom-1 h-1.5 w-1.5 rounded-full ${event.color}`}
                         />
                       </div>
                     );
