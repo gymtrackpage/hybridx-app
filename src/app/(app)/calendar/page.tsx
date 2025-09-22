@@ -27,6 +27,7 @@ interface WorkoutEvent {
   session?: WorkoutSession;
   isCompleted: boolean;
   color: string;
+  isRestDay: boolean;
 }
 
 export default function CalendarPage() {
@@ -149,16 +150,17 @@ export default function CalendarPage() {
 
         if (workout) {
             const isRestDay = workout.title.toLowerCase().includes('rest') || workout.title.toLowerCase().includes('recover');
-            if (isRestDay) continue; // Skip rest days from getting an indicator
-
             const isCompleted = !!session?.finishedAt;
+            
             events.push({
                 date: currentDate,
                 workout: workout,
                 session: session,
                 isCompleted,
-                color: getEventColor(workout, isCompleted)
+                color: getEventColor(workout, isCompleted),
+                isRestDay,
             });
+
             if (session) {
                 sessionsMap.delete(dateKey);
             }
@@ -169,16 +171,15 @@ export default function CalendarPage() {
     sessionsMap.forEach((session, dateKey) => {
         if (session.workoutDetails) {
             const isRestDay = session.workoutDetails.title.toLowerCase().includes('rest') || session.workoutDetails.title.toLowerCase().includes('recover');
-            if (!isRestDay) {
-                const eventDate = parseISO(`${dateKey}T12:00:00.000Z`);
-                 events.push({
-                    date: eventDate,
-                    session: session,
-                    workout: session.workoutDetails,
-                    isCompleted: true,
-                    color: 'bg-green-500'
-                });
-            }
+            const eventDate = parseISO(`${dateKey}T12:00:00.000Z`);
+            events.push({
+                date: eventDate,
+                session: session,
+                workout: session.workoutDetails,
+                isCompleted: true,
+                color: 'bg-green-500',
+                isRestDay,
+            });
         }
     });
 
@@ -323,7 +324,7 @@ export default function CalendarPage() {
               components={{
                 DayContent: ({ date }) => {
                   const event = workoutEvents.find(e => isSameDay(e.date, date));
-                  if (event) {
+                  if (event && !event.isRestDay) {
                     return (
                       <div className="relative h-full w-full flex items-center justify-center">
                         <span className="relative z-10">{date.getDate()}</span>
@@ -434,7 +435,7 @@ export default function CalendarPage() {
               </div>
             ) : null}
 
-             {selectedWorkout && !completedSession && (
+             {selectedWorkout && !completedSession && !selectedEvent.isRestDay && (
                 <div className="pt-4 mt-4 border-t flex flex-col sm:flex-row gap-2">
                     {!isToday(selectedDate) && program && (
                         <Button
