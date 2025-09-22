@@ -3,7 +3,8 @@
 
 import { Timestamp } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
-import type { WorkoutSession, Workout } from '@/models/types';
+import type { WorkoutSession, Workout, RunningWorkout } from '@/models/types';
+import { z } from 'zod';
 
 function fromFirestore(doc: any): WorkoutSession {
     const data = doc.data();
@@ -60,4 +61,94 @@ export async function getOrCreateWorkoutSessionAdmin(userId: string, programId: 
         completedExercises: initialCompleted,
         notes: '',
     };
+}
+
+
+const SwapWorkoutsInputSchema = z.object({
+  userId: z.string(),
+  programId: z.string(),
+  date1: z.date(),
+  workout1: z.any(), // Using any because Zod struggles with recursive types in zod-to-json-schema
+  date2: z.date(),
+  workout2: z.any().nullable(),
+});
+
+type SwapWorkoutsInput = z.infer<typeof SwapWorkoutsInputSchema>;
+
+export async function swapWorkouts(input: SwapWorkoutsInput): Promise<void> {
+    const adminDb = getAdminDb();
+    const sessionsCollection = adminDb.collection('workoutSessions');
+  
+    const { userId, programId, date1, workout1, date2, workout2 } = SwapWorkoutsInputSchema.parse(input);
+  
+    const batch = adminDb.batch();
+  
+    // Update or create session for date1 (today) with workout1 (from source day)
+    const session1Query = await sessionsCollection
+      .where('userId', '==', userId)
+      .where('workoutDate', '==', Timestamp.fromDate(date1))
+      .limit(1)
+      .get();
+      
+    if (session1Query.empty) {
+      const newSession1Ref = sessionsCollection.doc();
+      batch.set(newSession1Ref, createSessionData(userId, programId, date1, workout1));
+    } else {
+      batch.update(session1Query.docs[0].ref, createSessionData(userId, programId, date1, workout1, false));
+    }
+  
+    // Update or create session for date2 (source day) with workout2 (from today)
+    const session2Query = await sessionsCollection
+      .where('userId', '==', userId)
+      .where('workoutDate', '==', Timestamp.fromDate(date2))
+      .limit(1)
+      .get();
+  
+    if (session2Query.empty) {
+      if (workout2) { // Only create a session if there was a workout
+        const newSession2Ref = sessionsCollection.doc();
+        batch.set(newSession2Ref, createSessionData(userId, programId, date2, workout2));
+      }
+    } else {
+      if (workout2) {
+        batch.update(session2Query.docs[0].ref, createSessionData(userId, programId, date2, workout2, false));
+      } else {
+        // If there was no workout for today, we can delete the source day's placeholder session
+        batch.delete(session2Query.docs[0].ref);
+      }
+    }
+  
+    await batch.commit();
+}
+  
+  // Helper to create session data for batch operations
+function createSessionData(userId: string, programId: string, date: Date, workout: Workout | RunningWorkout, isNew: boolean = true) {
+    const items = workout.programType === 'running'
+        ? (workout as RunningWorkout).runs
+        : (workout as Workout).exercises;
+
+    const completedItems = items.reduce((acc, item) => {
+        const key = (item as any).name || (item as any).description;
+        acc[key] = false;
+        return acc;
+    }, {} as { [key: string]: boolean });
+    
+    const data: any = {
+      userId,
+      programId,
+      workoutDate: Timestamp.fromDate(date),
+      workoutTitle: workout.title,
+      programType: workout.programType,
+      completedItems,
+      finishedAt: null,
+      notes: '',
+      workoutDetails: workout,
+      skipped: false,
+    };
+
+    if (isNew) {
+        data.startedAt = Timestamp.now();
+    }
+    
+    return data;
 }

@@ -13,8 +13,9 @@ import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getAllUserSessions, getOrCreateWorkoutSession } from '@/services/session-service-client';
+import { swapWorkouts } from '@/services/session-service'; // Import the new server action
 import type { User, Program, Workout, WorkoutSession, RunningWorkout, Exercise } from '@/models/types';
-import { addDays, format, isSameDay, parseISO, isValid, isToday } from 'date-fns';
+import { addDays, format, isSameDay, parseISO, isValid, isToday, startOfDay } from 'date-fns';
 import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
 import { Button } from '@/components/ui/button';
 import { Link as LinkIcon, Activity, Clock, MapPin, Forward } from 'lucide-react';
@@ -40,6 +41,8 @@ export default function CalendarPage() {
   const selectedEvent = workoutEvents.find(event => 
     selectedDate && isSameDay(event.date, selectedDate)
   );
+
+  const todaysEvent = workoutEvents.find(event => isToday(event.date));
 
   const selectedWorkout = selectedEvent?.workout;
   const completedSession = selectedEvent?.session;
@@ -152,25 +155,34 @@ export default function CalendarPage() {
   };
 
   const handleDoToday = async () => {
-    if (!firebaseUser || !selectedWorkout || !program) {
-        toast({ title: "Error", description: "Cannot assign workout. User or workout data is missing.", variant: "destructive" });
-        return;
-    }
+      if (!firebaseUser || !selectedWorkout || !selectedDate || !program) {
+          toast({ title: "Error", description: "Cannot swap workout. User or workout data is missing.", variant: "destructive" });
+          return;
+      }
 
-    try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+      try {
+          const today = startOfDay(new Date());
+          const sourceDate = startOfDay(selectedDate);
+          const todaysOriginalWorkout = todaysEvent?.workout || null;
 
-        await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, selectedWorkout, true);
-        
-        toast({ title: "Workout Assigned!", description: `"${selectedWorkout.title}" is set for today. Let's go!` });
-        router.push('/workout/active');
+          await swapWorkouts({
+              userId: firebaseUser.uid,
+              programId: program.id,
+              date1: today,
+              workout1: selectedWorkout,
+              date2: sourceDate,
+              workout2: todaysOriginalWorkout
+          });
+          
+          toast({ title: "Workouts Swapped!", description: `"${selectedWorkout.title}" is now scheduled for today.` });
+          router.push('/workout/active');
 
-    } catch (error) {
-        console.error("Failed to assign workout for today:", error);
-        toast({ title: "Error", description: "Could not assign the workout. Please try again.", variant: "destructive" });
-    }
+      } catch (error) {
+          console.error("Failed to swap workouts:", error);
+          toast({ title: "Error", description: "Could not swap the workouts. Please try again.", variant: "destructive" });
+      }
   };
+
 
   const getCompletedExercises = (session: WorkoutSession): { name: string, details: string }[] => {
     if (session.workoutDetails) {
