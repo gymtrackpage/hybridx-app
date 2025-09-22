@@ -18,7 +18,7 @@ import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getTodaysOneOffSession, getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
+import { getTodaysOneOffSession, getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession, getTodaysProgramSession } from '@/services/session-service-client';
 import type { Workout, RunningWorkout, User, Exercise } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
@@ -61,30 +61,39 @@ export default function ActiveWorkoutPage() {
         let workoutSession;
         let currentWorkoutInfo;
 
-        // First, check for a one-off or custom workout for today
+        // Priority 1: Check for a one-off or custom workout for today
         const oneOffSession = await getTodaysOneOffSession(firebaseUser.uid, today);
 
         if (oneOffSession) {
             workoutSession = oneOffSession;
-            // Reconstruct a temporary workout object for display from the session data
             currentWorkoutInfo = {
                 day: 0,
-                workout: {
-                    title: oneOffSession.workoutTitle,
-                    programType: oneOffSession.programType,
-                    day: 0,
-                    exercises: oneOffSession.extendedExercises || [], 
-                    runs: [] // Custom/AI runs not supported yet
-                } as Workout
+                workout: oneOffSession.workoutDetails as Workout,
             };
-            setExtendedExercises([]); 
         } else if (currentUser.programId && currentUser.startDate) {
-            // If no one-off workout, look for a scheduled program workout
-            const program = await getProgramClient(currentUser.programId);
-            if (program) {
-                currentWorkoutInfo = getWorkoutForDay(program, currentUser.startDate, today);
-                if (currentWorkoutInfo.workout) {
-                   workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, currentWorkoutInfo.workout);
+            // Priority 2: Check for an existing program session (which could be swapped)
+            const programSession = await getTodaysProgramSession(firebaseUser.uid, today);
+            
+            if (programSession) {
+                workoutSession = programSession;
+                // Use the details from the session itself, which will reflect any swaps
+                currentWorkoutInfo = {
+                    day: getWorkoutForDay(
+                        { id: programSession.programId, workouts: [programSession.workoutDetails!], name: '', description: '', programType: 'hyrox'}, 
+                        currentUser.startDate, 
+                        today
+                    ).day,
+                    workout: programSession.workoutDetails as Workout,
+                };
+            } else {
+                // Priority 3: No session exists, so create one based on the original program schedule
+                const program = await getProgramClient(currentUser.programId);
+                if (program) {
+                    const scheduledWorkoutInfo = getWorkoutForDay(program, currentUser.startDate, today);
+                    if (scheduledWorkoutInfo.workout) {
+                       workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, scheduledWorkoutInfo.workout);
+                       currentWorkoutInfo = scheduledWorkoutInfo;
+                    }
                 }
             }
         }
@@ -94,20 +103,17 @@ export default function ActiveWorkoutPage() {
         if (workoutSession) {
             setSession(workoutSession);
             setNotes(workoutSession.notes || '');
-            // Only set extended exercises if it's NOT a one-off/custom workout
             if (!['one-off-ai', 'custom-workout'].includes(workoutSession.programId)) {
                  setExtendedExercises(workoutSession.extendedExercises || []);
             }
 
         }
-        // Note: AI summary will be loaded separately to improve initial page load speed
     }
   };
 
   const loadWorkoutSummary = async (currentUser: User, workoutInfo: { workout: Workout | RunningWorkout }, session: WorkoutSession) => {
     if (!workoutInfo?.workout || summaryText) return; // Don't reload if already loaded
 
-    // Show that we're enhancing the summary
     setSummaryLoading(true);
 
     try {
@@ -115,7 +121,6 @@ export default function ActiveWorkoutPage() {
         ? (workoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
         : [...(workoutInfo.workout as Workout).exercises, ...(session.extendedExercises || [])].map(e => e.name).join(', ');
 
-      // Add a timeout to prevent the AI call from hanging indefinitely
       const summaryPromise = workoutSummary({
         userName: currentUser.firstName,
         workoutTitle: workoutInfo.workout.title,
@@ -123,15 +128,13 @@ export default function ActiveWorkoutPage() {
       });
 
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('AI summary timeout')), 10000) // 10 second timeout
+        setTimeout(() => reject(new Error('AI summary timeout')), 10000)
       );
 
       const summaryResult = await Promise.race([summaryPromise, timeoutPromise]) as any;
       setSummaryText(summaryResult.summary);
     } catch (error) {
       console.error("Failed to generate AI workout summary:", error);
-      // Silently fall back - the UI will continue showing the workout title
-      // which is already visible, so no jarring experience for the user
     } finally {
       setSummaryLoading(false);
     }
@@ -160,10 +163,8 @@ export default function ActiveWorkoutPage() {
     };
   }, [today]);
 
-  // Separate effect to load AI summary after main data is ready (lazy loading)
   useEffect(() => {
     if (user && workoutInfo && session && !loading) {
-      // Add a small delay to ensure the UI renders first
       const timer = setTimeout(() => {
         loadWorkoutSummary(user, workoutInfo, session);
       }, 100);
@@ -175,7 +176,7 @@ export default function ActiveWorkoutPage() {
   const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
     if (!session) return;
     await updateWorkoutSession(session.id, { notes: value });
-  }, 1500); // Save 1.5 seconds after user stops typing
+  }, 1500);
 
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNotes(e.target.value);
@@ -206,7 +207,6 @@ export default function ActiveWorkoutPage() {
         const allExtended = [...extendedExercises, ...newExercises];
         setExtendedExercises(allExtended);
 
-        // Update the session in Firestore with the new exercises
         if (session) {
             await updateWorkoutSession(session.id, { extendedExercises: allExtended });
         }
@@ -220,7 +220,6 @@ export default function ActiveWorkoutPage() {
   
   const handleFinishWorkout = async () => {
       if(!session || !workoutInfo?.workout) return;
-      // Final save of notes before finishing
       debouncedSaveNotes.flush();
       const finishedAt = new Date();
       const updatedSessionData = {
@@ -242,7 +241,6 @@ export default function ActiveWorkoutPage() {
 
   const handleSkipWorkout = async () => {
       if(!session || !workoutInfo?.workout) return;
-      // Final save of notes before skipping
       debouncedSaveNotes.flush();
       const finishedAt = new Date();
       const skipNotes = notes ? `${notes}\n\n[WORKOUT SKIPPED]` : '[WORKOUT SKIPPED]';
@@ -273,7 +271,7 @@ export default function ActiveWorkoutPage() {
         await fetchWorkoutData(auth.currentUser);
     }
     setLoading(false);
-    setIsCompleteModalOpen(true); // Show completion modal after successful link
+    setIsCompleteModalOpen(true);
   };
 
 

@@ -57,6 +57,22 @@ export async function getTodaysOneOffSession(userId: string, workoutDate: Date):
     return null;
 }
 
+export async function getTodaysProgramSession(userId: string, workoutDate: Date): Promise<WorkoutSession | null> {
+    const q = query(
+        sessionsCollection,
+        where('userId', '==', userId),
+        where('workoutDate', '==', Timestamp.fromDate(workoutDate)),
+        // Exclude one-off sessions from this specific query
+        where('programId', 'not-in', ['one-off-ai', 'custom-workout']),
+        limit(1)
+    );
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+        return fromFirestore(snapshot.docs[0]);
+    }
+    return null;
+}
+
 export async function createCustomWorkoutSession(userId: string, title: string, type: ProgramType, description: string, duration?: string): Promise<void> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
