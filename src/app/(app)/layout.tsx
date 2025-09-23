@@ -33,12 +33,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { InstallPwaBanner } from '@/components/install-pwa-banner';
 import { getUserClient } from '@/services/user-service-client';
 import { addMonths, isAfter } from 'date-fns';
-import { MobileNavBar, mobileNavItems, secondaryNavItems } from '@/components/mobile-nav-bar';
+import { MobileNavBar, primaryNavItems, secondaryNavItems, adminNavItems } from '@/components/mobile-nav-bar';
 
-
-const adminNavItems = [
-    { href: '/admin/programs', icon: Shield, label: 'Manage Programs' },
-];
 
 function NavMenu() {
     const { setOpenMobile } = useSidebar();
@@ -51,7 +47,7 @@ function NavMenu() {
     return (
         <>
             <SidebarMenu>
-                {mobileNavItems.map((item) => (
+                {primaryNavItems.map((item) => (
                     // Hide the central workout button from the sidebar list
                     !item.isCentral && (
                         <SidebarMenuItem key={item.href}>

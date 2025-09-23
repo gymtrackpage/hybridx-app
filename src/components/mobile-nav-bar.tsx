@@ -3,11 +3,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, Newspaper, LayoutDashboard, Sparkles, BookOpen, CreditCard, Dumbbell, Calendar } from 'lucide-react';
+import { User, Newspaper, LayoutDashboard, Sparkles, BookOpen, CreditCard, Calendar, Activity, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CustomWorkoutIcon } from './icons';
 import { useScrollDirection } from '@/hooks/use-scroll-direction';
 
+// Primary navigation items, including the central button
 export const primaryNavItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/calendar', icon: Calendar, label: 'Calendar' },
@@ -16,15 +17,18 @@ export const primaryNavItems = [
   { href: '/profile', icon: User, label: 'Profile' },
 ];
 
+// Secondary content-focused items
 export const secondaryNavItems = [
+  { href: '/activity-feed', icon: Activity, label: 'Activity Feed' },
   { href: '/articles', icon: Newspaper, label: 'Articles' },
   { href: '/programs', icon: BookOpen, label: 'Programs' },
   { href: '/subscription', icon: CreditCard, label: 'Subscription' },
-]
+];
 
-// Combine primary and secondary for sidebar usage
-export const mobileNavItems = [...primaryNavItems, ...secondaryNavItems];
-
+// Admin-specific items
+export const adminNavItems = [
+    { href: '/admin/programs', icon: Shield, label: 'Manage Programs' },
+];
 
 export function MobileNavBar() {
   const pathname = usePathname();
