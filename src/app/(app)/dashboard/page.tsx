@@ -79,6 +79,7 @@ export default function DashboardPage() {
 
       let workoutSession;
       let currentWorkoutInfo;
+      let currentProgram: Program | null = null;
       const today = new Date();
       today.setHours(0,0,0,0);
 
@@ -92,7 +93,11 @@ export default function DashboardPage() {
               workout: oneOffSession.workoutDetails as Workout,
           };
       } else if (currentUser.programId && currentUser.startDate) {
-          const currentProgram = await getProgramClient(currentUser.programId);
+          if (currentUser.customProgram) {
+            currentProgram = { id: currentUser.programId, workouts: currentUser.customProgram } as Program;
+          } else {
+            currentProgram = await getProgramClient(currentUser.programId);
+          }
           setProgram(currentProgram);
 
           // Priority 2: Check for an existing program session (which could be swapped)
@@ -102,7 +107,7 @@ export default function DashboardPage() {
               workoutSession = programSession;
               // Use the details from the session itself, which will reflect any swaps
               currentWorkoutInfo = {
-                  day: getWorkoutForDay({ id: programSession.programId, name: '', description: '', programType: 'hyrox', workouts: [programSession.workoutDetails] }, currentUser.startDate, today).day,
+                  day: getWorkoutForDay(currentProgram!, currentUser.startDate, today).day,
                   workout: programSession.workoutDetails,
               };
           } else if (currentProgram) {

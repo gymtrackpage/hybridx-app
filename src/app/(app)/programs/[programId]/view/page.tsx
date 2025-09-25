@@ -16,6 +16,7 @@ import { getProgramClient } from '@/services/program-service-client';
 import { getUserClient, updateUser } from '@/services/user-service-client';
 import { useToast } from '@/hooks/use-toast';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
+import { adjustTrainingPlan } from '@/ai/flows/adjust-training-plan';
 
 
 import { Button } from '@/components/ui/button';
@@ -287,14 +288,30 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
 };
   
   const handleScheduleProgram = async (programId: string, startDate: Date) => {
-    if (!user) {
+    if (!user || !program) {
         toast({ title: 'Error', description: 'You must be logged in to schedule a program.', variant: 'destructive' });
         return;
     }
 
     setIsScheduling(true);
     try {
-        await updateUser(user.id, { programId, startDate });
+        let updateData: Partial<User> = { programId, startDate, customProgram: null };
+        const nonRestWorkouts = program.workouts.filter(w => !w.title.toLowerCase().includes('rest'));
+        
+        // Check if adjustment is needed
+        if (user.frequency !== '5+' && nonRestWorkouts.length > parseInt(user.frequency, 10)) {
+            toast({ title: 'Adjusting your plan...', description: 'Our AI coach is tailoring this program to fit your schedule.' });
+            
+            const result = await adjustTrainingPlan({
+                currentWorkouts: program.workouts.filter(w => w.programType === 'hyrox') as any, // Cast to hyrox workout for now
+                targetDays: user.frequency as '3' | '4',
+            });
+            
+            updateData.customProgram = result.adjustedWorkouts;
+        }
+
+        await updateUser(user.id, updateData);
+        
         toast({
             title: 'Program Scheduled!',
             description: 'Your new training program has been added to your calendar.',

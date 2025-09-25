@@ -44,6 +44,8 @@ export interface User {
   runningProfile?: UserRunningProfile;
   strava?: StravaTokens;
   lastStravaSync?: Date;
+  // AI-adjusted program for the user
+  customProgram?: (Workout | RunningWorkout)[] | null;
   // Subscription fields
   isAdmin?: boolean;
   subscriptionStatus?: SubscriptionStatus;

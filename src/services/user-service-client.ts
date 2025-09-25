@@ -31,6 +31,7 @@ export async function getUserClient(userId: string): Promise<User | null> {
             runningProfile: data.runningProfile || { benchmarkPaces: {} },
             strava: data.strava ? { ...data.strava, expiresAt: data.strava.expiresAt.toDate() } : undefined,
             lastStravaSync: data.lastStravaSync instanceof Timestamp ? data.lastStravaSync.toDate() : undefined,
+            customProgram: data.customProgram || null,
             isAdmin: data.isAdmin || false,
             // Fallback for subscription status if it's missing
             subscriptionStatus: data.subscriptionStatus || 'trial',
@@ -57,6 +58,7 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'startD
         personalRecords: {},
         runningProfile: { benchmarkPaces: {} },
         strava: null,
+        customProgram: null,
         isAdmin: false,
         subscriptionStatus: 'trial',
         stripeCustomerId: null,

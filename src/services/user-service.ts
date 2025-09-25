@@ -47,6 +47,7 @@ export async function getUser(userId: string): Promise<User | null> {
             runningProfile: data.runningProfile || { benchmarkPaces: {} },
             strava: stravaData,
             lastStravaSync: safeToDate(data.lastStravaSync),
+            customProgram: data.customProgram || null,
             isAdmin: data.isAdmin || false,
             subscriptionStatus: data.subscriptionStatus || 'trial',
             stripeCustomerId: data.stripeCustomerId,
@@ -79,6 +80,7 @@ export async function getUser(userId: string): Promise<User | null> {
                 personalRecords: {},
                 runningProfile: { benchmarkPaces: {} },
                 strava: undefined,
+                customProgram: null,
                 isAdmin: false,
                 subscriptionStatus: 'trial',
                 trialStartDate: trialStartDate,
@@ -207,6 +209,7 @@ export async function getAllUsers(): Promise<User[]> {
             trialStartDate: safeToDate(data.trialStartDate),
             cancel_at_period_end: data.cancel_at_period_end,
             cancellation_effective_date: safeToDate(data.cancellation_effective_date),
+            customProgram: data.customProgram || null,
         };
         return user;
     });
