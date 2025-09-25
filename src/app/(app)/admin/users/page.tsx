@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -130,7 +131,8 @@ export default function AdminUsersPage() {
     if (!u.trialStartDate) return false;
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    return u.trialStartDate > oneMonthAgo;
+    const trialStartDate = u.trialStartDate instanceof Date ? u.trialStartDate : new Date(u.trialStartDate);
+    return trialStartDate > oneMonthAgo;
   }).length;
 
   const usersWithStripe = users.filter(u => u.stripeCustomerId).length;
@@ -338,7 +340,7 @@ export default function AdminUsersPage() {
                     <TableCell>{user.frequency} days/week</TableCell>
                     <TableCell>
                       {user.trialStartDate
-                        ? format(user.trialStartDate, 'MMM dd, yyyy')
+                        ? format(new Date(user.trialStartDate), 'MMM dd, yyyy')
                         : 'Unknown'
                       }
                     </TableCell>

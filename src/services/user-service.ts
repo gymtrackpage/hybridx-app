@@ -52,7 +52,7 @@ export async function getUser(userId: string): Promise<User | null> {
             subscriptionStatus: data.subscriptionStatus || 'trial',
             stripeCustomerId: data.stripeCustomerId,
             subscriptionId: data.subscriptionId,
-            trialStartDate: safeToDate(data.trialStartDate),
+            trialStartDate: safeToDate(data.trialStartDate) || new Date(),
             cancel_at_period_end: data.cancel_at_period_end,
             cancellation_effective_date: safeToDate(data.cancellation_effective_date),
         };
@@ -142,30 +142,45 @@ function determineSubscriptionStatus(
     cancellation_effective_date: Date | undefined
 ): SubscriptionStatus {
     const now = new Date();
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(now.getMonth() - 1);
+    
+    // Admin users always have 'active' status internally for access
+    if (storedStatus === 'admin') return 'active';
 
-    // If user has an active Stripe subscription, they are active
-    if (stripeCustomerId && subscriptionId && subscriptionId !== null) {
-        // Check if subscription is cancelled but still active
-        if (cancel_at_period_end && cancellation_effective_date) {
-            return now > cancellation_effective_date ? 'canceled' : 'active';
+    // Active subscription from Stripe is the highest priority
+    if (storedStatus === 'active' && stripeCustomerId && subscriptionId) {
+        return 'active';
+    }
+
+    // Handle paused state
+    if (storedStatus === 'paused') {
+        return 'paused';
+    }
+    
+    // Handle cancelled state (still has access until period end)
+    if (cancel_at_period_end && cancellation_effective_date && now < cancellation_effective_date) {
+        return 'active'; // Still active until period end
+    }
+    
+    if (cancel_at_period_end && cancellation_effective_date && now >= cancellation_effective_date) {
+        return 'canceled';
+    }
+
+    // Trial period logic
+    if (trialStartDate) {
+        const trialEndDate = new Date(trialStartDate);
+        trialEndDate.setDate(trialEndDate.getDate() + 30); // 30-day trial
+        if (now < trialEndDate) {
+            return 'trial';
         }
-        return storedStatus === 'active' ? 'active' : (storedStatus as SubscriptionStatus) || 'active';
     }
 
-    // If user has no Stripe data and signed up less than 1 month ago, they are trial
-    if (trialStartDate && trialStartDate > oneMonthAgo) {
-        return 'trial';
-    }
-
-    // If user signed up more than 1 month ago and has no Stripe subscription, they are expired
-    if (trialStartDate && trialStartDate <= oneMonthAgo && (!stripeCustomerId || !subscriptionId)) {
+    // If trial is over and no active subscription
+    if (!stripeCustomerId || !subscriptionId) {
         return 'expired';
     }
-
-    // Fallback to stored status or default to trial
-    return (storedStatus as SubscriptionStatus) || 'trial';
+    
+    // Fallback to the stored status or default to expired if no other conditions met
+    return (storedStatus as SubscriptionStatus) || 'expired';
 }
 
 // SERVER-SIDE function to get all users (admin only)
@@ -180,6 +195,8 @@ export async function getAllUsers(): Promise<User[]> {
             ...data.strava, 
             expiresAt: safeToDate(data.strava.expiresAt)! 
         } : undefined;
+
+        const trialStartDate = safeToDate(data.trialStartDate);
 
         const user: User = {
             id: doc.id,
@@ -200,13 +217,13 @@ export async function getAllUsers(): Promise<User[]> {
                 data.subscriptionStatus,
                 data.stripeCustomerId,
                 data.subscriptionId,
-                safeToDate(data.trialStartDate),
+                trialStartDate,
                 data.cancel_at_period_end,
                 safeToDate(data.cancellation_effective_date)
             ),
             stripeCustomerId: data.stripeCustomerId,
             subscriptionId: data.subscriptionId,
-            trialStartDate: safeToDate(data.trialStartDate),
+            trialStartDate: trialStartDate,
             cancel_at_period_end: data.cancel_at_period_end,
             cancellation_effective_date: safeToDate(data.cancellation_effective_date),
             customProgram: data.customProgram || null,

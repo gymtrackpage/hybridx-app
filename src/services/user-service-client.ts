@@ -38,6 +38,8 @@ export async function getUserClient(userId: string): Promise<User | null> {
             stripeCustomerId: data.stripeCustomerId,
             subscriptionId: data.subscriptionId,
             trialStartDate: trialStartDate,
+            cancel_at_period_end: data.cancel_at_period_end,
+            cancellation_effective_date: data.cancellation_effective_date instanceof Timestamp ? data.cancellation_effective_date.toDate() : undefined,
         };
         return user;
     }
