@@ -54,6 +54,7 @@ export interface User {
   trialStartDate?: Date;
   cancel_at_period_end?: boolean;
   cancellation_effective_date?: Date;
+  completedWorkouts?: number; // Added for admin view
 }
 
 export type ProgramType = 'hyrox' | 'running';

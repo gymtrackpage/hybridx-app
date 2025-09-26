@@ -186,11 +186,26 @@ function determineSubscriptionStatus(
 // SERVER-SIDE function to get all users (admin only)
 export async function getAllUsers(): Promise<User[]> {
     const adminDb = getAdminDb();
-    const usersCollection = adminDb.collection('users');
-    const snapshot = await usersCollection.get();
+    
+    // Fetch all users
+    const usersSnapshot = await adminDb.collection('users').get();
+    
+    // Fetch all completed workout sessions in a single query
+    const sessionsSnapshot = await adminDb.collection('workoutSessions')
+      .where('finishedAt', '!=', null)
+      .get();
 
-    return snapshot.docs.map(doc => {
+    // Create a map of userId -> completed workout count
+    const workoutCounts = new Map<string, number>();
+    sessionsSnapshot.forEach(doc => {
+        const session = doc.data();
+        const userId = session.userId;
+        workoutCounts.set(userId, (workoutCounts.get(userId) || 0) + 1);
+    });
+
+    return usersSnapshot.docs.map(doc => {
         const data = doc.data();
+        const userId = doc.id;
         const stravaData = data.strava ? { 
             ...data.strava, 
             expiresAt: safeToDate(data.strava.expiresAt)! 
@@ -199,7 +214,7 @@ export async function getAllUsers(): Promise<User[]> {
         const trialStartDate = safeToDate(data.trialStartDate);
 
         const user: User = {
-            id: doc.id,
+            id: userId,
             email: data.email,
             firstName: data.firstName,
             lastName: data.lastName,
@@ -227,6 +242,7 @@ export async function getAllUsers(): Promise<User[]> {
             cancel_at_period_end: data.cancel_at_period_end,
             cancellation_effective_date: safeToDate(data.cancellation_effective_date),
             customProgram: data.customProgram || null,
+            completedWorkouts: workoutCounts.get(userId) || 0,
         };
         return user;
     });

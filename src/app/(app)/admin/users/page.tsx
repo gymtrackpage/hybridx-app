@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, Crown, Calendar, Mail, User as UserIcon, Filter } from 'lucide-react';
+import { Users, Crown, Calendar, Mail, User as UserIcon, Filter, CheckCircle } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -290,6 +290,7 @@ export default function AdminUsersPage() {
                 <TableHead>Subscription</TableHead>
                 <TableHead>Goal</TableHead>
                 <TableHead>Frequency</TableHead>
+                <TableHead>Workouts Done</TableHead>
                 <TableHead>Trial Start</TableHead>
                 <TableHead>Stripe Status</TableHead>
                 <TableHead>Admin</TableHead>
@@ -298,7 +299,7 @@ export default function AdminUsersPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center">
+                  <TableCell colSpan={10} className="text-center">
                     Loading users...
                   </TableCell>
                 </TableRow>
@@ -339,6 +340,12 @@ export default function AdminUsersPage() {
                     </TableCell>
                     <TableCell>{user.frequency} days/week</TableCell>
                     <TableCell>
+                        <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                            <span className="font-medium">{user.completedWorkouts || 0}</span>
+                        </div>
+                    </TableCell>
+                    <TableCell>
                       {user.trialStartDate
                         ? format(new Date(user.trialStartDate), 'MMM dd, yyyy')
                         : 'Unknown'
@@ -376,7 +383,7 @@ export default function AdminUsersPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center">
+                  <TableCell colSpan={10} className="text-center">
                     No users found matching your filters.
                   </TableCell>
                 </TableRow>
