@@ -25,6 +25,12 @@ const AdjustTrainingPlanInputSchema = z.object({
 });
 export type AdjustTrainingPlanInput = z.infer<typeof AdjustTrainingPlanInputSchema>;
 
+// Internal schema for the prompt, which expects a stringified version of the workouts
+const AdjustTrainingPlanPromptInputSchema = z.object({
+  workoutsJSON: z.string().describe('The JSON string of the original workout objects.'),
+  targetDays: z.enum(['3', '4']),
+});
+
 const AdjustTrainingPlanOutputSchema = z.object({
   adjustedWorkouts: z.array(WorkoutSchema).describe('The new, condensed array of workout objects for the target number of days.'),
 });
@@ -36,7 +42,7 @@ export async function adjustTrainingPlan(input: AdjustTrainingPlanInput): Promis
 
 const prompt = ai.definePrompt({
   name: 'adjustTrainingPlanPrompt',
-  input: {schema: AdjustTrainingPlanInputSchema},
+  input: {schema: AdjustTrainingPlanPromptInputSchema},
   output: {schema: AdjustTrainingPlanOutputSchema},
   prompt: `You are an expert strength and conditioning coach. Your task is to intelligently condense a 5-day training plan into a {{{targetDays}}}-day plan.
 
@@ -54,7 +60,7 @@ const prompt = ai.definePrompt({
   4.  **Maintain Integrity:** The goal is to retain the original program's effectiveness, just in a more condensed format.
 
   **Original 5-Day Plan:**
-  {{{JSON.stringify currentWorkouts}}}
+  {{{workoutsJSON}}}
 
   Generate the adjusted {{{targetDays}}}-day workout plan.`,
 });
@@ -66,9 +72,14 @@ const adjustTrainingPlanFlow = ai.defineFlow(
     outputSchema: AdjustTrainingPlanOutputSchema,
   },
   async input => {
-    // The prompt is powerful enough to handle this directly.
-    // In a more complex scenario, you might add pre-processing logic here.
-    const {output} = await prompt(input);
+    // Stringify the workouts array before passing it to the prompt.
+    const workoutsJSON = JSON.stringify(input.currentWorkouts);
+
+    const {output} = await prompt({
+      workoutsJSON,
+      targetDays: input.targetDays,
+    });
+    
     return output!;
   }
 );
