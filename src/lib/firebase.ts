@@ -1,9 +1,8 @@
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { 
-  getAuth, 
-  indexedDBLocalPersistence, 
+import {
+  getAuth,
   browserLocalPersistence,
   initializeAuth as initializeFirebaseAuth,
   Auth,
@@ -40,8 +39,10 @@ const getAuthInstance = (): Promise<Auth> => {
     try {
       if (typeof window !== 'undefined') {
         // For client-side, initialize with persistence.
+        // Use only browserLocalPersistence to avoid PWA/IndexedDB issues
         const auth = initializeFirebaseAuth(app, {
-          persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+          persistence: browserLocalPersistence,
+          popupRedirectResolver: undefined
         });
         resolve(auth);
       } else {
@@ -53,7 +54,10 @@ const getAuthInstance = (): Promise<Auth> => {
       // If initialization fails, fall back to the basic getAuth.
       // This can happen with hot-reloading in development.
       if ((error as any).code === 'auth/already-initialized') {
-        resolve(getAuth(app));
+        const existingAuth = getAuth(app);
+        // Ensure persistence is set on existing instance
+        existingAuth.setPersistence(browserLocalPersistence).catch(console.error);
+        resolve(existingAuth);
       } else {
         console.error("Firebase Auth initialization error:", error);
         reject(error);
