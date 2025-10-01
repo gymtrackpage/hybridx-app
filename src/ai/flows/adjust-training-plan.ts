@@ -37,7 +37,7 @@ export async function adjustTrainingPlan(input: AdjustTrainingPlanInput): Promis
 const prompt = ai.definePrompt({
   name: 'adjustTrainingPlanPrompt',
   input: {schema: AdjustTrainingPlanInputSchema},
-  output: {schema: AdjustTrainingPlanLogitBiasOutputSchema},
+  output: {schema: AdjustTrainingPlanOutputSchema},
   prompt: `You are an expert strength and conditioning coach. Your task is to intelligently condense a 5-day training plan into a {{{targetDays}}}-day plan.
 
   **CRITICAL INSTRUCTIONS:**

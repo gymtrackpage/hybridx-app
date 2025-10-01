@@ -46,21 +46,26 @@ export async function getUserClient(userId: string): Promise<User | null> {
     return null;
 }
 
-export async function createUser(userId: string, data: Omit<User, 'id' | 'startDate' | 'programId' | 'personalRecords'>): Promise<User> {
+export async function createUser(userId: string, data: Omit<User, 'id' | 'personalRecords'>): Promise<User> {
     const usersCollection = collection(db, 'users');
     const userRef = doc(usersCollection, userId);
     const trialStartDate = new Date();
-    
+
     // This is the data that will be saved to Firestore.
     // It correctly includes the subscription status and trial start date.
-    const userDataToSet = {
-        ...data,
-        programId: null,
-        startDate: null,
+    const userDataToSet: any = {
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        experience: data.experience,
+        frequency: data.frequency,
+        goal: data.goal,
+        programId: data.programId ?? null,
+        startDate: data.startDate ? Timestamp.fromDate(data.startDate) : null,
         personalRecords: {},
         runningProfile: { benchmarkPaces: {} },
         strava: null,
-        customProgram: null,
+        customProgram: data.customProgram ?? null,
         isAdmin: false,
         subscriptionStatus: 'trial',
         stripeCustomerId: null,
@@ -72,7 +77,15 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'startD
     // This is the user object returned to the application after creation.
     const createdUser: User = {
         id: userId,
-        ...data,
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        experience: data.experience,
+        frequency: data.frequency,
+        goal: data.goal,
+        programId: data.programId ?? null,
+        startDate: data.startDate,
+        customProgram: data.customProgram ?? null,
         personalRecords: {},
         runningProfile: { benchmarkPaces: {} },
         isAdmin: false,
