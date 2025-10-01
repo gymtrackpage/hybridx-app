@@ -1,85 +1,109 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to HYBRIDX.CLUB</title>
+    <title>Welcome to the HYBRIDX.CLUB Community!</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Space+Grotesk:wght@700&display=swap');
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
-            line-height: 1.6;
-            color: #333;
-            background-color: #f4f4f4;
             margin: 0;
             padding: 0;
+            background-color: #f4f4f4;
+            font-family: 'Inter', Arial, sans-serif;
         }
         .container {
             max-width: 600px;
-            margin: 20px auto;
+            margin: 0 auto;
             background-color: #ffffff;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            overflow: hidden;
+            border: 1px solid #e0e0e0;
         }
         .header {
-            background-color: #111827;
-            padding: 20px;
+            background-color: #18181b;
+            padding: 40px 20px;
             text-align: center;
         }
+        .header img {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 15px;
+        }
         .header h1 {
-            margin: 0;
+            font-family: 'Space Grotesk', sans-serif;
             color: #ffffff;
-            font-size: 24px;
+            font-size: 28px;
+            margin: 0;
         }
         .content {
-            padding: 30px;
+            padding: 40px 30px;
+            color: #333333;
+            line-height: 1.6;
         }
-        .content p {
-            margin: 0 0 1em;
+        .content h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 22px;
+            color: #18181b;
+        }
+        .button-container {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .button {
+            background-color: #E6B31E; /* Approx. hsl(45 95% 55%) */
+            color: #18181b;
+            padding: 12px 25px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
         }
         .footer {
-            background-color: #f9fafb;
+            background-color: #f4f4f4;
+            color: #888888;
             padding: 20px;
             text-align: center;
             font-size: 12px;
-            color: #777;
-        }
-        .button {
-            display: inline-block;
-            background-color: #FBBF24; /* Accent color */
-            color: #111827;
-            padding: 12px 24px;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: bold;
-            margin-top: 10px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <!-- You can host your logo and link it here -->
-            <!-- <img src="[URL_TO_YOUR_LOGO]" alt="HYBRIDX.CLUB Logo" width="50" style="margin-bottom: 10px;"> -->
-            <h1>HYBRIDX.CLUB</h1>
-        </div>
-        <div class="content">
-            <p><strong>Subject: How's your training going with HYBRIDX.CLUB?</strong></p>
-            <br>
-            <p>Hi [User's First Name],</p>
-            <p>My name is Jon Lee, and I'm the founder of HYBRIDX.CLUB. I wanted to personally welcome you and say how thrilled I am that you've joined our community of over 1,000 users.</p>
-            <p>You're now part of a new frontier in accessible and affordable training, and we're committed to helping you unlock your peak performance. I'd love to hear how you're getting on with the app and your new training plan.</p>
-            <p>As we continue to grow and improve, your feedback is incredibly valuable. Is there anything you'd like to see changed, added, or improved? No idea is too small!</p>
-            <p>Just reply to this email and let me know your thoughts.</p>
-            <p>Keep up the great work.</p>
-            <p>Best regards,</p>
-            <p><strong>Jon Lee</strong><br>Founder, HYBRIDX.CLUB</p>
-        </div>
-        <div class="footer">
-            <p>HYBRIDX.CLUB</p>
-            <p>You're receiving this email because you recently signed up.</p>
-        </div>
-    </div>
+    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+            <td align="center">
+                <div class="container">
+                    <!-- Header -->
+                    <div class="header">
+                         <!-- IMPORTANT: Replace [YOUR_APP_URL] with your actual production domain for the logo to appear correctly -->
+                        <img src="https://hyroxedgeai.web.app/icon-logo.png" alt="HYBRIDX.CLUB Logo">
+                        <h1>HYBRIDX.CLUB</h1>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="content">
+                        <h2>A quick hello from the HYBRIDX.CLUB team!</h2>
+                        <p>Hi [User Name],</p>
+                        <p>We're thrilled to have you on board and wanted to personally welcome you to the HYBRIDX.CLUB community. You've just joined over 1,000 other athletes who are pushing their limits with a new frontier in accessible and affordable hybrid training.</p>
+                        <p>We're just getting started and would love to know how you're finding things so far. Your experience is incredibly important, and your feedback will directly shape the future of the app.</p>
+                        <p>Are there any amendments, new features, or improvements you'd love to see? No idea is too big or too small!</p>
+                        
+                        <div class="button-container">
+                            <a href="mailto:feedback@hybridx.club?subject=App Feedback" class="button">Share Your Feedback</a>
+                        </div>
+                        
+                        <p>Thanks for being one of our foundational members. Let's get stronger together.</p>
+                        <p>Best,<br>The HYBRIDX.CLUB Team</p>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="footer">
+                        <p>&copy; 2024 HYBRIDX.CLUB. All rights reserved.</p>
+                        <p>You're receiving this email because you recently signed up.</p>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
