@@ -55,6 +55,8 @@ export interface User {
   cancel_at_period_end?: boolean;
   cancellation_effective_date?: Date;
   completedWorkouts?: number; // Added for admin view
+  // Notification preferences
+  notificationTime?: { hour: number; minute: number };
 }
 
 export type ProgramType = 'hyrox' | 'running';

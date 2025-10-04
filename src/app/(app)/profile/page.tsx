@@ -6,13 +6,15 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Loader2, Link as LinkIcon } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Bell } from 'lucide-react';
+import { ThemeSwitcher } from '@/components/theme-switcher';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { getAuthInstance } from '@/lib/firebase';
@@ -42,9 +44,15 @@ const runningProfileSchema = z.object({
     halfMarathon: z.string().optional(),
 });
 
+const notificationSchema = z.object({
+    hour: z.string(),
+    minute: z.string(),
+});
+
 type ProfileFormData = z.infer<typeof profileFormSchema>;
 type RecordsFormData = z.infer<typeof recordsFormSchema>;
 type RunningProfileFormData = z.infer<typeof runningProfileSchema>;
+type NotificationFormData = z.infer<typeof notificationSchema>;
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -61,6 +69,14 @@ export default function ProfilePage() {
 
   const runningForm = useForm<RunningProfileFormData>({
     resolver: zodResolver(runningProfileSchema),
+  });
+
+  const notificationForm = useForm<NotificationFormData>({
+    resolver: zodResolver(notificationSchema),
+    defaultValues: {
+      hour: '8',
+      minute: '0',
+    },
   });
 
   const fetchUserData = async () => {
@@ -89,7 +105,11 @@ export default function ProfilePage() {
                     fiveK: currentUser.runningProfile?.benchmarkPaces?.fiveK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.fiveK) : '',
                     tenK: currentUser.runningProfile?.benchmarkPaces?.tenK ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.tenK) : '',
                     halfMarathon: currentUser.runningProfile?.benchmarkPaces?.halfMarathon ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.halfMarathon) : '',
-                })
+                });
+                notificationForm.reset({
+                    hour: currentUser.notificationTime?.hour?.toString() || '8',
+                    minute: currentUser.notificationTime?.minute?.toString() || '0',
+                });
             }
         }
     } catch (error) {
@@ -203,6 +223,21 @@ export default function ProfilePage() {
     } catch (error: any) {
         console.error("Detailed error updating running profile:", error);
         toast({ title: 'Error', description: `Failed to update running profile: ${error.message}`, variant: 'destructive' });
+    }
+  };
+
+  const handleNotificationSubmit = async (data: NotificationFormData) => {
+    if (!user) return;
+    try {
+        const notificationTime = {
+            hour: parseInt(data.hour, 10),
+            minute: parseInt(data.minute, 10),
+        };
+        await updateUser(user.id, { notificationTime });
+        toast({ title: 'Success', description: 'Your notification time has been updated.' });
+    } catch (error: any) {
+        console.error("Error updating notification time:", error);
+        toast({ title: 'Error', description: `Failed to update notification time: ${error.message}`, variant: 'destructive' });
     }
   };
 
@@ -327,6 +362,70 @@ export default function ProfilePage() {
             </Card>
 
             <Card>
+                <Form {...notificationForm}>
+                    <form onSubmit={notificationForm.handleSubmit(handleNotificationSubmit)}>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Bell className="h-5 w-5" />
+                                Daily Workout Notifications
+                            </CardTitle>
+                            <CardDescription>Choose when you'd like to receive your daily workout reminder.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex gap-4 items-end">
+                                <FormField control={notificationForm.control} name="hour" render={({ field }) => (
+                                    <FormItem className="flex-1">
+                                        <FormLabel>Hour</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select hour" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {Array.from({ length: 24 }, (_, i) => (
+                                                    <SelectItem key={i} value={i.toString()}>
+                                                        {i.toString().padStart(2, '0')}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )} />
+                                <FormField control={notificationForm.control} name="minute" render={({ field }) => (
+                                    <FormItem className="flex-1">
+                                        <FormLabel>Minute</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value}>
+                                            <FormControl>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select minute" />
+                                                </SelectTrigger>
+                                            </FormControl>
+                                            <SelectContent>
+                                                {['00', '15', '30', '45'].map((minute) => (
+                                                    <SelectItem key={minute} value={minute}>
+                                                        {minute}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                    </FormItem>
+                                )} />
+                            </div>
+                        </CardContent>
+                        <CardFooter>
+                            <Button type="submit" disabled={notificationForm.formState.isSubmitting}>
+                                {notificationForm.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Save Notification Time
+                            </Button>
+                        </CardFooter>
+                    </form>
+                </Form>
+            </Card>
+
+            <Card>
                 <Form {...runningForm}>
                     <form onSubmit={runningForm.handleSubmit(handleRunningSubmit)}>
                         <CardHeader>
@@ -393,6 +492,11 @@ export default function ProfilePage() {
                     </form>
                 </Form>
             </Card>
+
+            {/* Theme Settings */}
+            <div className="lg:col-span-2">
+              <ThemeSwitcher />
+            </div>
         </div>
       </div>
     </div>

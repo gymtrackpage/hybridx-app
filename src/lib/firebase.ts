@@ -4,9 +4,11 @@ import { getFirestore } from "firebase/firestore";
 import {
   getAuth,
   browserLocalPersistence,
+  indexedDBLocalPersistence,
   initializeAuth as initializeFirebaseAuth,
   Auth,
-  onAuthStateChanged
+  onAuthStateChanged,
+  setPersistence
 } from "firebase/auth";
 
 // Your web app's Firebase configuration
@@ -35,15 +37,46 @@ const getAuthInstance = (): Promise<Auth> => {
     return authInstancePromise;
   }
 
-  authInstancePromise = new Promise((resolve, reject) => {
+  authInstancePromise = new Promise(async (resolve, reject) => {
     try {
       if (typeof window !== 'undefined') {
         // For client-side, initialize with persistence.
-        // Use only browserLocalPersistence to avoid PWA/IndexedDB issues
-        const auth = initializeFirebaseAuth(app, {
-          persistence: browserLocalPersistence,
-          popupRedirectResolver: undefined
+        // Try IndexedDB first (more reliable for PWAs), fall back to localStorage
+        let auth: Auth;
+
+        try {
+          auth = initializeFirebaseAuth(app, {
+            persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+            popupRedirectResolver: undefined
+          });
+          console.log('✅ Firebase Auth initialized with IndexedDB persistence');
+        } catch (initError: any) {
+          // If initialization fails (already initialized), get existing instance
+          if (initError.code === 'auth/already-initialized') {
+            auth = getAuth(app);
+            // Try to set persistence with fallback chain
+            try {
+              await setPersistence(auth, indexedDBLocalPersistence);
+              console.log('✅ Persistence set to IndexedDB');
+            } catch (persistError) {
+              console.warn('⚠️ IndexedDB persistence failed, using localStorage', persistError);
+              await setPersistence(auth, browserLocalPersistence);
+            }
+          } else {
+            throw initError;
+          }
+        }
+
+        // Additional persistence check on page load
+        auth.onAuthStateChanged((user) => {
+          if (user) {
+            // Ensure token is fresh
+            user.getIdToken(true).catch(err => {
+              console.error('Token refresh error:', err);
+            });
+          }
         });
+
         resolve(auth);
       } else {
         // For server-side, just get the auth instance without persistence.
@@ -51,17 +84,10 @@ const getAuthInstance = (): Promise<Auth> => {
         resolve(auth);
       }
     } catch (error) {
-      // If initialization fails, fall back to the basic getAuth.
-      // This can happen with hot-reloading in development.
-      if ((error as any).code === 'auth/already-initialized') {
-        const existingAuth = getAuth(app);
-        // Ensure persistence is set on existing instance
-        existingAuth.setPersistence(browserLocalPersistence).catch(console.error);
-        resolve(existingAuth);
-      } else {
-        console.error("Firebase Auth initialization error:", error);
-        reject(error);
-      }
+      console.error("Firebase Auth initialization error:", error);
+      // Last resort fallback
+      const auth = getAuth(app);
+      resolve(auth);
     }
   });
 

@@ -396,7 +396,7 @@ export default function ActiveWorkoutPage() {
                                             ) : (
                                                 <>
                                                     <p className="font-semibold">{(item as any).name}</p>
-                                                    <p className="text-sm text-muted-foreground">{(item as any).details}</p>
+                                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{(item as any).details}</p>
                                                 </>
                                             )}
                                         </div>
@@ -427,7 +427,7 @@ export default function ActiveWorkoutPage() {
                                     <CardContent className="p-4 flex items-center gap-4">
                                         <div className="flex-1">
                                             <p className="font-semibold">{(item as any).name}</p>
-                                            <p className="text-sm text-muted-foreground">{(item as any).details}</p>
+                                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{(item as any).details}</p>
                                         </div>
                                         <Checkbox
                                             id={key}

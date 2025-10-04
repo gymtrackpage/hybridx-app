@@ -110,6 +110,7 @@ The AI uses sophisticated logic to condense programs:
    - Identifies workout types (strength, conditioning, recovery)
    - Understands training intensity progression
    - Recognizes critical vs. optional sessions
+   - Identifies heavy sessions that require recovery
 
 2. **Prioritizes & Combines**
    - Keeps most critical workouts (strength foundations, key conditioning)
@@ -123,11 +124,14 @@ The AI uses sophisticated logic to condense programs:
    - Avoids conflicts (e.g., heavy legs + intense running on same day)
    - Maintains program effectiveness in condensed format
 
-4. **Restructures Week**
-   - Distributes workouts logically through 7-day week
-   - Example 3-day plan: Day 1, Day 3, Day 5
-   - Example 4-day plan: Day 1, Day 2, Day 4, Day 5
-   - Rest days fill the gaps automatically
+4. **Smart Weekly Distribution** 🆕
+   - Spreads workouts throughout the week (no clustering at end)
+   - Places rest days strategically after heavy strength sessions
+   - Follows intelligent patterns:
+     - **3-day plan:** Day 1, Day 3, Day 5 (alternating pattern)
+     - **4-day plan:** Day 1, Day 2, Day 4, Day 5 (rest after heavy days)
+   - Example: Strength → Rest → Conditioning → Rest → Long Run → Rest → Rest
+   - **Key principle:** Heavy lower body/full body strength gets rest day or light conditioning after
 
 ### AI Prompt (Abbreviated)
 
@@ -140,9 +144,14 @@ CRITICAL INSTRUCTIONS:
 2. Identify critical workouts to keep
 3. Combine complementary sessions intelligently
 4. Drop lower priority workouts if necessary
-5. Final output MUST contain exactly {targetDays} workouts
-6. Distribute logically through 7-day week
-7. Maintain program effectiveness
+5. Smart Weekly Distribution:
+   - Final output MUST contain exactly {targetDays} workouts
+   - DO NOT cluster workouts at end of week - spread them out!
+   - Place rest days strategically after heavy strength sessions
+   - 3-day: Day 1, 3, 5 (alternating) or Day 2, 4, 6
+   - 4-day: Day 1, 2, 4, 5 or Day 1, 3, 4, 6 (rest after heavy days)
+   - Key: Heavy lower/full body strength → rest or light conditioning
+6. Maintain program effectiveness with intelligent recovery
 ```
 
 ---
@@ -166,10 +175,13 @@ CRITICAL INSTRUCTIONS:
 ```javascript
 {
   programId: "JrHDGwFm0Cn4sRJosApH",  // Original program
-  customProgram: [                      // AI-adjusted version
+  customProgram: [                      // AI-adjusted version with smart distribution
     { day: 1, title: "Full Body Strength & Core", exercises: [...] },
+    // Day 2: REST (recovery after strength)
     { day: 3, title: "Running & Hyrox Skills", exercises: [...] },
+    // Day 4: REST
     { day: 5, title: "Conditioning & Endurance", exercises: [...] }
+    // Days 6-7: REST
   ],
   startDate: "2025-10-01"
 }

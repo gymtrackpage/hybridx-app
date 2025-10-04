@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import { ThemeProvider } from '@/contexts/theme-context';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -41,14 +42,17 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="HYBRIDX.CLUB" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#FFFFFF" />
+        <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
 
         {/* Apple Touch Icon */}
         <link rel="apple-touch-icon" href="/icon-logo.png" />
       </head>
       <body className="font-body antialiased">
-        {children}
-        <Toaster />
+        <ThemeProvider>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

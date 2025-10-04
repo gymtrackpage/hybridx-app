@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { StravaUploadButton } from '@/components/strava-upload-button';
-import { WorkoutImageGenerator } from '@/components/WorkoutImageGenerator';
+import { ShareWorkoutDialog } from '@/components/share-workout-dialog';
 import type { WorkoutSession, Workout, RunningWorkout } from '@/models/types';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
@@ -85,15 +85,14 @@ export default function WorkoutCompleteModal({ isOpen, onClose, session, userHas
                                 disabled={session.skipped}
                             />
                         )}
-                        <WorkoutImageGenerator 
-                             workout={{
-                                name: session.workoutTitle,
-                                type: workout.programType,
-                                startTime: session.startedAt,
-                                notes: session.notes,
-                                duration: duration, // Pass the duration to the image generator
-                                distance: session.stravaActivity?.distance,
-                            }}
+
+                        <ShareWorkoutDialog
+                            session={session}
+                            trigger={
+                                <Button variant="outline" className="w-full">
+                                    Share Workout Image
+                                </Button>
+                            }
                         />
                     </div>
 

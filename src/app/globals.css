@@ -90,6 +90,29 @@
     --sidebar-border: 0 0% 14.9%;
     --sidebar-ring: 0 0% 83.1%;
   }
+
+  /* Hot Pink Theme (Light) - Higher specificity */
+  .light.theme-pink,
+  :root.theme-pink {
+    --accent: 330 100% 60%;
+    --accent-foreground: 0 0% 100%;
+    --chart-3: 330 100% 60%;
+    --chart-4: 340 85% 65%;
+    --chart-5: 320 90% 55%;
+    --sidebar-primary: 330 100% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+  }
+
+  /* Hot Pink Theme (Dark) */
+  .dark.theme-pink {
+    --accent: 330 90% 55%;
+    --accent-foreground: 0 0% 100%;
+    --chart-3: 330 90% 55%;
+    --chart-4: 340 85% 60%;
+    --chart-5: 320 80% 50%;
+    --sidebar-primary: 330 90% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+  }
 }
 
 @layer base {

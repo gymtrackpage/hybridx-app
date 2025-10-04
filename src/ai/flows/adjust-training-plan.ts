@@ -48,21 +48,32 @@ const prompt = ai.definePrompt({
 
   **CRITICAL INSTRUCTIONS:**
   1.  **Analyze the 5-day Plan:** Review the original workouts to understand the weekly structure, intensity, and goals (e.g., strength days, conditioning days, recovery).
+
   2.  **Prioritize & Combine:**
       *   Identify the most critical workouts that must be kept.
       *   Combine complementary sessions. For example, merge a shorter strength session with a metcon, or combine accessory work into a main lift day.
       *   Lower priority workouts (e.g., secondary recovery sessions, light accessory work) can be dropped if necessary.
       *   Ensure the combined days are challenging but manageable, not excessively long or conflicting (e.g., don't pair a heavy leg day with intense running).
-  3.  **Restructure the Week:**
+
+  3.  **Smart Weekly Distribution:**
       *   The final output MUST contain exactly {{{targetDays}}} workout objects.
-      *   Re-assign the 'day' property for the new workouts to be sequential (e.g., Day 1, Day 2, Day 3). Distribute them logically through a 7-day week (e.g., Day 1, 3, 5 for a 3-day plan).
-      *   The remaining days of the 7-day week should be rest days. Do NOT include rest day objects in the output array.
-  4.  **Maintain Integrity:** The goal is to retain the original program's effectiveness, just in a more condensed format.
+      *   Distribute workouts intelligently throughout the 7-day week with proper recovery placement.
+      *   **DO NOT cluster all workouts at the end of the week** - spread them out!
+      *   **Place rest days strategically** - especially after heavy strength sessions or high-intensity workouts.
+      *   Follow these guidelines for day numbering:
+          - For 3-day plans: Use Day 1, Day 3, Day 5 or Day 2, Day 4, Day 6 (alternating pattern with rest in between)
+          - For 4-day plans: Use Day 1, Day 2, Day 4, Day 5 or Day 1, Day 3, Day 4, Day 6 (with rest after heavy sessions)
+      *   Example good patterns:
+          - 3-day: [Strength Day 1] → [Rest Day 2] → [Conditioning Day 3] → [Rest Day 4] → [Long Run Day 5] → [Rest Days 6-7]
+          - 4-day: [Lower Body Day 1] → [Upper Body Day 2] → [Rest Day 3] → [Conditioning Day 4] → [Endurance Day 5] → [Rest Days 6-7]
+      *   **Key principle:** Heavy lower body or full body strength sessions should typically have a rest day or light conditioning after them.
+
+  4.  **Maintain Integrity:** The goal is to retain the original program's effectiveness, just in a more condensed format with intelligent recovery placement.
 
   **Original 5-Day Plan:**
   {{{workoutsJSON}}}
 
-  Generate the adjusted {{{targetDays}}}-day workout plan.`,
+  Generate the adjusted {{{targetDays}}}-day workout plan with smart weekly distribution.`,
 });
 
 const adjustTrainingPlanFlow = ai.defineFlow(

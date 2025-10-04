@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, Newspaper, LayoutDashboard, Sparkles, BookOpen, CreditCard, Calendar, Activity, Shield } from 'lucide-react';
+import { User, Newspaper, LayoutDashboard, Sparkles, BookOpen, CreditCard, Calendar, Activity, Shield, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CustomWorkoutIcon } from './icons';
 import { useScrollDirection } from '@/hooks/use-scroll-direction';
@@ -19,6 +19,7 @@ export const primaryNavItems = [
 
 // Secondary content-focused items
 export const secondaryNavItems = [
+  { href: '/history', icon: History, label: 'History' },
   { href: '/activity-feed', icon: Activity, label: 'Activity Feed' },
   { href: '/articles', icon: Newspaper, label: 'Articles' },
   { href: '/programs', icon: BookOpen, label: 'Programs' },

@@ -80,7 +80,7 @@ The AI uses strength & conditioning expertise to:
 - **Prioritize** critical workouts that must be kept
 - **Combine** complementary sessions (e.g., strength + conditioning)
 - **Drop** lower priority workouts (light recovery, redundant sessions)
-- **Restructure** the week to distribute workouts logically
+- **Smart Distribution** 🆕 spread workouts throughout week with strategic rest placement
 - **Maintain** program effectiveness in condensed format
 
 ### Example Adjustments
@@ -96,11 +96,17 @@ Day 5: Compromised Running
 Day 6: Long Run
 Day 7: Rest
 
-Adjusted (3 days):
+Adjusted (3 days) - NEW SMART DISTRIBUTION:
 Day 1: Full Body Strength & Power (combined Day 1 + 3)
+Day 2: REST (recovery after heavy strength)
 Day 3: Speed & Conditioning (combined Day 2 + 5)
+Day 4: REST
 Day 5: Long Run & Mobility (Day 6 + essential recovery)
-Days 2, 4, 6, 7: Rest
+Day 6-7: REST
+
+✓ Workouts spread throughout week
+✓ Rest days after heavy strength sessions
+✓ Proper recovery for optimal performance
 ```
 
 ---

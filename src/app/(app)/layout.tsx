@@ -31,6 +31,8 @@ import { Logo } from '@/components/icons';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { InstallPwaBanner } from '@/components/install-pwa-banner';
+import { NotificationPermissionPrompt } from '@/components/notification-permission-prompt';
+import { OfflineIndicator } from '@/components/offline-indicator';
 import { getUserClient } from '@/services/user-service-client';
 import { addMonths, isAfter } from 'date-fns';
 import { MobileNavBar, primaryNavItems, secondaryNavItems, adminNavItems } from '@/components/mobile-nav-bar';
@@ -201,13 +203,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 {/* Header content can go here, like breadcrumbs */}
             </div>
         </header>
+
+        {/* Offline Indicator */}
+        <OfflineIndicator />
+
         <main className="flex-1 overflow-auto p-4 lg:p-6 pb-28 md:pb-6">{children}</main>
-        
+
         {/* PWA Banner for Desktop */}
         <div className="hidden md:block">
             <InstallPwaBanner />
         </div>
-        
+
+        {/* Notification Permission Prompt */}
+        <NotificationPermissionPrompt />
+
          {/* Mobile Nav Bar for smaller screens */}
         <div className="md:hidden">
           <MobileNavBar />

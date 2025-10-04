@@ -20,6 +20,7 @@ import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dial
 import { Button } from '@/components/ui/button';
 import { Link as LinkIcon, Activity, Clock, MapPin, Forward } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { formatTextWithBullets } from '@/utils/text-formatter';
 
 interface WorkoutEvent {
   date: Date;
@@ -418,20 +419,28 @@ export default function CalendarPage() {
             ) : selectedWorkout ? (
               <div>
                 <h4 className="font-semibold mb-2">Planned Workout</h4>
-                <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                  {selectedWorkout.programType === 'running' 
+                <div className="space-y-4">
+                  {selectedWorkout.programType === 'running'
                     ? (selectedWorkout as RunningWorkout).runs.map((run, index) => (
-                        <li key={index}>
-                          <span className="font-medium text-foreground">{run.description}</span>
-                        </li>
+                        <div key={index} className="space-y-1">
+                          <p className="font-medium text-foreground">{run.description}</p>
+                        </div>
                       ))
-                    : (selectedWorkout as Workout).exercises.map((exercise, index) => (
-                        <li key={index}>
-                          <span className="font-medium text-foreground">{exercise.name}:</span> {exercise.details}
-                        </li>
-                      ))
+                    : (selectedWorkout as Workout).exercises.map((exercise, index) => {
+                        const formattedDetails = formatTextWithBullets(exercise.details);
+                        return (
+                          <div key={index} className="space-y-1">
+                            <p className="font-medium text-foreground">{exercise.name}</p>
+                            {formattedDetails.map((line, lineIndex) => (
+                              <p key={lineIndex} className="text-sm text-muted-foreground whitespace-pre-wrap ml-4">
+                                {line}
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      })
                   }
-                </ul>
+                </div>
               </div>
             ) : null}
 

@@ -35,6 +35,10 @@ import { cn } from '@/lib/utils';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import { useToast } from '@/hooks/use-toast';
 import { CustomWorkoutDialog } from '@/components/custom-workout-dialog';
+import { checkAndScheduleNotification } from '@/utils/notification-scheduler';
+import { useNotificationPermission } from '@/hooks/use-notification-permission';
+import { StatsWidget } from '@/components/stats-widget';
+import { calculateStreakData, type StreakData } from '@/utils/streak-calculator';
 
 const chartConfig = {
   workouts: {
@@ -49,6 +53,7 @@ export default function DashboardPage() {
   const [todaysWorkout, setTodaysWorkout] = useState<{ day: number; workout: Workout | RunningWorkout | null } | null>(null);
   const [todaysSession, setTodaysSession] = useState<WorkoutSession | null>(null);
   const [progressData, setProgressData] = useState<{ week: string, workouts: number }[]>([]);
+  const [streakData, setStreakData] = useState<StreakData>({ currentStreak: 0, longestStreak: 0, totalWorkouts: 0, thisWeekWorkouts: 0, thisMonthWorkouts: 0 });
   const [trainingPaces, setTrainingPaces] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
@@ -59,6 +64,7 @@ export default function DashboardPage() {
   const [workoutSummaryLoading, setWorkoutSummaryLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const { isGranted } = useNotificationPermission();
   
   const fetchCoreData = async (userId: string) => {
     setLoading(true);
@@ -76,6 +82,9 @@ export default function DashboardPage() {
       const sessions = await getAllUserSessions(userId);
       const weeklyProgress = generateProgressData(sessions);
       setProgressData(weeklyProgress);
+
+      const streak = calculateStreakData(sessions);
+      setStreakData(streak);
 
       let workoutSession;
       let currentWorkoutInfo;
@@ -200,6 +209,22 @@ export default function DashboardPage() {
       setWorkoutSummaryLoading(false);
     }
   }, [user, todaysWorkout]);
+
+  // Effect to schedule daily notifications
+  useEffect(() => {
+    if (isGranted && todaysWorkout?.workout && user) {
+      const exercisesForNotification = todaysWorkout.workout.programType === 'running'
+        ? (todaysWorkout.workout as RunningWorkout).runs.map(r => r.type).join(', ')
+        : (todaysWorkout.workout as Workout).exercises.map(e => e.name).join(', ');
+
+      checkAndScheduleNotification({
+        workoutTitle: todaysWorkout.workout.title,
+        exercises: exercisesForNotification,
+      }, user.notificationTime).catch(error => {
+        console.error('Error scheduling notification:', error);
+      });
+    }
+  }, [isGranted, todaysWorkout, user]);
 
   
   const generateProgressData = (sessions: WorkoutSession[]) => {
@@ -360,7 +385,7 @@ export default function DashboardPage() {
                             (todaysWorkout.workout as Workout).exercises.map((ex) => (
                                 <li key={ex.name}>
                                     <p className="font-medium">{ex.name}</p>
-                                    <p className="text-sm text-muted-foreground">{ex.details}</p>
+                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{ex.details}</p>
                                 </li>
                             ))
                         )}
@@ -462,6 +487,8 @@ export default function DashboardPage() {
             </Card>
           </div>
         </div>
+
+        <StatsWidget streakData={streakData} loading={loading} />
       </div>
       {user && (
          <CustomWorkoutDialog
