@@ -382,7 +382,7 @@ export default function ActiveWorkoutPage() {
                             const key = isRunningProgram ? (item as any).description : (item as any).name;
                             return (
                                 <Card key={`${key}-${index}`} className="has-[[data-state=checked]]:bg-muted/50 transition-colors">
-                                    <CardContent className="p-4 flex items-center gap-4">
+                                    <CardContent className="py-4 px-2 flex items-center gap-4">
                                         <div className="flex-1">
                                             {isRunningProgram ? (
                                                 <>
@@ -424,7 +424,7 @@ export default function ActiveWorkoutPage() {
                             const key = (item as any).name;
                             return (
                                 <Card key={`${key}-${index}`} className="has-[[data-state=checked]]:bg-muted/50 transition-colors border-dashed border-primary/50">
-                                    <CardContent className="p-4 flex items-center gap-4">
+                                    <CardContent className="py-4 px-2 flex items-center gap-4">
                                         <div className="flex-1">
                                             <p className="font-semibold">{(item as any).name}</p>
                                             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{(item as any).details}</p>
