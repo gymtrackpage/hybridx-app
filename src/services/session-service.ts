@@ -17,7 +17,6 @@ function fromFirestore(doc: any): WorkoutSession {
         programType: data.programType,
         startedAt: data.startedAt.toDate(),
         finishedAt: data.finishedAt ? data.finishedAt.toDate() : undefined,
-        completedItems: data.completedItems,
         notes: data.notes || '',
         extendedExercises: data.extendedExercises,
         skipped: data.skipped,
@@ -44,17 +43,11 @@ export async function getOrCreateWorkoutSessionAdmin(userId: string, programId: 
         return fromFirestore(snapshot.docs[0]);
     }
 
-    const initialCompleted: { [key: string]: boolean } = {};
-    workout.exercises.forEach(ex => {
-        initialCompleted[ex.name] = false;
-    });
-
     const newSessionData = {
         userId,
         programId,
         workoutDate: Timestamp.fromDate(workoutDate),
         startedAt: Timestamp.now(),
-        completedItems: initialCompleted,
         finishedAt: null,
         notes: '',
         workoutTitle: workout.title,
@@ -72,7 +65,6 @@ export async function getOrCreateWorkoutSessionAdmin(userId: string, programId: 
         workoutTitle: workout.title,
         programType: workout.programType,
         startedAt: new Date(),
-        completedItems: initialCompleted,
         notes: '',
         workoutDetails: workout,
     };
@@ -141,12 +133,6 @@ function createSessionData(userId: string, programId: string, date: Date, workou
     const items = workout.programType === 'running'
         ? (workout as RunningWorkout).runs
         : (workout as Workout).exercises;
-
-    const completedItems = items.reduce((acc, item) => {
-        const key = (item as any).name || (item as any).description;
-        acc[key] = false;
-        return acc;
-    }, {} as { [key: string]: boolean });
     
     const data: any = {
       userId,
@@ -154,7 +140,6 @@ function createSessionData(userId: string, programId: string, date: Date, workou
       workoutDate: Timestamp.fromDate(date),
       workoutTitle: workout.title,
       programType: workout.programType,
-      completedItems,
       finishedAt: null,
       notes: '',
       workoutDetails: workout, // <-- CRITICAL FIX: Ensure full workout object is saved

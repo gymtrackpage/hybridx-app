@@ -29,12 +29,6 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
   const shareCardRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const completedItems = session.completedItems
-    ? Object.values(session.completedItems).filter(Boolean).length
-    : 0;
-  const totalItems = session.completedItems ? Object.keys(session.completedItems).length : 0;
-  const completionPercentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
-
   const handleDownload = async () => {
     setIsGenerating(true);
     try {
@@ -79,7 +73,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
   };
 
   const handleCopyText = () => {
-    const text = `Just crushed a ${session.workoutTitle} workout! 💪\n${completionPercentage}% complete | ${session.duration || 0} minutes\n\nGet your personalized HYROX training at HYBRIDX.CLUB`;
+    const text = `Just crushed a ${session.workoutTitle} workout! 💪\nDuration: ${session.duration || 0} minutes\n\nGet your personalized HYROX training at HYBRIDX.CLUB`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -178,17 +172,9 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
                       {session.workoutTitle}
                     </h2>
                     {session.finishedAt && !session.skipped && (
-                      <div className="flex items-center gap-3">
-                        <div className="text-6xl font-bold bg-gradient-to-r from-green-400 to-emerald-600 bg-clip-text text-transparent">
-                          {completionPercentage}%
-                        </div>
                         <div className="text-white/80">
-                          <div className="text-lg font-semibold">COMPLETE</div>
-                          <div className="text-sm">
-                            {completedItems}/{totalItems} exercises
-                          </div>
+                          <div className="text-lg font-semibold">WORKOUT COMPLETE</div>
                         </div>
-                      </div>
                     )}
                   </div>
 

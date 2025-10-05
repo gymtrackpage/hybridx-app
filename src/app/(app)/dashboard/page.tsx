@@ -286,18 +286,6 @@ export default function DashboardPage() {
     }
   };
 
-  const workoutItems = useMemo(() => {
-    if (!todaysWorkout?.workout) return [];
-    if (todaysWorkout.workout.programType === 'running') {
-      return (todaysWorkout.workout as RunningWorkout).runs;
-    }
-    return (todaysWorkout.workout as Workout).exercises;
-  }, [todaysWorkout]);
-
-  const completedItems = todaysSession && todaysSession.completedItems ? Object.values(todaysSession.completedItems).filter(Boolean).length : 0;
-  const totalItems = workoutItems.length;
-  const progressPercentage = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
-  
   const programStartsInFuture = user?.startDate && isFuture(user.startDate);
   const showGenerateWorkoutButton = !program || programStartsInFuture || !todaysWorkout?.workout;
   
@@ -361,13 +349,8 @@ export default function DashboardPage() {
             <CardContent>
               {todaysWorkout?.workout && !programStartsInFuture ? (
                   <div className="space-y-4">
-                      <div className="flex items-center gap-4">
-                          <span className="text-sm font-medium text-muted-foreground w-20">Progress</span>
-                          <Progress value={progressPercentage} className="flex-1" />
-                          <span className="text-sm font-bold">{Math.round(progressPercentage)}%</span>
-                      </div>
                       <Separator />
-                      <ul className="space-y-4">
+                      <ul className="space-y-4 pt-4">
                         {isRunningProgram ? (
                             (todaysWorkout.workout as RunningWorkout).runs.map((run: PlannedRun) => (
                                 <li key={run.description}>

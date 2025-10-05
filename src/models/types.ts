@@ -119,7 +119,6 @@ export interface WorkoutSession {
     programType: ProgramType;
     startedAt: Date;
     finishedAt?: Date;
-    completedItems: { [itemName: string]: boolean };
     notes?: string;
     duration?: string; // Optional duration for custom workouts
     extendedExercises?: Exercise[]; // AI-generated exercises

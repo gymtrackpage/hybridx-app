@@ -313,10 +313,6 @@ export default function WorkoutHistoryPage() {
           <div className="space-y-3">
             {filteredAndSortedSessions.map((session) => {
               const isCompleted = session.finishedAt && !session.skipped;
-              const completedItems = session.completedItems
-                ? Object.values(session.completedItems).filter(Boolean).length
-                : 0;
-              const totalItems = session.completedItems ? Object.keys(session.completedItems).length : 0;
 
               return (
                 <Card key={session.id} className={cn('transition-all hover:shadow-md', {
@@ -366,11 +362,6 @@ export default function WorkoutHistoryPage() {
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
                                   {session.duration} min
-                                </span>
-                              )}
-                              {totalItems > 0 && (
-                                <span>
-                                  {completedItems}/{totalItems} exercises
                                 </span>
                               )}
                             </div>
@@ -494,16 +485,8 @@ export default function WorkoutHistoryPage() {
                       </div>
 
                       <div className="flex md:flex-col gap-2 md:items-end">
-                        {isCompleted && totalItems > 0 && (
-                          <>
-                            <div className="text-right">
-                              <div className="text-2xl font-bold text-green-600">
-                                {Math.round((completedItems / totalItems) * 100)}%
-                              </div>
-                              <div className="text-xs text-muted-foreground">Complete</div>
-                            </div>
-                            <ShareWorkoutDialog session={session} />
-                          </>
+                        {isCompleted && (
+                          <ShareWorkoutDialog session={session} />
                         )}
                       </div>
                     </div>

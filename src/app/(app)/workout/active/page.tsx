@@ -10,7 +10,6 @@ import { workoutSummary } from '@/ai/flows/workout-summary';
 import { extendWorkout } from '@/ai/flows/extend-workout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -181,14 +180,6 @@ export default function ActiveWorkoutPage() {
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNotes(e.target.value);
     debouncedSaveNotes(e.target.value);
-  };
-
-  const handleToggleItem = async (itemName: string, completed: boolean) => {
-    if (!session) return;
-    const updatedCompleted = { ...session.completedItems, [itemName]: completed };
-    const updatedSession = { ...session, completedItems: updatedCompleted };
-    setSession(updatedSession);
-    await updateWorkoutSession(session.id, { completedItems: updatedCompleted });
   };
 
   const handleExtendWorkout = async () => {
@@ -381,7 +372,7 @@ export default function ActiveWorkoutPage() {
                         {originalWorkoutItems.map((item, index) => {
                             const key = isRunningProgram ? (item as any).description : (item as any).name;
                             return (
-                                <Card key={`${key}-${index}`} className="has-[[data-state=checked]]:bg-muted/50 transition-colors">
+                                <Card key={`${key}-${index}`}>
                                     <CardContent className="py-4 px-2 flex items-center gap-4">
                                         <div className="flex-1">
                                             {isRunningProgram ? (
@@ -400,14 +391,6 @@ export default function ActiveWorkoutPage() {
                                                 </>
                                             )}
                                         </div>
-                                        <Checkbox
-                                            id={key}
-                                            checked={!!session.completedItems?.[key]}
-                                            onCheckedChange={(checked) => handleToggleItem(key, !!checked)}
-                                            className="h-6 w-6"
-                                            disabled={!!session.finishedAt}
-                                            aria-label={`Mark ${key} as complete`}
-                                        />
                                     </CardContent>
                                 </Card>
                             );
@@ -423,20 +406,12 @@ export default function ActiveWorkoutPage() {
                         {extendedExercises.map((item, index) => {
                             const key = (item as any).name;
                             return (
-                                <Card key={`${key}-${index}`} className="has-[[data-state=checked]]:bg-muted/50 transition-colors border-dashed border-primary/50">
+                                <Card key={`${key}-${index}`} className="border-dashed border-primary/50">
                                     <CardContent className="py-4 px-2 flex items-center gap-4">
                                         <div className="flex-1">
                                             <p className="font-semibold">{(item as any).name}</p>
                                             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{(item as any).details}</p>
                                         </div>
-                                        <Checkbox
-                                            id={key}
-                                            checked={!!session.completedItems?.[key]}
-                                            onCheckedChange={(checked) => handleToggleItem(key, !!checked)}
-                                            className="h-6 w-6"
-                                            disabled={!!session.finishedAt}
-                                            aria-label={`Mark ${key} as complete`}
-                                        />
                                     </CardContent>
                                 </Card>
                             );

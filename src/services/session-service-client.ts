@@ -17,7 +17,6 @@ function fromFirestore(doc: any): WorkoutSession {
         programType: data.programType || 'hyrox',
         startedAt: data.startedAt.toDate(),
         finishedAt: data.finishedAt ? data.finishedAt.toDate() : undefined,
-        completedItems: data.completedItems,
         notes: data.notes || '',
         duration: data.duration,
         extendedExercises: data.extendedExercises || [],
@@ -121,16 +120,6 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         console.log(`Overwriting existing workout session for date: ${workoutDate.toISOString()}`);
     }
 
-    const initialCompleted: { [key: string]: boolean } = {};
-    const items = workout.programType === 'running' 
-        ? (workout as RunningWorkout).runs 
-        : [...((workout as Workout).exercises || [])];
-        
-    items.forEach(item => {
-        const key = workout.programType === 'running' ? (item as any).description : (item as any).name;
-        initialCompleted[key] = false;
-    });
-
     const newSessionData = {
         userId,
         programId,
@@ -138,7 +127,6 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         workoutTitle: workout.title,
         programType: workout.programType || 'hyrox',
         startedAt: Timestamp.now(),
-        completedItems: initialCompleted,
         finishedAt: null,
         notes: '',
         duration: duration || null,
@@ -164,7 +152,6 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         workoutTitle: workout.title,
         programType: workout.programType || 'hyrox',
         startedAt: new Date(),
-        completedItems: initialCompleted,
         notes: '',
         duration: newSessionData.duration,
         extendedExercises: newSessionData.extendedExercises,
@@ -217,20 +204,10 @@ export async function linkStravaActivityToSession(sessionId: string, activity: S
             workoutTitle: activity.name,
             programType: activity.sport_type.toLowerCase().includes('run') ? 'running' : 'hyrox',
             startedAt: Timestamp.fromDate(new Date(activity.start_date)),
-            completedItems: { [activity.name]: true },
         };
         const docRef = await addDoc(sessionsCollection, newSessionData);
         sessionRef = docRef;
         sessionData = { id: docRef.id, ...newSessionData, workoutDate: activityDate, startedAt: new Date(activity.start_date) };
-    }
-    
-    // Mark all original exercises as complete
-    const completedItems: { [key: string]: boolean } = { ...sessionData.completedItems };
-   if (sessionData.workoutDetails) {
-        const items = sessionData.workoutDetails.programType === 'running' ? sessionData.workoutDetails.runs : sessionData.workoutDetails.exercises;
-        items.forEach((item: any) => {
-            completedItems[item.name || item.description] = true;
-        });
     }
 
     const updateData = {
@@ -239,7 +216,6 @@ export async function linkStravaActivityToSession(sessionId: string, activity: S
         uploadedToStrava: false, // It's linked, not uploaded from our app
         stravaUploadedAt: Timestamp.now(),
         notes: sessionData.notes ? `${sessionData.notes}\n\nCompleted via Strava: ${activity.name}.` : `Completed via Strava: ${activity.name}.`,
-        completedItems,
         stravaActivity: {
             distance: activity.distance,
             moving_time: activity.moving_time,
