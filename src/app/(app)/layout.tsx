@@ -88,6 +88,14 @@ function NavMenu() {
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 ))}
+                 <SidebarMenuItem>
+                    <SidebarMenuButton asChild tooltip="Debug" isActive={pathname.startsWith('/debug')}>
+                        <Link href="/debug" onClick={handleLinkClick}>
+                            <Shield />
+                            <span>Debug</span>
+                        </Link>
+                    </SidebarMenuButton>
+                </SidebarMenuItem>
             </SidebarMenu>
         </>
     );
