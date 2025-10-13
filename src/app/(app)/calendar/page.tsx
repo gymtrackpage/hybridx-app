@@ -12,15 +12,17 @@ import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getAllUserSessions, getOrCreateWorkoutSession } from '@/services/session-service-client';
+import { getAllUserSessions, getOrCreateWorkoutSession, updateWorkoutSession } from '@/services/session-service-client';
 import { swapWorkouts } from '@/services/session-service'; // Import the new server action
 import type { User, Program, Workout, WorkoutSession, RunningWorkout, Exercise } from '@/models/types';
 import { addDays, format, isSameDay, parseISO, isValid, isToday, startOfDay } from 'date-fns';
 import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
 import { Button } from '@/components/ui/button';
-import { Link as LinkIcon, Activity, Clock, MapPin, Forward } from 'lucide-react';
+import { Link as LinkIcon, Activity, Clock, MapPin, Forward, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatTextWithBullets } from '@/utils/text-formatter';
+import { Textarea } from '@/components/ui/textarea';
+import { useDebouncedCallback } from 'use-debounce';
 
 interface WorkoutEvent {
   date: Date;
@@ -38,6 +40,8 @@ export default function CalendarPage() {
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   const [sessionToLink, setSessionToLink] = useState<WorkoutSession | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notes, setNotes] = useState('');
   const router = useRouter();
   const { toast } = useToast();
 
@@ -49,6 +53,16 @@ export default function CalendarPage() {
 
   const selectedWorkout = selectedEvent?.workout;
   const completedSession = selectedEvent?.session;
+
+  // When selectedEvent changes, update notes state
+  useEffect(() => {
+    if (selectedEvent?.session?.notes) {
+      setNotes(selectedEvent.session.notes);
+    } else {
+      setNotes('');
+    }
+    setEditingNotes(false); // Reset editing state on date change
+  }, [selectedEvent]);
 
   const fetchCalendarData = async (fbUser: FirebaseUser) => {
     try {
@@ -186,6 +200,29 @@ export default function CalendarPage() {
 
     setWorkoutEvents(events);
   };
+
+  const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
+    if (!completedSession) return;
+    try {
+      await updateWorkoutSession(completedSession.id, { notes: value });
+      // We don't need to show a toast every time they type
+    } catch (error) {
+      console.error("Failed to save notes:", error);
+      toast({ title: "Error", description: "Could not save your notes.", variant: "destructive" });
+    }
+  }, 1000);
+
+  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setNotes(e.target.value);
+    debouncedSaveNotes(e.target.value);
+  };
+
+  const handleSaveNotes = () => {
+    debouncedSaveNotes.flush();
+    setEditingNotes(false);
+    toast({ title: "Notes Saved", description: "Your workout notes have been updated." });
+  };
+
 
   const handleDoToday = async () => {
       if (!firebaseUser || !selectedWorkout || !selectedDate || !program) {
@@ -382,14 +419,6 @@ export default function CalendarPage() {
                             <div className="text-xs text-muted-foreground">TIME</div>
                         </div>
                     </div>
-                     {completedSession.notes && (
-                        <div>
-                            <h4 className="font-semibold mb-2">Your Notes</h4>
-                            <p className="text-sm text-muted-foreground border-l-2 pl-4 italic">
-                            {completedSession.notes}
-                            </p>
-                        </div>
-                    )}
                 </div>
             ) : completedSession?.finishedAt ? (
               <div className="space-y-4">
@@ -407,14 +436,6 @@ export default function CalendarPage() {
                     <p className="text-sm text-muted-foreground">No completed items details available for this session.</p>
                   )}
                 </div>
-                {completedSession.notes && (
-                  <div>
-                    <h4 className="font-semibold mb-2">Your Notes</h4>
-                    <p className="text-sm text-muted-foreground border-l-2 pl-4 italic">
-                      {completedSession.notes}
-                    </p>
-                  </div>
-                )}
               </div>
             ) : selectedWorkout ? (
               <div>
@@ -443,6 +464,37 @@ export default function CalendarPage() {
                 </div>
               </div>
             ) : null}
+
+            {/* Notes Section */}
+            {completedSession && (
+              <div className="mt-4 pt-4 border-t">
+                  <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-semibold">Your Notes</h4>
+                      {!editingNotes && (
+                          <Button variant="ghost" size="sm" onClick={() => setEditingNotes(true)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit
+                          </Button>
+                      )}
+                  </div>
+                  {editingNotes ? (
+                      <div className="space-y-2">
+                          <Textarea
+                              value={notes}
+                              onChange={handleNotesChange}
+                              placeholder="Add notes about your workout..."
+                              rows={4}
+                          />
+                          <Button size="sm" onClick={handleSaveNotes}>Save Notes</Button>
+                      </div>
+                  ) : (
+                      <p className="text-sm text-muted-foreground border-l-2 pl-4 italic min-h-[40px]">
+                          {notes || 'No notes for this workout.'}
+                      </p>
+                  )}
+              </div>
+            )}
+
 
              {selectedWorkout && !completedSession && !selectedEvent.isRestDay && (
                 <div className="pt-4 mt-4 border-t flex flex-col sm:flex-row gap-2">
