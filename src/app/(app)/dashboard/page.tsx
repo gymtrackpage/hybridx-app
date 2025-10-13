@@ -5,7 +5,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { BarChart, Target, Sparkles, Loader2, Route, Zap, PlusSquare, Link as LinkIcon } from 'lucide-react';
+import { BarChart, Target, Sparkles, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval, isFuture, isToday } from 'date-fns';
 
 import { dashboardSummary } from '@/ai/flows/dashboard-summary';
@@ -39,6 +39,7 @@ import { checkAndScheduleNotification } from '@/utils/notification-scheduler';
 import { useNotificationPermission } from '@/hooks/use-notification-permission';
 import { StatsWidget } from '@/components/stats-widget';
 import { calculateStreakData, type StreakData } from '@/utils/streak-calculator';
+import { Badge } from '@/components/ui/badge';
 
 const chartConfig = {
   workouts: {
@@ -187,7 +188,7 @@ export default function DashboardPage() {
 
   // Effect for AI Workout Summary
   useEffect(() => {
-    if (user && todaysWorkout?.workout) {
+    if (user && todaysWorkout?.workout && todaysSession) {
       setWorkoutSummaryLoading(true);
       const exercisesForSummary = todaysWorkout.workout.programType === 'running'
         ? (todaysWorkout.workout as RunningWorkout).runs.map(r => r.type).join(', ')
@@ -197,6 +198,7 @@ export default function DashboardPage() {
         userName: user.firstName,
         workoutTitle: todaysWorkout.workout.title,
         exercises: exercisesForSummary,
+        userNotes: todaysSession.notes,
       }).then(result => {
         setWorkoutSummaryText(result.summary);
       }).catch(aiError => {
@@ -208,7 +210,7 @@ export default function DashboardPage() {
     } else {
       setWorkoutSummaryLoading(false);
     }
-  }, [user, todaysWorkout]);
+  }, [user, todaysWorkout, todaysSession]);
 
   // Effect to schedule daily notifications
   useEffect(() => {
@@ -288,6 +290,7 @@ export default function DashboardPage() {
 
   const programStartsInFuture = user?.startDate && isFuture(user.startDate);
   const showGenerateWorkoutButton = !program || programStartsInFuture || !todaysWorkout?.workout;
+  const isWorkoutCompleted = !!todaysSession?.finishedAt;
   
   if (loading) {
     return (
@@ -329,12 +332,22 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
+          <Card className={cn("lg:col-span-2", isWorkoutCompleted && "bg-muted/30")}>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                {isRunningProgram ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
-                {program && todaysWorkout?.workout && !programStartsInFuture ? `Today's Workout (Day ${todaysWorkout.day})` : "Today's Plan"}
-              </CardTitle>
+              <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <CardTitle className="flex items-center gap-2">
+                      {isRunningProgram ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
+                      {program && todaysWorkout?.workout && !programStartsInFuture ? `Today's Workout (Day ${todaysWorkout.day})` : "Today's Plan"}
+                    </CardTitle>
+                  </div>
+                  {isWorkoutCompleted && (
+                      <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
+                          <CheckCircle className="mr-2 h-4 w-4" />
+                          Completed
+                      </Badge>
+                  )}
+              </div>
               <CardDescription asChild>
                   <div className={cn("mt-2 p-3 bg-accent/20 border border-accent/50 rounded-md transform -rotate-1 shadow-sm", {
                       "animate-pulse": workoutSummaryLoading,
@@ -347,7 +360,13 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {todaysWorkout?.workout && !programStartsInFuture ? (
+              {isWorkoutCompleted ? (
+                 <div className="text-center text-muted-foreground py-10">
+                    <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                    <p className="font-semibold text-foreground">Great job! You've completed today's workout.</p>
+                    <p className="text-sm">Check your progress in the calendar or history.</p>
+                 </div>
+              ) : todaysWorkout?.workout && !programStartsInFuture ? (
                   <div className="space-y-4">
                       <Separator />
                       <ul className="space-y-4 pt-4">
@@ -391,7 +410,14 @@ export default function DashboardPage() {
               )}
             </CardContent>
             <CardFooter className="flex-col md:flex-row gap-2">
-              {showGenerateWorkoutButton ? (
+              {isWorkoutCompleted ? (
+                <Button variant="outline" className="w-full" asChild>
+                    <Link href="/history">
+                        <History className="mr-2 h-4 w-4" />
+                        View Workout History
+                    </Link>
+                </Button>
+              ) : showGenerateWorkoutButton ? (
                   <div className="w-full flex flex-col md:flex-row gap-2">
                       <Button variant="accent" className="w-full" onClick={handleGenerateWorkout} disabled={isGeneratingWorkout}>
                           {isGeneratingWorkout ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}

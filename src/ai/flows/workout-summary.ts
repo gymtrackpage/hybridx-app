@@ -16,11 +16,12 @@ const WorkoutSummaryInputSchema = z.object({
   userName: z.string().describe("The user's first name."),
   workoutTitle: z.string().describe('The title of the workout.'),
   exercises: z.string().describe('A comma-separated list of exercises for the workout.'),
+  userNotes: z.string().optional().describe("Optional notes from the user about how the workout felt."),
 });
 export type WorkoutSummaryInput = z.infer<typeof WorkoutSummaryInputSchema>;
 
 const WorkoutSummaryOutputSchema = z.object({
-  summary: z.string().describe("A single, encouraging sentence summarizing the workout's focus with a useful tip."),
+  summary: z.string().describe("A single, encouraging sentence summarizing the workout's focus with a useful tip, considering the user's notes."),
 });
 export type WorkoutSummaryOutput = z.infer<typeof WorkoutSummaryOutputSchema>;
 
@@ -36,9 +37,16 @@ const prompt = ai.definePrompt({
 
   Today's workout is "{{{workoutTitle}}}" and includes these exercises: {{{exercises}}}.
 
+  {{#if userNotes}}
+  The user's notes from the session: "{{{userNotes}}}"
+  
+  Based on the workout and their notes, create a single, encouraging sentence that summarizes the focus and provides a short, actionable tip that relates to their notes if possible.
+  Example if user notes mention tired legs: "Great push on today's leg-focused session, {{{userName}}}. Remember to prioritize recovery and stretching for those tired legs!"
+  {{else}}
   Based on this, create a single, encouraging sentence that summarizes the focus of the workout and provides a short, actionable tip.
-
-  Example: "Today's focus is on building full-body strength; remember to brace your core on the heavy lifts for stability and power."`,
+  Example: "Today's focus is on building full-body strength; remember to brace your core on the heavy lifts for stability and power."
+  {{/if}}
+  `,
 });
 
 const workoutSummaryFlow = ai.defineFlow(
