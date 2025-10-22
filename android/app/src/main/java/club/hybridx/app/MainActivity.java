@@ -17,7 +17,6 @@ public class MainActivity extends BridgeActivity {
 
             // Enable cache for better performance
             webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
-            webSettings.setAppCacheEnabled(true);
         }
     }
 }
