@@ -6,7 +6,7 @@ workflows:
     environment:
       vars:
         PACKAGE_NAME: "club.hybridx.app"
-      node: 18
+      node: 20
     triggering:
       events:
         - push
