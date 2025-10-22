@@ -4,10 +4,6 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
-      android_signing:
-        - hybridx_keystore
-      groups:
-        - google_play
       vars:
         PACKAGE_NAME: "club.hybridx.app"
       node: 18
@@ -34,7 +30,7 @@ workflows:
       - name: Build Android APK
         script: |
           cd android
-          ./gradlew assembleRelease
+          ./gradlew assembleDebug
     artifacts:
       - android/app/build/outputs/**/*.apk
       - android/app/build/outputs/**/*.aab
