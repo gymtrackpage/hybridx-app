@@ -28,6 +28,11 @@ workflows:
       - name: Sync Capacitor
         script: |
           npx cap sync android
+      - name: Fix Java version in auto-generated files
+        script: |
+          # Fix Java version in capacitor-cordova-android-plugins
+          sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' android/capacitor-cordova-android-plugins/build.gradle 2>/dev/null || \
+          sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' android/capacitor-cordova-android-plugins/build.gradle
       - name: Set up local.properties
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
