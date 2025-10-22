@@ -10,6 +10,16 @@ const config: CapacitorConfig = {
   },
   android: {
     allowMixedContent: false, // All traffic over HTTPS
+  },
+  plugins: {
+    StatusBar: {
+      style: 'dark', // 'light' or 'dark'
+      backgroundColor: '#000000', // Match your app's theme
+    },
+    SplashScreen: {
+      launchAutoHide: false,
+      androidScaleType: 'CENTER_CROP',
+    }
   }
 };
 
