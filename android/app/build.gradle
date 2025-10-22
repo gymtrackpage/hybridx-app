@@ -57,6 +57,14 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
+// Force Java 17 after Capacitor config is applied
+android {
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
 try {
     def servicesJSON = file('google-services.json')
     if (servicesJSON.text) {
