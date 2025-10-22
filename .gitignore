@@ -43,3 +43,15 @@ next-env.d.ts
 # firebase
 firebase-debug.log
 firestore-debug.log
+
+# Capacitor
+/android/app/build/
+/android/build/
+/android/.gradle/
+/android/local.properties
+/android/.idea/
+/android/captures/
+/android/app/release/
+/ios/App/build/
+/ios/App/Pods/
+/ios/App/.xcode.env.local

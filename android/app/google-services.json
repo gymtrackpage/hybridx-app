@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "321094496963",
+    "project_id": "hyroxedgeai",
+    "storage_bucket": "hyroxedgeai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:321094496963:android:2ab45e1d1b4609e2dce876",
+        "android_client_info": {
+          "package_name": "club.hybridx.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA24MzL6QLY_dfKghTDf2ox2r0QEGqU-gQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
