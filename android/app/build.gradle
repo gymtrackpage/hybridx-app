@@ -3,6 +3,12 @@ apply plugin: 'com.android.application'
 android {
     namespace "club.hybridx.app"
     compileSdk rootProject.ext.compileSdkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
     defaultConfig {
         applicationId "club.hybridx.app"
         minSdkVersion rootProject.ext.minSdkVersion

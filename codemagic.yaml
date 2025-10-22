@@ -6,6 +6,7 @@ workflows:
     environment:
       vars:
         PACKAGE_NAME: "club.hybridx.app"
+      java: 17
       node: 20
     triggering:
       events:
