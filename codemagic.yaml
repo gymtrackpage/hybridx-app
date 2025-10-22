@@ -19,6 +19,15 @@ workflows:
       - name: Install dependencies
         script: |
           npm install
+      - name: Patch Capacitor Android for Java 17
+        script: |
+          # Patch capacitor-android build.gradle to use Java 17
+          CAPACITOR_ANDROID_BUILD="node_modules/@capacitor/android/capacitor/build.gradle"
+          if [ -f "$CAPACITOR_ANDROID_BUILD" ]; then
+            sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' "$CAPACITOR_ANDROID_BUILD" 2>/dev/null || \
+            sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' "$CAPACITOR_ANDROID_BUILD"
+            echo "Patched capacitor-android to use Java 17"
+          fi
       - name: Install Capacitor CLI
         script: |
           npm install -g @capacitor/cli
@@ -33,6 +42,7 @@ workflows:
           # Fix Java version in capacitor-cordova-android-plugins
           sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' android/capacitor-cordova-android-plugins/build.gradle 2>/dev/null || \
           sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' android/capacitor-cordova-android-plugins/build.gradle
+          echo "Patched capacitor-cordova-android-plugins to use Java 17"
       - name: Set up local.properties and gradle.properties
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
