@@ -21,6 +21,9 @@ workflows:
       - name: Install Capacitor CLI
         script: |
           npm install -g @capacitor/cli
+      - name: Create assets directory
+        script: |
+          mkdir -p android/app/src/main/assets
       - name: Sync Capacitor
         script: |
           npx cap sync android
