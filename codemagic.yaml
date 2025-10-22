@@ -21,15 +21,15 @@ workflows:
           npm install
       - name: Patch Capacitor plugins for Java 17
         script: |
-          # Patch all Capacitor plugin build.gradle files to use Java 17
-          for plugin in capacitor-android capacitor-preferences; do
-            BUILD_FILE="node_modules/@${plugin}/android/${plugin#capacitor-}/build.gradle"
-            if [ -f "$BUILD_FILE" ]; then
-              sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' "$BUILD_FILE" 2>/dev/null || \
-              sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' "$BUILD_FILE"
-              echo "Patched $plugin to use Java 17"
-            fi
-          done
+          # Patch capacitor-android
+          sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/android/capacitor/build.gradle 2>/dev/null || \
+          sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/android/capacitor/build.gradle
+          echo "Patched capacitor-android to use Java 17"
+
+          # Patch capacitor-preferences
+          sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/preferences/android/build.gradle 2>/dev/null || \
+          sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/preferences/android/build.gradle
+          echo "Patched capacitor-preferences to use Java 17"
       - name: Install Capacitor CLI
         script: |
           npm install -g @capacitor/cli
