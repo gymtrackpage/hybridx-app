@@ -16,6 +16,7 @@
     "@capacitor/android": "^7.4.3",
     "@capacitor/cli": "^7.4.3",
     "@capacitor/core": "^7.4.3",
+    "@capacitor/preferences": "^7.0.2",
     "@genkit-ai/googleai": "^1.14.2",
     "@genkit-ai/next": "^1.14.2",
     "@hookform/resolvers": "^4.1.3",

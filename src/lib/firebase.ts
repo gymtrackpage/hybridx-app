@@ -11,6 +11,7 @@ import {
   onAuthStateChanged,
   setPersistence
 } from "firebase/auth";
+import { Capacitor } from '@capacitor/core';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -42,26 +43,36 @@ const getAuthInstance = (): Promise<Auth> => {
     try {
       if (typeof window !== 'undefined') {
         // For client-side, initialize with persistence.
-        // Try IndexedDB first (more reliable for PWAs), fall back to localStorage
+        // For Capacitor apps, always use IndexedDB for better reliability
+        const isNative = Capacitor.isNativePlatform();
         let auth: Auth;
 
         try {
+          // Capacitor apps work best with IndexedDB only (no fallback)
+          const persistenceOptions = isNative
+            ? [indexedDBLocalPersistence]
+            : [indexedDBLocalPersistence, browserLocalPersistence];
+
           auth = initializeFirebaseAuth(app, {
-            persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+            persistence: persistenceOptions,
             popupRedirectResolver: undefined
           });
-          console.log('✅ Firebase Auth initialized with IndexedDB persistence');
+          console.log(`✅ Firebase Auth initialized ${isNative ? '(Capacitor)' : '(Web)'} with persistence`);
         } catch (initError: any) {
           // If initialization fails (already initialized), get existing instance
           if (initError.code === 'auth/already-initialized') {
             auth = getAuth(app);
-            // Try to set persistence with fallback chain
+            // Try to set persistence
             try {
               await setPersistence(auth, indexedDBLocalPersistence);
               console.log('✅ Persistence set to IndexedDB');
             } catch (persistError) {
-              console.warn('⚠️ IndexedDB persistence failed, using localStorage', persistError);
-              await setPersistence(auth, browserLocalPersistence);
+              if (!isNative) {
+                console.warn('⚠️ IndexedDB persistence failed, using localStorage', persistError);
+                await setPersistence(auth, browserLocalPersistence);
+              } else {
+                console.error('❌ Persistence failed in Capacitor app', persistError);
+              }
             }
           } else {
             throw initError;
@@ -71,10 +82,13 @@ const getAuthInstance = (): Promise<Auth> => {
         // Additional persistence check on page load
         auth.onAuthStateChanged((user) => {
           if (user) {
+            console.log('✅ Auth state detected:', user.email);
             // Ensure token is fresh
             user.getIdToken(true).catch(err => {
               console.error('Token refresh error:', err);
             });
+          } else {
+            console.log('❌ No auth state detected');
           }
         });
 
