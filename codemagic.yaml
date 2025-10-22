@@ -33,13 +33,15 @@ workflows:
           # Fix Java version in capacitor-cordova-android-plugins
           sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' android/capacitor-cordova-android-plugins/build.gradle 2>/dev/null || \
           sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' android/capacitor-cordova-android-plugins/build.gradle
-      - name: Set up local.properties
+      - name: Set up local.properties and gradle.properties
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+          echo "org.gradle.java.home=$JAVA_HOME" >> "$CM_BUILD_DIR/android/gradle.properties"
       - name: Build Android APK
         script: |
           cd android
-          ./gradlew assembleDebug
+          export JAVA_HOME=$JAVA_HOME_17_X64
+          ./gradlew assembleDebug --stacktrace
     artifacts:
       - android/app/build/outputs/**/*.apk
       - android/app/build/outputs/**/*.aab
