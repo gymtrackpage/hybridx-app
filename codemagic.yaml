@@ -1,6 +1,6 @@
 workflows:
   android-capacitor-workflow:
-    name: Android Capacitor Build
+    name: Android Capacitor Build (Debug)
     max_build_duration: 120
     instance_type: mac_mini_m1
     environment:
@@ -15,6 +15,26 @@ workflows:
         - pattern: 'main'
           include: true
           source: true
+
+  android-release-workflow:
+    name: Android Capacitor Build (Release)
+    max_build_duration: 120
+    instance_type: mac_mini_m1
+    environment:
+      android_signing:
+        - hybridx_keystore
+      groups:
+        - google_play
+      vars:
+        PACKAGE_NAME: "club.hybridx.app"
+      java: 17
+      node: 20
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
     scripts:
       - name: Install dependencies
         script: |
@@ -49,13 +69,18 @@ workflows:
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
           echo "org.gradle.java.home=$JAVA_HOME" >> "$CM_BUILD_DIR/android/gradle.properties"
-      - name: Build Android APK
+      - name: Set up keystore environment variables
+        script: |
+          echo "CM_KEYSTORE_PATH=$CM_KEYSTORE_PATH" >> "$CM_BUILD_DIR/android/gradle.properties"
+          echo "CM_KEYSTORE_PASSWORD=$CM_KEYSTORE_PASSWORD" >> "$CM_BUILD_DIR/android/gradle.properties"
+          echo "CM_KEY_ALIAS=$CM_KEY_ALIAS" >> "$CM_BUILD_DIR/android/gradle.properties"
+          echo "CM_KEY_PASSWORD=$CM_KEY_PASSWORD" >> "$CM_BUILD_DIR/android/gradle.properties"
+      - name: Build Android Release AAB
         script: |
           cd android
           export JAVA_HOME=$JAVA_HOME_17_X64
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew bundleRelease --stacktrace
     artifacts:
-      - android/app/build/outputs/**/*.apk
       - android/app/build/outputs/**/*.aab
     publishing:
       email:
@@ -64,3 +89,7 @@ workflows:
         notify:
           success: true
           failure: true
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        submit_as_draft: true
