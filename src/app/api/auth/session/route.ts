@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         );
 
         // Determine if we're in a secure environment
-        const isSecure = process.env.NODE_ENV === 'production' || req.headers.host?.includes('cloudworkstations.dev');
+        const isSecure = process.env.NODE_ENV === 'production' || req.url.startsWith('https://');
 
         console.log('🍪 Setting cookie with config:', {
             secure: isSecure,
@@ -36,7 +36,6 @@ export async function POST(req: NextRequest) {
             httpOnly: true,
             path: '/',
             maxAge: expiresIn / 1000,
-            domain: req.headers.host?.includes('cloudworkstations.dev') ? undefined : undefined // Let browser determine
         });
 
         response.cookies.set('__session', sessionCookie, {
