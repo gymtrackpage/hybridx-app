@@ -244,7 +244,7 @@ export default function ProfilePage() {
   const initiateStravaAuth = async () => {
     try {
       // First, ensure we have a fresh session cookie. This also verifies the user is logged in.
-      const auth = getAuthInstance();
+      const auth = await getAuthInstance();
       const currentUser = auth.currentUser;
       if (!currentUser) {
         toast({ title: 'Authentication Required', description: 'Please log in to connect your Strava account.', variant: 'destructive' });

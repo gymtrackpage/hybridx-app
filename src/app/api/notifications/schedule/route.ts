@@ -1,6 +1,6 @@
 // src/app/api/notifications/schedule/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthInstance } from '@/lib/firebase';
+import { getAdminAuth } from '@/lib/firebase-admin';
 import { getUser } from '@/services/user-service';
 
 export async function POST(request: NextRequest) {
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.substring(7);
-    const auth = await getAuthInstance();
+    const auth = getAdminAuth();
     const decodedToken = await auth.verifyIdToken(token);
     const userId = decodedToken.uid;
 

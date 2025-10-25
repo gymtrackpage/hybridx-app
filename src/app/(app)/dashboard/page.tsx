@@ -129,9 +129,13 @@ export default function DashboardPage() {
               }
           }
       }
-      
-      setTodaysWorkout(currentWorkoutInfo);
-      setTodaysSession(workoutSession);
+
+      if (currentWorkoutInfo) {
+        setTodaysWorkout(currentWorkoutInfo);
+      }
+      if (workoutSession) {
+        setTodaysSession(workoutSession);
+      }
 
     } catch (error) {
         console.error("Error fetching core dashboard data:", error);

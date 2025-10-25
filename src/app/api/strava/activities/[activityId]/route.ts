@@ -51,7 +51,7 @@ export async function GET(
   }
 
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('__session')?.value;
     if (!sessionCookie) {
       return NextResponse.json({ error: 'Authentication required: No session cookie.' }, { status: 401 });

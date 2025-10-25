@@ -169,6 +169,9 @@ export async function getAllUsersClient(): Promise<User[]> {
 
         // Create session cookie if needed
         console.log('🔑 Getting fresh ID token...');
+        if (!currentUser) {
+            throw new Error('No authenticated user found');
+        }
         const idToken = await currentUser.getIdToken(true);
 
         console.log('🍪 Creating session cookie...');

@@ -32,9 +32,14 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
  */
 export async function createCheckoutSession(userId: string): Promise<{ url: string | null }> {
     try {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-        
-        if (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') && (appUrl.includes('localhost') || appUrl.includes('127.0.0.1'))) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const stripeKey = process.env.STRIPE_SECRET_KEY;
+
+        if (!stripeKey) {
+            throw new Error('Configuration error: STRIPE_SECRET_KEY is not set');
+        }
+
+        if (stripeKey.startsWith('sk_live_') && (appUrl.includes('localhost') || appUrl.includes('127.0.0.1'))) {
            throw new Error('Configuration error: You are using a live Stripe key with a localhost URL. NEXT_PUBLIC_APP_URL must be set to your public production URL in a live environment.');
         }
         
@@ -150,10 +155,12 @@ export async function cancelSubscription(userId: string): Promise<void> {
         const subscription = await stripe.subscriptions.update(user.subscriptionId, {
             cancel_at_period_end: true,
         });
-        await updateUserAdmin(userId, { 
-            subscriptionStatus: 'canceled', 
+
+        const cancelAt = subscription.cancel_at;
+        await updateUserAdmin(userId, {
+            subscriptionStatus: 'canceled',
             cancel_at_period_end: true,
-            cancellation_effective_date: new Date(subscription.cancel_at * 1000)
+            cancellation_effective_date: cancelAt ? new Date(cancelAt * 1000) : undefined
         });
     } catch (error: any) {
         console.error(`Failed to cancel subscription for user ${userId}:`, error);

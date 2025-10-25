@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
 
     try {
         // Get the session token from cookies
-        const cookieStore = cookies();
+        const cookieStore = await cookies();
         const sessionCookie = cookieStore.get('__session')?.value;
         console.log('📝 Session cookie exists:', !!sessionCookie);
 

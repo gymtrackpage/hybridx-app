@@ -14,8 +14,9 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Enable edge-to-edge display (content renders behind status bar)
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        // Disable edge-to-edge to prevent content from rendering behind status bar
+        // This ensures the hamburger menu and other UI elements are accessible
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
 
         // Enable WebView data persistence
         if (this.bridge != null && this.bridge.getWebView() != null) {
@@ -25,8 +26,12 @@ public class MainActivity extends BridgeActivity {
             webSettings.setDatabaseEnabled(true);
             webSettings.setDomStorageEnabled(true);
 
-            // Enable cache for better performance
+            // Enable JavaScript (required for web apps)
+            webSettings.setJavaScriptEnabled(true);
+
+            // Enable cache for better performance and offline support
             webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
+            webSettings.setAppCacheEnabled(true);
 
             // CRITICAL FIX: Configure cookie persistence
             CookieManager cookieManager = CookieManager.getInstance();
@@ -39,6 +44,10 @@ public class MainActivity extends BridgeActivity {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 cookieManager.flush();
             }
+
+            System.out.println("✅ WebView persistence configured: Database=" + webSettings.getDatabaseEnabled()
+                + ", DOMStorage=" + webSettings.getDomStorageEnabled()
+                + ", Cookies=" + cookieManager.acceptCookie());
         }
     }
 

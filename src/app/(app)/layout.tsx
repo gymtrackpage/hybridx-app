@@ -111,9 +111,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initialize = async () => {
         const auth = await getAuthInstance();
+
+        // CRITICAL FIX: Wait for Firebase Auth to finish loading persisted state
+        // This prevents premature redirect to login while IndexedDB/localStorage is being read
+        console.log('⏳ Waiting for Firebase Auth to restore persisted session...');
+        await auth.authStateReady();
+        console.log('✅ Firebase Auth state ready');
+
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
         if (currentUser) {
+            console.log('✅ User authenticated:', currentUser.email);
             setUser(currentUser);
+
             // Subscription check logic
             const appUser = await getUserClient(currentUser.uid);
             if (appUser && !appUser.isAdmin && pathname !== '/subscription') {
@@ -127,8 +136,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     router.push('/subscription');
                 }
             }
-
         } else {
+            // User is definitively not logged in (persistence already loaded)
+            console.log('❌ No authenticated user, redirecting to login');
             router.push('/login');
         }
         setLoading(false);

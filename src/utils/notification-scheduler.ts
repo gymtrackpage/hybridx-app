@@ -76,6 +76,7 @@ export async function scheduleDailyNotification(
         body: message,
         icon: '/icons/icon-192x192.png',
         badge: '/icons/icon-192x192.png',
+        // @ts-ignore - vibrate is a valid option but not in TypeScript types yet
         vibrate: [200, 100, 200],
         data: {
           url: '/workout',
@@ -165,6 +166,7 @@ export async function sendTestNotification(message: string): Promise<void> {
     body: message,
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-192x192.png',
+    // @ts-ignore - vibrate is a valid option but not in TypeScript types yet
     vibrate: [200, 100, 200],
     data: {
       url: '/workout',

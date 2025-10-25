@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   console.log('=== ENHANCED DEBUG STRAVA ACTIVITIES API START ===');
   
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('__session')?.value;
 
     if (!sessionCookie) {

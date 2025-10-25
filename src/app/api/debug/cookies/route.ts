@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
     console.log('=== COOKIE DEBUG ENDPOINT ===');
 
     try {
-        const cookieStore = cookies();
+        const cookieStore = await cookies();
         const allCookies = cookieStore.getAll();
         const sessionCookie = cookieStore.get('__session');
 

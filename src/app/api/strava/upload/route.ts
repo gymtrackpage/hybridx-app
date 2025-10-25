@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Authenticate user
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('__session')?.value;
     
     if (!sessionCookie) {

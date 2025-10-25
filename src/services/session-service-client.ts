@@ -6,6 +6,9 @@ import { db, getAuthInstance } from '@/lib/firebase';
 import type { WorkoutSession, Workout, RunningWorkout, Exercise, ProgramType } from '@/models/types';
 import type { StravaActivity } from './strava-service';
 
+// Re-export WorkoutSession type for convenience
+export type { WorkoutSession };
+
 function fromFirestore(doc: any): WorkoutSession {
     const data = doc.data();
     return {
