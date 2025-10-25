@@ -30,6 +30,9 @@ const db = getFirestore(app);
 // Singleton promise to ensure auth is only initialized once
 let authInstancePromise: Promise<Auth> | null = null;
 
+// Track if we've already set up the auth state listener to prevent duplicates
+let authStateListenerSetup = false;
+
 /**
  * Gets the initialized Firebase Auth instance using a promise-based singleton pattern.
  * Ensures persistence is set for PWA functionality and that it's only initialized once.
@@ -48,7 +51,8 @@ const getAuthInstance = (): Promise<Auth> => {
         let auth: Auth;
 
         try {
-          // Capacitor apps work best with IndexedDB only (no fallback)
+          // CRITICAL: For Capacitor native apps, use IndexedDB with explicit configuration
+          // This is the most reliable persistence mechanism for hybrid apps
           const persistenceOptions = isNative
             ? [indexedDBLocalPersistence]
             : [indexedDBLocalPersistence, browserLocalPersistence];
@@ -57,21 +61,32 @@ const getAuthInstance = (): Promise<Auth> => {
             persistence: persistenceOptions,
             popupRedirectResolver: undefined
           });
-          console.log(`✅ Firebase Auth initialized ${isNative ? '(Capacitor)' : '(Web)'} with persistence`);
+
+          // Force immediate persistence confirmation
+          if (isNative) {
+            await setPersistence(auth, indexedDBLocalPersistence);
+          }
+
+          console.log(`✅ Firebase Auth initialized ${isNative ? '(Capacitor/Native)' : '(Web)'} with ${isNative ? 'IndexedDB' : 'IndexedDB+LocalStorage'} persistence`);
         } catch (initError: any) {
           // If initialization fails (already initialized), get existing instance
           if (initError.code === 'auth/already-initialized') {
             auth = getAuth(app);
-            // Try to set persistence
+            // CRITICAL: Always re-set persistence for existing instance
             try {
               await setPersistence(auth, indexedDBLocalPersistence);
-              console.log('✅ Persistence set to IndexedDB');
+              console.log('✅ Persistence re-set to IndexedDB on existing instance');
             } catch (persistError) {
               if (!isNative) {
-                console.warn('⚠️ IndexedDB persistence failed, using localStorage', persistError);
-                await setPersistence(auth, browserLocalPersistence);
+                console.warn('⚠️ IndexedDB persistence failed, falling back to localStorage', persistError);
+                try {
+                  await setPersistence(auth, browserLocalPersistence);
+                } catch (fallbackError) {
+                  console.error('❌ All persistence mechanisms failed', fallbackError);
+                }
               } else {
-                console.error('❌ Persistence failed in Capacitor app', persistError);
+                console.error('❌ CRITICAL: IndexedDB persistence failed in Capacitor app', persistError);
+                // In native app, this is a critical error
               }
             }
           } else {
@@ -79,18 +94,83 @@ const getAuthInstance = (): Promise<Auth> => {
           }
         }
 
-        // Additional persistence check on page load
-        auth.onAuthStateChanged((user) => {
-          if (user) {
-            console.log('✅ Auth state detected:', user.email);
-            // Ensure token is fresh
-            user.getIdToken(true).catch(err => {
-              console.error('Token refresh error:', err);
-            });
-          } else {
-            console.log('❌ No auth state detected');
-          }
-        });
+        // CRITICAL FIX: Set up proactive token refresh ONLY ONCE
+        // Prevent multiple listeners from being created on navigation
+        if (!authStateListenerSetup && typeof window !== 'undefined') {
+          authStateListenerSetup = true;
+
+          auth.onAuthStateChanged(async (user) => {
+            if (user) {
+              console.log('✅ Auth state detected:', user.email);
+
+              // CRITICAL: Immediately refresh token on auth state change
+              try {
+                await user.getIdToken(true);
+                console.log('🔄 Token refreshed successfully');
+              } catch (err) {
+                console.error('❌ Token refresh error:', err);
+              }
+
+              // Clear any existing refresh interval before creating a new one
+              if ((window as any).__authRefreshInterval) {
+                clearInterval((window as any).__authRefreshInterval);
+                console.log('🧹 Cleared previous refresh interval');
+              }
+
+              // CRITICAL: Set up automatic token refresh every 50 minutes (before 1-hour expiry)
+              const refreshInterval = setInterval(async () => {
+                try {
+                  const currentUser = auth.currentUser;
+                  if (currentUser) {
+                    // Check if page is visible before refreshing (save resources)
+                    if (document.visibilityState === 'visible') {
+                      await currentUser.getIdToken(true);
+                      console.log('🔄 Background token refresh successful');
+                    } else {
+                      console.log('⏸️ Skipping refresh - page not visible');
+                    }
+                  } else {
+                    console.warn('⚠️ No current user, clearing refresh interval');
+                    clearInterval(refreshInterval);
+                    delete (window as any).__authRefreshInterval;
+                  }
+                } catch (err) {
+                  console.error('❌ Background token refresh failed:', err);
+                }
+              }, 50 * 60 * 1000); // 50 minutes
+
+              // Store interval ID so we can clear it later
+              (window as any).__authRefreshInterval = refreshInterval;
+              console.log('⏰ Token refresh interval established');
+            } else {
+              console.log('❌ No auth state detected');
+
+              // Clear refresh interval if user logs out
+              if ((window as any).__authRefreshInterval) {
+                clearInterval((window as any).__authRefreshInterval);
+                delete (window as any).__authRefreshInterval;
+                console.log('🧹 Refresh interval cleared on logout');
+              }
+            }
+          });
+
+          // CRITICAL: Refresh token when page becomes visible again
+          // This handles cases where user left tab inactive for > 1 hour
+          document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+              const currentUser = auth.currentUser;
+              if (currentUser) {
+                console.log('👁️ Page visible again, refreshing token...');
+                try {
+                  await currentUser.getIdToken(true);
+                  console.log('✅ Token refreshed after visibility change');
+                } catch (err) {
+                  console.error('❌ Token refresh failed on visibility change:', err);
+                }
+              }
+            }
+          });
+        }
 
         resolve(auth);
       } else {

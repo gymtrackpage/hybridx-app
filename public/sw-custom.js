@@ -1,5 +1,36 @@
-// Custom service worker code for notifications
+// Custom service worker code for notifications and auth handling
 // This will be imported into the main service worker
+
+// CRITICAL FIX: Prevent caching of Firebase Auth and session endpoints
+// Firebase auth responses should NEVER be cached
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // List of endpoints that should NEVER be cached (auth-related)
+  const noCachePatterns = [
+    /firebaseapp\.com.*\/auth\//,
+    /googleapis\.com.*\/identitytoolkit/,
+    /securetoken\.googleapis\.com/,
+    /\/api\/auth\//,  // Your session cookie endpoint
+  ];
+
+  // Check if this request matches any no-cache patterns
+  const shouldNotCache = noCachePatterns.some(pattern => pattern.test(event.request.url));
+
+  if (shouldNotCache) {
+    // Force network-only for auth endpoints, bypass cache completely
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .catch(err => {
+          console.error('Auth request failed:', err);
+          return new Response('Network error', { status: 503 });
+        })
+    );
+    return;
+  }
+
+  // For all other requests, let the default service worker handle it
+});
 
 // Push notification event
 self.addEventListener('push', (event) => {

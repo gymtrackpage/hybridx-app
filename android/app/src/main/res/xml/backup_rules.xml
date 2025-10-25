@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Exclude WebView data to prevent auth state corruption during backup/restore -->
+    <exclude domain="sharedpref" path="WebViewChromiumPrefs.xml"/>
+
+    <!-- Include everything else for backup -->
+    <include domain="sharedpref" path="."/>
+    <include domain="database" path="."/>
+    <include domain="file" path="."/>
+</full-backup-content>

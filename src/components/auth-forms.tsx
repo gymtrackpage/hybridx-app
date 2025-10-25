@@ -96,7 +96,24 @@ export function LoginForm() {
     try {
       const auth = await getAuthInstance();
       await signInWithEmailAndPassword(auth, values.email, values.password);
-      
+
+      // CRITICAL FIX: Always create session cookie on login for server-side auth
+      console.log('🍪 Creating session cookie after login...');
+      try {
+        const idToken = await auth.currentUser?.getIdToken(true);
+        if (idToken) {
+          await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+          });
+          console.log('✅ Session cookie created successfully');
+        }
+      } catch (sessionError) {
+        console.error('⚠️ Session cookie creation failed (non-critical):', sessionError);
+        // Don't block login if session cookie fails
+      }
+
       const wasRedirected = await completePendingStravaAuth();
 
       if (!wasRedirected) {
@@ -118,7 +135,7 @@ export function LoginForm() {
         variant: 'destructive',
       });
       setIsLoading(false);
-    } 
+    }
     // Don't setIsLoading(false) if redirecting, to prevent button flicker
   }
 
@@ -237,6 +254,21 @@ export function SignupForm() {
       // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, finalData.email, finalData.password);
       const user = userCredential.user;
+
+      // 1.5. CRITICAL FIX: Create session cookie immediately after signup
+      console.log('🍪 Creating session cookie after signup...');
+      try {
+        const idToken = await user.getIdToken(true);
+        await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        });
+        console.log('✅ Session cookie created successfully');
+      } catch (sessionError) {
+        console.error('⚠️ Session cookie creation failed (non-critical):', sessionError);
+        // Don't block signup if session cookie fails
+      }
 
       // 2. Prepare user data
       let customProgram: Workout[] | null = null;

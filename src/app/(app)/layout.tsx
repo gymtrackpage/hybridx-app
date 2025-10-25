@@ -150,6 +150,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     try {
       const auth = await getAuthInstance();
       await signOut(auth);
+
+      // CRITICAL FIX: Clear session cookie on logout
+      // Set cookie to empty with immediate expiration
+      document.cookie = '__session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+      console.log('🧹 Session cookie cleared on logout');
+
       toast({
         title: 'Logged Out',
         description: 'You have been successfully logged out.',
