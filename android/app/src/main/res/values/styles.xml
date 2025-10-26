@@ -16,6 +16,8 @@
         <!-- Use default status bar color instead of transparent to prevent content overlap -->
         <item name="android:statusBarColor">@color/colorPrimaryDark</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Ensure content doesn't draw behind system bars -->
+        <item name="android:fitsSystemWindows">true</item>
     </style>
 
 

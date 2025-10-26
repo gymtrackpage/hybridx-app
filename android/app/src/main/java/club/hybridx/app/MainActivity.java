@@ -6,7 +6,9 @@ import android.view.View;
 import android.view.WindowManager;
 import android.webkit.WebSettings;
 import android.webkit.CookieManager;
+import android.graphics.Color;
 import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -14,9 +16,22 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Disable edge-to-edge to prevent content from rendering behind status bar
-        // This ensures the hamburger menu and other UI elements are accessible
+        // CRITICAL FIX: Disable edge-to-edge rendering to prevent status bar overlap
+        // This must be set to ensure content doesn't render behind the status bar
         WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+
+        // Configure status bar appearance
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            getWindow().setStatusBarColor(Color.parseColor("#000000")); // Black status bar
+        }
+
+        // Set status bar text color based on theme
+        WindowInsetsControllerCompat windowInsetsController =
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (windowInsetsController != null) {
+            // Use light text on dark background (dark mode)
+            windowInsetsController.setAppearanceLightStatusBars(false);
+        }
 
         // Enable WebView data persistence
         if (this.bridge != null && this.bridge.getWebView() != null) {
