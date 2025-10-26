@@ -31,7 +31,7 @@ public class MainActivity extends BridgeActivity {
 
             // Enable cache for better performance and offline support
             webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
-            webSettings.setAppCacheEnabled(true);
+            // Note: setAppCacheEnabled() was deprecated in API 33 and removed - no longer needed
 
             // CRITICAL FIX: Configure cookie persistence
             CookieManager cookieManager = CookieManager.getInstance();
@@ -52,7 +52,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onPause() {
+    public void onPause() {
         super.onPause();
         // Ensure cookies are saved when app goes to background
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
