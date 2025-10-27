@@ -357,7 +357,7 @@ export default function DashboardPage() {
                       "animate-pulse": workoutSummaryLoading,
                       "hidden": !todaysWorkout?.workout || programStartsInFuture
                   })}>
-                      <p className="rotate-1 text-accent-foreground/90 italic">
+                      <p className="rotate-1 text-foreground/90 italic">
                           {workoutSummaryLoading ? "Generating your daily tip..." : workoutSummaryText}
                       </p>
                   </div>

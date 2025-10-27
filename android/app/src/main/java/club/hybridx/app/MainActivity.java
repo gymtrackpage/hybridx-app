@@ -1,3 +1,4 @@
+
 package club.hybridx.app;
 
 import android.os.Build;
@@ -16,18 +17,28 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Configure status bar appearance
+        // --- Definitive Edge-to-Edge Fix ---
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
+        // Make status bar and navigation bar transparent
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(Color.parseColor("#000000")); // Black status bar
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+            getWindow().setNavigationBarColor(Color.TRANSPARENT);
         }
 
-        // Set status bar text color based on theme
+        // Set status bar icons to light (for dark backgrounds) or dark (for light backgrounds)
+        // This should adapt based on your web app's theme via CSS `prefers-color-scheme`
+        // or a theme management library.
+        // We'll set a default here. If your app is always dark at the top, `false` is correct.
         WindowInsetsControllerCompat windowInsetsController =
             WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         if (windowInsetsController != null) {
-            // Use light text on dark background (dark mode)
+            // Use light icons for dark status bar
             windowInsetsController.setAppearanceLightStatusBars(false);
+            windowInsetsController.setAppearanceLightNavigationBars(false);
         }
+        // --- End of Fix ---
+
 
         // Enable WebView data persistence
         if (this.bridge != null && this.bridge.getWebView() != null) {
