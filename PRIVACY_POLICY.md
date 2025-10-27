@@ -79,8 +79,6 @@ If you choose to connect your Strava account, we collect:
 
 ## 3. How We Use Your Information
 
-We use the collected information for the following purposes:
-
 ### 3.1 Core App Functionality
 
 - **Account management** - Create, maintain, and authenticate your user account
@@ -211,16 +209,20 @@ You can access all your personal data through the App's profile and settings pag
 
 You can update your profile information, personal records, and running profile at any time through the App's settings.
 
-### 6.3 Deletion
+### 6.3 Account Deletion
 
-You can request deletion of your account and all associated data by contacting us at [your-email@hybridx.club]. Upon deletion:
+You have the right to request the deletion of your account and all associated personal data. To initiate this process, please send an email from the address associated with your HYBRIDX.CLUB account to [training@hybridx.club](mailto:training@hybridx.club?subject=Account%20Deletion%20Request) with the subject line "Account Deletion Request".
 
-- All Firestore documents (user profile, workout sessions) will be permanently deleted
-- Your Firebase Authentication account will be disabled
-- Your Stripe customer record will be deleted
-- Cached data will be cleared from your device
+**What data is deleted?**
+Upon verification, we will permanently delete the following information:
+- Your Firebase Authentication account (email, password)
+- Your user profile in Firestore (name, preferences, records)
+- All your workout history and session data
+- Your Stripe customer information (your subscription will be canceled)
+- Any connection tokens for third-party services like Strava
 
-**Note:** Some data may persist in backups for up to 90 days, and Stripe retains transaction history for legal compliance.
+**What data is kept?**
+Anonymized transaction records may be retained by Stripe for legal and financial compliance for a period of up to 10 years. This data cannot be linked back to your personal account.
 
 ### 6.4 Withdraw Consent
 
@@ -375,3 +377,5 @@ For the purposes of GDPR and other data protection laws, the data controller res
 - **No ads:** The App does not display advertisements
 
 By using HYBRIDX.CLUB, you acknowledge that you have read and understood this Privacy Policy.
+
+    

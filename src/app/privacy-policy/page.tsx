@@ -1,3 +1,4 @@
+
 export default function PrivacyPolicyPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -295,18 +296,22 @@ export default function PrivacyPolicyPage() {
         </div>
 
         <div className="space-y-3">
-          <h3 className="text-xl font-semibold">6.3 Deletion</h3>
+          <h3 className="text-xl font-semibold">6.3 Account Deletion</h3>
           <p className="text-muted-foreground">
-            You can request deletion of your account and all associated data by contacting us at <a href="mailto:training@hybridx.club" className="text-primary hover:underline">training@hybridx.club</a>. Upon deletion:
+            You have the right to request the deletion of your account and all associated personal data. To initiate this process, please send an email from the address associated with your HYBRIDX.CLUB account to <a href="mailto:training@hybridx.club?subject=Account%20Deletion%20Request" className="text-primary hover:underline">training@hybridx.club</a> with the subject line "Account Deletion Request".
           </p>
+          <p className="text-muted-foreground font-semibold mt-2">What data is deleted?</p>
+          <p className="text-muted-foreground">Upon verification, we will permanently delete the following information:</p>
           <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-            <li>All Firestore documents (user profile, workout sessions) will be permanently deleted</li>
-            <li>Your Firebase Authentication account will be disabled</li>
-            <li>Your Stripe customer record will be deleted</li>
-            <li>Cached data will be cleared from your device</li>
+            <li>Your Firebase Authentication account (email, password)</li>
+            <li>Your user profile in Firestore (name, preferences, records)</li>
+            <li>All your workout history and session data</li>
+            <li>Your Stripe customer information (your subscription will be canceled)</li>
+            <li>Any connection tokens for third-party services like Strava</li>
           </ul>
-          <p className="text-muted-foreground mt-3">
-            <strong>Note:</strong> Some data may persist in backups for up to 90 days, and Stripe retains transaction history for legal compliance.
+          <p className="text-muted-foreground font-semibold mt-2">What data is kept?</p>
+          <p className="text-muted-foreground">
+            Anonymized transaction records may be retained by Stripe for legal and financial compliance for a period of up to 10 years. This data cannot be linked back to your personal account.
           </p>
         </div>
 
@@ -526,3 +531,5 @@ export default function PrivacyPolicyPage() {
     </div>
   );
 }
+
+    
