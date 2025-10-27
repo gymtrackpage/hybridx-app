@@ -16,10 +16,6 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // CRITICAL FIX: Disable edge-to-edge rendering to prevent status bar overlap
-        // This must be set to ensure content doesn't render behind the status bar
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
-
         // Configure status bar appearance
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             getWindow().setStatusBarColor(Color.parseColor("#000000")); // Black status bar
