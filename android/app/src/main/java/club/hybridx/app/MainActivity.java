@@ -7,6 +7,8 @@ import android.view.View;
 import android.view.WindowManager;
 import android.webkit.WebSettings;
 import android.webkit.CookieManager;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.graphics.Color;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -64,6 +66,46 @@ public class MainActivity extends BridgeActivity {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 cookieManager.flush();
             }
+
+            // CRITICAL: Inject CSS to prevent status bar overlap on EVERY page load
+            // This ensures the web content always has safe area padding
+            final WebView webView = this.bridge.getWebView();
+
+            // Calculate the actual status bar height
+            int statusBarHeight = 0;
+            int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+            if (resourceId > 0) {
+                statusBarHeight = getResources().getDimensionPixelSize(resourceId);
+            }
+            final int finalStatusBarHeight = statusBarHeight > 0 ? statusBarHeight : 75; // Default 75px (~24dp)
+
+            webView.setWebViewClient(new WebViewClient() {
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    super.onPageFinished(view, url);
+
+                    // Inject CSS that adds padding-top to body element
+                    // This pushes all web content below the Android status bar
+                    String js =
+                        "(function() {" +
+                        "  if (!document.getElementById('android-status-bar-fix')) {" +
+                        "    var style = document.createElement('style');" +
+                        "    style.id = 'android-status-bar-fix';" +
+                        "    style.innerHTML = '" +
+                        "      body { " +
+                        "        padding-top: " + finalStatusBarHeight + "px !important; " +
+                        "        box-sizing: border-box !important; " +
+                        "      }" +
+                        "    ';" +
+                        "    document.head.appendChild(style);" +
+                        "    console.log('✅ Injected status bar CSS with " + finalStatusBarHeight + "px padding');" +
+                        "  }" +
+                        "})();";
+
+                    view.evaluateJavascript(js, null);
+                    System.out.println("✅ Page loaded, injected " + finalStatusBarHeight + "px safe area CSS for: " + url);
+                }
+            });
 
             System.out.println("✅ WebView persistence configured: Database=" + webSettings.getDatabaseEnabled()
                 + ", DOMStorage=" + webSettings.getDomStorageEnabled()
