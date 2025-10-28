@@ -13,9 +13,11 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
-        <!-- Use default status bar color instead of transparent to prevent content overlap -->
-        <item name="android:statusBarColor">@color/colorPrimaryDark</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- Enable system bar drawing for proper status bar control -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <!-- Use white status bar to match app header -->
+        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:navigationBarColor">@android:color/white</item>
     </style>
 
 

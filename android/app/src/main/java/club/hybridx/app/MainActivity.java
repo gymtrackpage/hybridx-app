@@ -17,10 +17,24 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // --- Definitive Edge-to-Edge Fix ---
-        // This tells Android to handle the window insets, preventing web content from
-        // drawing behind the status bar. It allows the Capacitor config to work correctly.
+        // CRITICAL: Tell Android that our app layout should respect system bars
+        // This prevents content from drawing behind the status bar
         WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+
+        // Set a solid background color for the status bar
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            // Use white to match your app header
+            getWindow().setStatusBarColor(Color.WHITE);
+            getWindow().setNavigationBarColor(Color.WHITE);
+        }
+
+        // Set dark icons for the white status bar
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            View decorView = getWindow().getDecorView();
+            int flags = decorView.getSystemUiVisibility();
+            flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+            decorView.setSystemUiVisibility(flags);
+        }
 
         // Enable WebView data persistence
         if (this.bridge != null && this.bridge.getWebView() != null) {
