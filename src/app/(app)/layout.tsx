@@ -115,7 +115,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         // CRITICAL FIX: Wait for Firebase Auth to finish loading persisted state
         // This prevents premature redirect to login while IndexedDB/localStorage is being read
         console.log('⏳ Waiting for Firebase Auth to restore persisted session...');
-        await auth.authStateReady();
+        await (auth as any).authStateReady();
         console.log('✅ Firebase Auth state ready');
 
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
