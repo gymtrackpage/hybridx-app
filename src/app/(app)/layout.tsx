@@ -112,14 +112,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const initialize = async () => {
         const auth = await getAuthInstance();
 
-        // This is now the simple, correct way. We wait for Firebase to tell us
-        // the final auth state, preventing any race conditions.
+        // CRITICAL FIX: Wait for Firebase to restore session from IndexedDB
+        // This prevents the race condition where the layout redirects before auth is ready.
+        if (typeof auth.authStateReady === 'function') {
+            await auth.authStateReady();
+        }
+
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
                 console.log('✅ [Layout] User authenticated:', currentUser.email);
                 setUser(currentUser);
 
-                // Optional: Subscription check logic can remain here
                 const appUser = await getUserClient(currentUser.uid);
                 if (appUser && !appUser.isAdmin && pathname !== '/subscription') {
                     const status = appUser.subscriptionStatus || 'trial';

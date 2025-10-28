@@ -1,4 +1,3 @@
-
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
@@ -32,6 +31,15 @@ let authInstancePromise: Promise<Auth> | null = null;
 
 // Track if we've already set up the auth state listener to prevent duplicates
 let authStateListenerSetup = false;
+
+// Function to get a specific cookie by name
+const getCookie = (name: string): string | undefined => {
+    if (typeof document === 'undefined') return undefined;
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift();
+};
+
 
 /**
  * Gets the initialized Firebase Auth instance using a promise-based singleton pattern.
@@ -84,31 +92,46 @@ const getAuthInstance = (): Promise<Auth> => {
               console.log('✅ Auth state detected user:', user.email);
 
               // CRITICAL: Proactively create/validate session cookie on auth state change
-              try {
-                const idToken = await user.getIdToken(true);
-                await fetch('/api/auth/session', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ idToken }),
-                });
-                console.log('🍪 Session cookie created/validated on app startup.');
-              } catch (sessionError) {
-                console.error('❌ Failed to create session cookie on startup:', sessionError);
+              // Only create if it doesn't exist to avoid unnecessary API calls.
+              const sessionCookie = getCookie('__session');
+              if (!sessionCookie) {
+                console.log('⚠️ No session cookie found, creating one now...');
+                try {
+                    const idToken = await user.getIdToken(true);
+                    await fetch('/api/auth/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idToken }),
+                    });
+                    console.log('🍪 Session cookie created/validated on app startup.');
+                } catch (sessionError) {
+                    console.error('❌ Failed to create session cookie on startup:', sessionError);
+                }
+              } else {
+                 console.log('✅ Session cookie already exists.');
               }
 
-              // Set up automatic token refresh
+
+              // Set up automatic token and session refresh
               if ((window as any).__authRefreshInterval) {
                 clearInterval((window as any).__authRefreshInterval);
               }
               const refreshInterval = setInterval(async () => {
                 try {
                   if (auth.currentUser) {
-                    await auth.currentUser.getIdToken(true);
+                    const idToken = await auth.currentUser.getIdToken(true);
+                    // Also refresh the session cookie periodically
+                     await fetch('/api/auth/session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ idToken }),
+                    });
+                    console.log('🔄 Background token & session refresh successful');
                   }
                 } catch (err) {
-                  console.error('❌ Background token refresh failed:', err);
+                  console.error('❌ Background token & session refresh failed:', err);
                 }
-              }, 50 * 60 * 1000);
+              }, 50 * 60 * 1000); // 50 minutes
               (window as any).__authRefreshInterval = refreshInterval;
             } else {
               console.log('❌ No auth state detected');
@@ -149,14 +172,6 @@ const waitForAuthState = (): Promise<boolean> => {
         }, reject); // Pass reject to handle errors during auth state observation
     }).catch(reject);
   });
-};
-
-// Function to get a specific cookie by name
-const getCookie = (name: string): string | undefined => {
-    if (typeof document === 'undefined') return undefined;
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop()?.split(';').shift();
 };
 
 /**
