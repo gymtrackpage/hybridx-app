@@ -72,11 +72,12 @@ public class MainActivity extends BridgeActivity {
             final WebView webView = this.bridge.getWebView();
 
             // Calculate the actual status bar height in DP (device-independent pixels)
-            int statusBarHeightPx = 0;
+            int statusBarHeightPxTemp = 0;
             int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
             if (resourceId > 0) {
-                statusBarHeightPx = getResources().getDimensionPixelSize(resourceId);
+                statusBarHeightPxTemp = getResources().getDimensionPixelSize(resourceId);
             }
+            final int statusBarHeightPx = statusBarHeightPxTemp; // Make final for inner class access
 
             // Convert pixels to DP for consistent sizing across devices
             final float density = getResources().getDisplayMetrics().density;
