@@ -88,8 +88,7 @@ public class MainActivity extends BridgeActivity {
                 public void onPageFinished(WebView view, String url) {
                     super.onPageFinished(view, url);
 
-                    // Inject CSS to add safe area inset CSS variable
-                    // Target the root element and let CSS handle it naturally
+                    // Inject CSS to add safe area padding and fix header border alignment
                     String js =
                         "(function() {" +
                         "  if (!document.getElementById('android-status-bar-fix')) {" +
@@ -106,10 +105,19 @@ public class MainActivity extends BridgeActivity {
                         "      } " +
                         "      body { " +
                         "        margin-top: 0 !important; " +
+                        "      } " +
+                        "      /* Fix header border - ensure it appears below logo, not through it */ " +
+                        "      header { " +
+                        "        padding-bottom: 12px !important; " +
+                        "        border-bottom: 1px solid rgba(0,0,0,0.1) !important; " +
+                        "      } " +
+                        "      /* Remove any stray borders that might cut through the logo */ " +
+                        "      header > * { " +
+                        "        border-top: none !important; " +
                         "      }" +
                         "    ';" +
                         "    document.head.appendChild(style);" +
-                        "    console.log('✅ Applied " + statusBarHeightDp + "px status bar padding');" +
+                        "    console.log('✅ Applied " + statusBarHeightDp + "px status bar padding with header fix');" +
                         "  }" +
                         "})();";
 
