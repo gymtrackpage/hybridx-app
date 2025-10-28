@@ -15,6 +15,7 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: 'light', // 'light' for dark icons, 'dark' for light icons
       backgroundColor: '#FFFFFF', // Match your app's light theme header
+      overlay: false, // CRITICAL: Don't overlay content, push it down
     },
     SplashScreen: {
       launchAutoHide: false,
