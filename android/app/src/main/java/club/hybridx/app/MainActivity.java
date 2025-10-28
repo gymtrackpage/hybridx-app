@@ -71,39 +71,49 @@ public class MainActivity extends BridgeActivity {
             // This ensures the web content always has safe area padding
             final WebView webView = this.bridge.getWebView();
 
-            // Calculate the actual status bar height
-            int statusBarHeight = 0;
+            // Calculate the actual status bar height in DP (device-independent pixels)
+            int statusBarHeightPx = 0;
             int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
             if (resourceId > 0) {
-                statusBarHeight = getResources().getDimensionPixelSize(resourceId);
+                statusBarHeightPx = getResources().getDimensionPixelSize(resourceId);
             }
-            final int finalStatusBarHeight = statusBarHeight > 0 ? statusBarHeight : 75; // Default 75px (~24dp)
+
+            // Convert pixels to DP for consistent sizing across devices
+            final float density = getResources().getDisplayMetrics().density;
+            final int statusBarHeightDp = statusBarHeightPx > 0 ? Math.round(statusBarHeightPx / density) : 24;
 
             webView.setWebViewClient(new WebViewClient() {
                 @Override
                 public void onPageFinished(WebView view, String url) {
                     super.onPageFinished(view, url);
 
-                    // Inject CSS that adds padding-top to body element
-                    // This pushes all web content below the Android status bar
+                    // Inject CSS to add safe area inset CSS variable
+                    // Target the root element and let CSS handle it naturally
                     String js =
                         "(function() {" +
                         "  if (!document.getElementById('android-status-bar-fix')) {" +
                         "    var style = document.createElement('style');" +
                         "    style.id = 'android-status-bar-fix';" +
                         "    style.innerHTML = '" +
-                        "      body { " +
-                        "        padding-top: " + finalStatusBarHeight + "px !important; " +
+                        "      :root { " +
+                        "        --sat: " + statusBarHeightDp + "px; " +
+                        "        --sab: 0px; " +
+                        "      } " +
+                        "      html { " +
+                        "        padding-top: " + statusBarHeightDp + "px !important; " +
                         "        box-sizing: border-box !important; " +
+                        "      } " +
+                        "      body { " +
+                        "        margin-top: 0 !important; " +
                         "      }" +
                         "    ';" +
                         "    document.head.appendChild(style);" +
-                        "    console.log('✅ Injected status bar CSS with " + finalStatusBarHeight + "px padding');" +
+                        "    console.log('✅ Applied " + statusBarHeightDp + "px status bar padding');" +
                         "  }" +
                         "})();";
 
                     view.evaluateJavascript(js, null);
-                    System.out.println("✅ Page loaded, injected " + finalStatusBarHeight + "px safe area CSS for: " + url);
+                    System.out.println("✅ Injected " + statusBarHeightDp + "px (" + statusBarHeightPx + "px) status bar padding for: " + url);
                 }
             });
 
