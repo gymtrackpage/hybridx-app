@@ -33,6 +33,11 @@ workflows:
           sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/preferences/android/build.gradle 2>/dev/null || \
           sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/preferences/android/build.gradle
           echo "Patched capacitor-preferences to use Java 17"
+
+          # Patch capacitor-status-bar
+          sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/status-bar/android/build.gradle 2>/dev/null || \
+          sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/status-bar/android/build.gradle
+          echo "Patched capacitor-status-bar to use Java 17"
       - name: Install Capacitor CLI
         script: |
           npm install -g @capacitor/cli
@@ -104,6 +109,11 @@ workflows:
           sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/preferences/android/build.gradle 2>/dev/null || \
           sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/preferences/android/build.gradle
           echo "Patched capacitor-preferences to use Java 17"
+
+          # Patch capacitor-status-bar
+          sed -i '' 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/status-bar/android/build.gradle 2>/dev/null || \
+          sed -i 's/JavaVersion.VERSION_21/JavaVersion.VERSION_17/g' node_modules/@capacitor/status-bar/android/build.gradle
+          echo "Patched capacitor-status-bar to use Java 17"
       - name: Install Capacitor CLI
         script: |
           npm install -g @capacitor/cli
