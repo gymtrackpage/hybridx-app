@@ -13,8 +13,8 @@ const config: CapacitorConfig = {
   },
   plugins: {
     StatusBar: {
-      style: 'dark', // 'light' or 'dark'
-      backgroundColor: '#000000', // Match your app's theme
+      style: 'light', // 'light' for dark icons, 'dark' for light icons
+      backgroundColor: '#FFFFFF', // Match your app's light theme header
     },
     SplashScreen: {
       launchAutoHide: false,
