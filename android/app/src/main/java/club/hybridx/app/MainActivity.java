@@ -18,27 +18,9 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
 
         // --- Definitive Edge-to-Edge Fix ---
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-
-        // Make status bar and navigation bar transparent
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            getWindow().setStatusBarColor(Color.TRANSPARENT);
-            getWindow().setNavigationBarColor(Color.TRANSPARENT);
-        }
-
-        // Set status bar icons to light (for dark backgrounds) or dark (for light backgrounds)
-        WindowInsetsControllerCompat windowInsetsController =
-            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        if (windowInsetsController != null) {
-            // Use light icons for dark status bar in dark mode
-            // Use dark icons for light status bar in light mode
-            // This can be adapted based on web app's theme via CSS `prefers-color-scheme`
-            // For now, let's assume a light header by default
-            windowInsetsController.setAppearanceLightStatusBars(true);
-            windowInsetsController.setAppearanceLightNavigationBars(true); // Assuming light nav bar
-        }
-        // --- End of Fix ---
-
+        // This tells Android to handle the window insets, preventing web content from
+        // drawing behind the status bar. It allows the Capacitor config to work correctly.
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
 
         // Enable WebView data persistence
         if (this.bridge != null && this.bridge.getWebView() != null) {
