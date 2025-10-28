@@ -22,9 +22,9 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // REVERT: Go back to letting Android handle system bar fitting
-        // We need Android to automatically adjust layout for system bars
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+        // Use edge-to-edge layout - content draws behind status bar
+        // We'll handle the padding via CSS injection instead
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         // Set a solid background color for the status bar
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
