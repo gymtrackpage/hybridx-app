@@ -112,36 +112,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const initialize = async () => {
         const auth = await getAuthInstance();
 
-        // CRITICAL FIX: Wait for Firebase Auth to finish loading persisted state
-        // This prevents premature redirect to login while IndexedDB/localStorage is being read
-        console.log('⏳ Waiting for Firebase Auth to restore persisted session...');
-        await (auth as any).authStateReady();
-        console.log('✅ Firebase Auth state ready');
-
+        // This is now the simple, correct way. We wait for Firebase to tell us
+        // the final auth state, preventing any race conditions.
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        if (currentUser) {
-            console.log('✅ User authenticated:', currentUser.email);
-            setUser(currentUser);
+            if (currentUser) {
+                console.log('✅ [Layout] User authenticated:', currentUser.email);
+                setUser(currentUser);
 
-            // Subscription check logic
-            const appUser = await getUserClient(currentUser.uid);
-            if (appUser && !appUser.isAdmin && pathname !== '/subscription') {
-                const status = appUser.subscriptionStatus || 'trial';
-                const trialStart = appUser.trialStartDate;
-                const trialEnded = trialStart ? isAfter(new Date(), addMonths(trialStart, 1)) : true;
+                // Optional: Subscription check logic can remain here
+                const appUser = await getUserClient(currentUser.uid);
+                if (appUser && !appUser.isAdmin && pathname !== '/subscription') {
+                    const status = appUser.subscriptionStatus || 'trial';
+                    const trialStart = appUser.trialStartDate;
+                    const trialEnded = trialStart ? isAfter(new Date(), addMonths(new Date(trialStart), 1)) : true;
 
-                if (status === 'trial' && trialEnded) {
-                    router.push('/subscription');
-                } else if (!['trial', 'active'].includes(status)) {
-                    router.push('/subscription');
+                    if (status === 'trial' && trialEnded) {
+                        router.push('/subscription');
+                    } else if (!['trial', 'active', 'paused'].includes(status)) {
+                        router.push('/subscription');
+                    }
                 }
+            } else {
+                console.log('❌ [Layout] No authenticated user, redirecting to login');
+                router.push('/login');
             }
-        } else {
-            // User is definitively not logged in (persistence already loaded)
-            console.log('❌ No authenticated user, redirecting to login');
-            router.push('/login');
-        }
-        setLoading(false);
+            setLoading(false);
         });
         return unsubscribe;
     };
@@ -162,7 +157,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       await signOut(auth);
 
       // CRITICAL FIX: Clear session cookie on logout
-      // Set cookie to empty with immediate expiration
       document.cookie = '__session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
       console.log('🧹 Session cookie cleared on logout');
 

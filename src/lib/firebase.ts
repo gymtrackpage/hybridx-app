@@ -45,14 +45,10 @@ const getAuthInstance = (): Promise<Auth> => {
   authInstancePromise = new Promise(async (resolve, reject) => {
     try {
       if (typeof window !== 'undefined') {
-        // For client-side, initialize with persistence.
-        // For Capacitor apps, always use IndexedDB for better reliability
         const isNative = Capacitor.isNativePlatform();
         let auth: Auth;
 
         try {
-          // CRITICAL: For Capacitor native apps, use IndexedDB with explicit configuration
-          // This is the most reliable persistence mechanism for hybrid apps
           const persistenceOptions = isNative
             ? [indexedDBLocalPersistence]
             : [indexedDBLocalPersistence, browserLocalPersistence];
@@ -62,111 +58,63 @@ const getAuthInstance = (): Promise<Auth> => {
             popupRedirectResolver: undefined
           });
 
-          // Force immediate persistence confirmation
           if (isNative) {
             await setPersistence(auth, indexedDBLocalPersistence);
           }
+          console.log(`✅ Firebase Auth initialized ${isNative ? '(Capacitor/Native)' : '(Web)'} with persistence`);
 
-          console.log(`✅ Firebase Auth initialized ${isNative ? '(Capacitor/Native)' : '(Web)'} with ${isNative ? 'IndexedDB' : 'IndexedDB+LocalStorage'} persistence`);
         } catch (initError: any) {
-          // If initialization fails (already initialized), get existing instance
           if (initError.code === 'auth/already-initialized') {
             auth = getAuth(app);
-            // CRITICAL: Always re-set persistence for existing instance
             try {
-              await setPersistence(auth, indexedDBLocalPersistence);
-              console.log('✅ Persistence re-set to IndexedDB on existing instance');
+              await setPersistence(auth, isNative ? indexedDBLocalPersistence : browserLocalPersistence);
             } catch (persistError) {
-              if (!isNative) {
-                console.warn('⚠️ IndexedDB persistence failed, falling back to localStorage', persistError);
-                try {
-                  await setPersistence(auth, browserLocalPersistence);
-                } catch (fallbackError) {
-                  console.error('❌ All persistence mechanisms failed', fallbackError);
-                }
-              } else {
-                console.error('❌ CRITICAL: IndexedDB persistence failed in Capacitor app', persistError);
-                // In native app, this is a critical error
-              }
+              console.warn('Persistence re-set failed, may already be set:', persistError);
             }
           } else {
             throw initError;
           }
         }
 
-        // CRITICAL FIX: Set up proactive token refresh ONLY ONCE
-        // Prevent multiple listeners from being created on navigation
-        if (!authStateListenerSetup && typeof window !== 'undefined') {
+        if (!authStateListenerSetup) {
           authStateListenerSetup = true;
 
-          auth.onAuthStateChanged(async (user) => {
+          onAuthStateChanged(auth, async (user) => {
             if (user) {
-              console.log('✅ Auth state detected:', user.email);
+              console.log('✅ Auth state detected user:', user.email);
 
-              // CRITICAL: Immediately refresh token on auth state change
+              // CRITICAL: Proactively create/validate session cookie on auth state change
               try {
-                await user.getIdToken(true);
-                console.log('🔄 Token refreshed successfully');
-              } catch (err) {
-                console.error('❌ Token refresh error:', err);
+                const idToken = await user.getIdToken(true);
+                await fetch('/api/auth/session', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ idToken }),
+                });
+                console.log('🍪 Session cookie created/validated on app startup.');
+              } catch (sessionError) {
+                console.error('❌ Failed to create session cookie on startup:', sessionError);
               }
 
-              // Clear any existing refresh interval before creating a new one
+              // Set up automatic token refresh
               if ((window as any).__authRefreshInterval) {
                 clearInterval((window as any).__authRefreshInterval);
-                console.log('🧹 Cleared previous refresh interval');
               }
-
-              // CRITICAL: Set up automatic token refresh every 50 minutes (before 1-hour expiry)
               const refreshInterval = setInterval(async () => {
                 try {
-                  const currentUser = auth.currentUser;
-                  if (currentUser) {
-                    // Check if page is visible before refreshing (save resources)
-                    if (document.visibilityState === 'visible') {
-                      await currentUser.getIdToken(true);
-                      console.log('🔄 Background token refresh successful');
-                    } else {
-                      console.log('⏸️ Skipping refresh - page not visible');
-                    }
-                  } else {
-                    console.warn('⚠️ No current user, clearing refresh interval');
-                    clearInterval(refreshInterval);
-                    delete (window as any).__authRefreshInterval;
+                  if (auth.currentUser) {
+                    await auth.currentUser.getIdToken(true);
                   }
                 } catch (err) {
                   console.error('❌ Background token refresh failed:', err);
                 }
-              }, 50 * 60 * 1000); // 50 minutes
-
-              // Store interval ID so we can clear it later
+              }, 50 * 60 * 1000);
               (window as any).__authRefreshInterval = refreshInterval;
-              console.log('⏰ Token refresh interval established');
             } else {
               console.log('❌ No auth state detected');
-
-              // Clear refresh interval if user logs out
               if ((window as any).__authRefreshInterval) {
                 clearInterval((window as any).__authRefreshInterval);
                 delete (window as any).__authRefreshInterval;
-                console.log('🧹 Refresh interval cleared on logout');
-              }
-            }
-          });
-
-          // CRITICAL: Refresh token when page becomes visible again
-          // This handles cases where user left tab inactive for > 1 hour
-          document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible') {
-              const currentUser = auth.currentUser;
-              if (currentUser) {
-                console.log('👁️ Page visible again, refreshing token...');
-                try {
-                  await currentUser.getIdToken(true);
-                  console.log('✅ Token refreshed after visibility change');
-                } catch (err) {
-                  console.error('❌ Token refresh failed on visibility change:', err);
-                }
               }
             }
           });
@@ -174,13 +122,11 @@ const getAuthInstance = (): Promise<Auth> => {
 
         resolve(auth);
       } else {
-        // For server-side, just get the auth instance without persistence.
         const auth = getAuth(app);
         resolve(auth);
       }
     } catch (error) {
       console.error("Firebase Auth initialization error:", error);
-      // Last resort fallback
       const auth = getAuth(app);
       resolve(auth);
     }
