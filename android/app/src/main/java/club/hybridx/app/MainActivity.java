@@ -27,15 +27,15 @@ public class MainActivity extends BridgeActivity {
         }
 
         // Set status bar icons to light (for dark backgrounds) or dark (for light backgrounds)
-        // This should adapt based on your web app's theme via CSS `prefers-color-scheme`
-        // or a theme management library.
-        // We'll set a default here. If your app is always dark at the top, `false` is correct.
         WindowInsetsControllerCompat windowInsetsController =
             WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
         if (windowInsetsController != null) {
-            // Use light icons for dark status bar
-            windowInsetsController.setAppearanceLightStatusBars(false);
-            windowInsetsController.setAppearanceLightNavigationBars(false);
+            // Use light icons for dark status bar in dark mode
+            // Use dark icons for light status bar in light mode
+            // This can be adapted based on web app's theme via CSS `prefers-color-scheme`
+            // For now, let's assume a light header by default
+            windowInsetsController.setAppearanceLightStatusBars(true);
+            windowInsetsController.setAppearanceLightNavigationBars(true); // Assuming light nav bar
         }
         // --- End of Fix ---
 
@@ -53,7 +53,6 @@ public class MainActivity extends BridgeActivity {
 
             // Enable cache for better performance and offline support
             webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
-            // Note: setAppCacheEnabled() was deprecated in API 33 and removed - no longer needed
 
             // CRITICAL FIX: Configure cookie persistence
             CookieManager cookieManager = CookieManager.getInstance();
