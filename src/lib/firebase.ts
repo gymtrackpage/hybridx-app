@@ -1,3 +1,4 @@
+
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
@@ -28,9 +29,6 @@ const db = getFirestore(app);
 
 // Singleton promise to ensure auth is only initialized once
 let authInstancePromise: Promise<Auth> | null = null;
-
-// Track if we've already set up the auth state listener to prevent duplicates
-let authStateListenerSetup = false;
 
 // Function to get a specific cookie by name
 const getCookie = (name: string): string | undefined => {
@@ -74,75 +72,12 @@ const getAuthInstance = (): Promise<Auth> => {
         } catch (initError: any) {
           if (initError.code === 'auth/already-initialized') {
             auth = getAuth(app);
-            try {
-              await setPersistence(auth, isNative ? indexedDBLocalPersistence : browserLocalPersistence);
-            } catch (persistError) {
-              console.warn('Persistence re-set failed, may already be set:', persistError);
-            }
           } else {
             throw initError;
           }
         }
 
-        if (!authStateListenerSetup) {
-          authStateListenerSetup = true;
-
-          onAuthStateChanged(auth, async (user) => {
-            if (user) {
-              console.log('✅ Auth state detected user:', user.email);
-
-              // CRITICAL: Proactively create/validate session cookie on auth state change
-              // Only create if it doesn't exist to avoid unnecessary API calls.
-              const sessionCookie = getCookie('__session');
-              if (!sessionCookie) {
-                console.log('⚠️ No session cookie found, creating one now...');
-                try {
-                    const idToken = await user.getIdToken(true);
-                    await fetch('/api/auth/session', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ idToken }),
-                    });
-                    console.log('🍪 Session cookie created/validated on app startup.');
-                } catch (sessionError) {
-                    console.error('❌ Failed to create session cookie on startup:', sessionError);
-                }
-              } else {
-                 console.log('✅ Session cookie already exists.');
-              }
-
-
-              // Set up automatic token and session refresh
-              if ((window as any).__authRefreshInterval) {
-                clearInterval((window as any).__authRefreshInterval);
-              }
-              const refreshInterval = setInterval(async () => {
-                try {
-                  if (auth.currentUser) {
-                    const idToken = await auth.currentUser.getIdToken(true);
-                    // Also refresh the session cookie periodically
-                     await fetch('/api/auth/session', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ idToken }),
-                    });
-                    console.log('🔄 Background token & session refresh successful');
-                  }
-                } catch (err) {
-                  console.error('❌ Background token & session refresh failed:', err);
-                }
-              }, 50 * 60 * 1000); // 50 minutes
-              (window as any).__authRefreshInterval = refreshInterval;
-            } else {
-              console.log('❌ No auth state detected');
-              if ((window as any).__authRefreshInterval) {
-                clearInterval((window as any).__authRefreshInterval);
-                delete (window as any).__authRefreshInterval;
-              }
-            }
-          });
-        }
-
+        // The session management logic has been moved to layout.tsx for better control flow
         resolve(auth);
       } else {
         const auth = getAuth(app);
@@ -151,28 +86,13 @@ const getAuthInstance = (): Promise<Auth> => {
     } catch (error) {
       console.error("Firebase Auth initialization error:", error);
       const auth = getAuth(app);
-      resolve(auth);
+      resolve(auth); // Resolve with the basic auth instance on error
     }
   });
 
   return authInstancePromise;
 };
 
-
-/**
- * A helper function that resolves when the auth state is first determined.
- * Resolves with `true` if a user is logged in, `false` otherwise.
- */
-const waitForAuthState = (): Promise<boolean> => {
-  return new Promise((resolve, reject) => {
-    getAuthInstance().then(auth => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            unsubscribe(); // Unsubscribe after the first emission
-            resolve(!!user);
-        }, reject); // Pass reject to handle errors during auth state observation
-    }).catch(reject);
-  });
-};
 
 /**
  * Provides a comprehensive diagnosis of the current authentication state.
@@ -213,4 +133,4 @@ export async function diagnoseAuth() {
 // but getAuthInstance is the preferred method.
 const auth = getAuth(app);
 
-export { app, db, auth, getAuthInstance, waitForAuthState };
+export { app, db, auth, getAuthInstance };
