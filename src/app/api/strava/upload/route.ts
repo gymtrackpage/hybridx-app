@@ -5,7 +5,9 @@ import { cookies } from 'next/headers';
 import { getUser, updateUserAdmin } from '@/services/user-service';
 import { getAdminDb } from '@/lib/firebase-admin';
 import axios from 'axios';
-import type { StravaTokens, WorkoutSession, ProgramType } from '@/models/types';
+import type { StravaTokens, WorkoutSession, ProgramType, Workout, RunningWorkout } from '@/models/types';
+import { generateStravaDescription } from '@/ai/flows/strava-description';
+
 
 // Helper function to safely convert Firestore timestamp to Date
 function toDate(timestamp: any): Date {
@@ -106,6 +108,29 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Cannot upload an incomplete workout' }, { status: 400 });
     }
 
+    // Generate AI Description for Strava
+    let aiDescription = `Workout from HYBRIDX.CLUB.\n\nNotes:\n${session.notes || 'No notes.'}`;
+    if (session.workoutDetails) {
+        try {
+            const exercises = session.programType === 'running' 
+                ? (session.workoutDetails as RunningWorkout).runs 
+                : (session.workoutDetails as Workout).exercises;
+            
+            const descriptionResult = await generateStravaDescription({
+                workoutTitle: session.workoutTitle,
+                workoutType: session.programType,
+                exercises: JSON.stringify(exercises),
+                userNotes: session.notes,
+            });
+            aiDescription = descriptionResult.description;
+            console.log('Generated AI description for Strava:', aiDescription);
+        } catch (aiError) {
+            console.error('Failed to generate AI description, using fallback:', aiError);
+            // Fallback to the original description if AI fails
+        }
+    }
+
+
     // Create the activity on Strava
     const estimatedDuration = 3600; // Strava requires a time, default to 1 hour
     const stravaActivityPayload = {
@@ -113,7 +138,7 @@ export async function POST(req: NextRequest) {
       type: mapActivityTypeToStrava(session.programType),
       start_date_local: toDate(session.startedAt).toISOString(),
       elapsed_time: estimatedDuration,
-      description: `Workout from HYBRIDX.CLUB.\n\nNotes:\n${session.notes || 'No notes.'}`,
+      description: aiDescription,
       trainer: true,
       commute: false
     };
