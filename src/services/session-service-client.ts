@@ -205,12 +205,21 @@ export async function linkStravaActivityToSession(sessionId: string, activity: S
             programId: 'strava-linked',
             workoutDate: Timestamp.fromDate(activityDate),
             workoutTitle: activity.name,
-            programType: activity.sport_type.toLowerCase().includes('run') ? 'running' : 'hyrox',
+            programType: (activity.sport_type.toLowerCase().includes('run') ? 'running' : 'hyrox') as ProgramType, // Fix: Cast to ProgramType
             startedAt: Timestamp.fromDate(new Date(activity.start_date)),
         };
         const docRef = await addDoc(sessionsCollection, newSessionData);
         sessionRef = docRef;
-        sessionData = { id: docRef.id, ...newSessionData, workoutDate: activityDate, startedAt: new Date(activity.start_date) };
+        // Fix: Ensure sessionData matches WorkoutSession type
+        sessionData = { 
+            id: docRef.id, 
+            userId: newSessionData.userId,
+            programId: newSessionData.programId,
+            workoutDate: activityDate,
+            workoutTitle: newSessionData.workoutTitle,
+            programType: newSessionData.programType,
+            startedAt: new Date(activity.start_date)
+        };
     }
 
     const updateData = {

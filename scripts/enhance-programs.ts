@@ -307,7 +307,7 @@ async function enhanceProgram(programId: string, programName: string) {
 
   if (!programDoc.exists()) {
     console.log(`❌ Program not found: ${programId}`);
-    return;
+    return 0;
   }
 
   const programData = programDoc.data();

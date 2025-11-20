@@ -22,8 +22,8 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Use edge-to-edge layout - content draws behind status bar
-        // We'll handle the padding via CSS injection instead
+        // Enable edge-to-edge layout for proper safe-area-inset support
+        // This allows the WebView to receive window insets and CSS env(safe-area-inset-*) to work
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
 
         // Set a solid background color for the status bar
@@ -67,62 +67,26 @@ public class MainActivity extends BridgeActivity {
                 cookieManager.flush();
             }
 
-            // CRITICAL: Inject CSS to prevent status bar overlap on EVERY page load
-            // This ensures the web content always has safe area padding
+            // Configure WebView to properly handle window insets
+            // The web app uses CSS env(safe-area-inset-*) which will handle the status bar spacing
             final WebView webView = this.bridge.getWebView();
 
-            // Calculate the actual status bar height in DP (device-independent pixels)
-            int statusBarHeightPxTemp = 0;
+            // Calculate the actual status bar height for logging purposes
+            int statusBarHeightPx = 0;
             int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
             if (resourceId > 0) {
-                statusBarHeightPxTemp = getResources().getDimensionPixelSize(resourceId);
+                statusBarHeightPx = getResources().getDimensionPixelSize(resourceId);
             }
-            final int statusBarHeightPx = statusBarHeightPxTemp; // Make final for inner class access
-
-            // Convert pixels to DP for consistent sizing across devices
-            final float density = getResources().getDisplayMetrics().density;
-            final int statusBarHeightDp = statusBarHeightPx > 0 ? Math.round(statusBarHeightPx / density) : 24;
+            final int finalStatusBarHeightPx = statusBarHeightPx;
 
             webView.setWebViewClient(new WebViewClient() {
                 @Override
                 public void onPageFinished(WebView view, String url) {
                     super.onPageFinished(view, url);
 
-                    // Inject CSS to add safe area padding and fix header border alignment
-                    String js =
-                        "(function() {" +
-                        "  if (!document.getElementById('android-status-bar-fix')) {" +
-                        "    var style = document.createElement('style');" +
-                        "    style.id = 'android-status-bar-fix';" +
-                        "    style.innerHTML = '" +
-                        "      :root { " +
-                        "        --sat: " + statusBarHeightDp + "px; " +
-                        "        --sab: 0px; " +
-                        "      } " +
-                        "      html { " +
-                        "        padding-top: " + statusBarHeightDp + "px !important; " +
-                        "        box-sizing: border-box !important; " +
-                        "      } " +
-                        "      body { " +
-                        "        margin-top: 0 !important; " +
-                        "      } " +
-                        "      /* Fix header border - ensure it appears below logo, not through it */ " +
-                        "      header { " +
-                        "        padding-bottom: 12px !important; " +
-                        "        border-bottom: 1px solid rgba(0,0,0,0.1) !important; " +
-                        "      } " +
-                        "      /* Remove any stray borders that might cut through the logo */ " +
-                        "      header > * { " +
-                        "        border-top: none !important; " +
-                        "      }" +
-                        "    ';" +
-                        "    document.head.appendChild(style);" +
-                        "    console.log('✅ Applied " + statusBarHeightDp + "px status bar padding with header fix');" +
-                        "  }" +
-                        "})();";
-
-                    view.evaluateJavascript(js, null);
-                    System.out.println("✅ Injected " + statusBarHeightDp + "px (" + statusBarHeightPx + "px) status bar padding for: " + url);
+                    // Log that the page loaded - no CSS injection needed
+                    // The web app's pt-safe class and safe-area-inset-top will handle spacing
+                    System.out.println("✅ Page loaded: " + url + " (status bar: " + finalStatusBarHeightPx + "px, handled by CSS safe-area)");
                 }
             });
 

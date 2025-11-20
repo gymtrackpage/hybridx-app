@@ -1,9 +1,32 @@
+
+import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/icons';
+import { getAdminAuth } from '@/lib/firebase-admin';
 
-export default function WelcomePage() {
+export default async function WelcomePage() {
+  // Check for session cookie server-side
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get('__session')?.value;
+
+  if (sessionCookie) {
+    try {
+      // Verify the session cookie
+      const adminAuth = getAdminAuth();
+      await adminAuth.verifySessionCookie(sessionCookie, true);
+      
+      // If valid, redirect immediately to dashboard
+      console.log('✅ [WelcomePage] Valid session found, redirecting to dashboard');
+      redirect('/dashboard');
+    } catch (error) {
+      // If verification fails, we just let the page render as normal
+      console.log('⚠️ [WelcomePage] Session cookie found but invalid or expired');
+    }
+  }
+
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center p-4">
       <Image

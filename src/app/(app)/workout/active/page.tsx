@@ -18,7 +18,7 @@ import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getTodaysOneOffSession, getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession, getTodaysProgramSession } from '@/services/session-service-client';
-import type { Workout, RunningWorkout, User, Exercise } from '@/models/types';
+import type { Workout, RunningWorkout, User, Exercise, Program } from '@/models/types';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
 import { Separator } from '@/components/ui/separator';
@@ -73,16 +73,24 @@ export default function ActiveWorkoutPage() {
             // Priority 2: Check for an existing program session (which could be swapped)
             const programSession = await getTodaysProgramSession(firebaseUser.uid, today);
             
-            if (programSession) {
+            if (programSession && programSession.workoutDetails) {
                 workoutSession = programSession;
                 // Use the details from the session itself, which will reflect any swaps
+                const mockProgram: Program = { 
+                    id: programSession.programId, 
+                    workouts: [programSession.workoutDetails], 
+                    name: '', 
+                    description: '', 
+                    programType: 'hyrox' // Default or infer from workoutDetails
+                };
+
                 currentWorkoutInfo = {
                     day: getWorkoutForDay(
-                        { id: programSession.programId, workouts: [programSession.workoutDetails!], name: '', description: '', programType: 'hyrox'}, 
+                        mockProgram, 
                         currentUser.startDate, 
                         today
                     ).day,
-                    workout: programSession.workoutDetails as Workout,
+                    workout: programSession.workoutDetails,
                 };
             } else {
                 // Priority 3: No session exists, so create one based on the original program schedule
@@ -97,7 +105,12 @@ export default function ActiveWorkoutPage() {
             }
         }
         
-        setWorkoutInfo(currentWorkoutInfo);
+        // We check if currentWorkoutInfo is valid before setting state
+        if (currentWorkoutInfo) {
+           setWorkoutInfo(currentWorkoutInfo);
+        } else {
+           setWorkoutInfo(null);
+        }
 
         if (workoutSession) {
             setSession(workoutSession);
@@ -165,7 +178,8 @@ export default function ActiveWorkoutPage() {
   useEffect(() => {
     if (user && workoutInfo && session && !loading) {
       const timer = setTimeout(() => {
-        loadWorkoutSummary(user, workoutInfo, session);
+        // Cast workoutInfo to the type expected by loadWorkoutSummary (where workout is not null)
+        loadWorkoutSummary(user, workoutInfo as { workout: Workout | RunningWorkout }, session);
       }, 100);
 
       return () => clearTimeout(timer);

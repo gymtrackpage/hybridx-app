@@ -98,14 +98,16 @@ export default function WorkoutHistoryPage() {
 
     // Sort
     filtered.sort((a, b) => {
+        // Convert to number explicitly to satisfy TS
       if (sortBy === 'date-desc') {
-        return b.workoutDate.getTime() - a.workoutDate.getTime();
+        return new Date(b.workoutDate).getTime() - new Date(a.workoutDate).getTime();
       } else if (sortBy === 'date-asc') {
-        return a.workoutDate.getTime() - b.workoutDate.getTime();
+        return new Date(a.workoutDate).getTime() - new Date(b.workoutDate).getTime();
       } else {
         // Sort by duration
-        const aDuration = a.duration || 0;
-        const bDuration = b.duration || 0;
+        // Ensure duration is treated as a number. Assuming duration is string "120" or number 120
+        const aDuration = Number(a.duration) || 0;
+        const bDuration = Number(b.duration) || 0;
         return bDuration - aDuration;
       }
     });
@@ -115,7 +117,7 @@ export default function WorkoutHistoryPage() {
 
   const stats = useMemo(() => {
     const completed = sessions.filter((s) => s.finishedAt && !s.skipped);
-    const totalDuration = completed.reduce((sum, s) => sum + (s.duration || 0), 0);
+    const totalDuration = completed.reduce((sum, s) => sum + (Number(s.duration) || 0), 0);
     const avgDuration = completed.length > 0 ? totalDuration / completed.length : 0;
 
     return {

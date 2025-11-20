@@ -11,7 +11,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 import { auth } from '@/lib/firebase';
-import type { Program, User, RunningProgram, PaceZone } from '@/models/types';
+import type { Program, User, RunningProgram, PaceZone, RunningWorkout, Workout } from '@/models/types';
 import { getProgramClient } from '@/services/program-service-client';
 import { getUserClient, updateUser } from '@/services/user-service-client';
 import { useToast } from '@/hooks/use-toast';
@@ -295,19 +295,35 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
 
     setIsScheduling(true);
     try {
-        let updateData: Partial<User> = { programId, startDate, customProgram: null };
+        const updateData: Partial<User> = { programId, startDate, customProgram: null };
         const nonRestWorkouts = program.workouts.filter(w => !w.title.toLowerCase().includes('rest'));
         
         // Check if adjustment is needed
         if (user.frequency !== '5+' && nonRestWorkouts.length > parseInt(user.frequency, 10)) {
             toast({ title: 'Adjusting your plan...', description: 'Our AI coach is tailoring this program to fit your schedule.' });
             
-            const result = await adjustTrainingPlan({
-                currentWorkouts: program.workouts.filter(w => w.programType === 'hyrox') as any, // Cast to hyrox workout for now
-                targetDays: user.frequency as '3' | '4',
-            });
-            
-            updateData.customProgram = result.adjustedWorkouts;
+            // Only adjust Hyrox programs for now as the AI flow expects Exercise[] structure
+            // For running programs, we might need a different AI flow or adjust `adjustTrainingPlan`
+            const hyroxWorkouts = program.workouts.filter(w => w.programType === 'hyrox') as Workout[];
+
+            // If the program is mixed or purely running, we might want to skip or handle differently.
+            // Assuming for now we only adjust if we have hyrox workouts to adjust.
+            if (hyroxWorkouts.length > 0) {
+                const result = await adjustTrainingPlan({
+                    currentWorkouts: hyroxWorkouts, 
+                    targetDays: user.frequency as '3' | '4',
+                });
+                // Need to satisfy type compatibility here. customProgram expects (Workout | RunningWorkout)[]
+                // adjustTrainingPlan returns what matches Workout structure (mostly)
+                // We ensure result.adjustedWorkouts has programType: 'hyrox'
+                
+                const adjustedWithTypes = result.adjustedWorkouts.map(w => ({
+                    ...w,
+                    programType: 'hyrox' as const
+                }));
+
+                updateData.customProgram = adjustedWithTypes;
+            }
         }
 
         await updateUser(user.id, updateData);
@@ -388,7 +404,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                           <AccordionContent>
                             {isRunningProgram ? (
                                 <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                                    {(workout as RunningProgram['workouts'][0]).runs.map((run, index) => {
+                                    {(workout as RunningWorkout).runs.map((run, index) => {
                                         const pace = trainingPaces ? formatPace(trainingPaces[run.paceZone]) : 'N/A';
                                         return (
                                              <li key={index}>
@@ -402,7 +418,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                                 </ul>
                             ) : (
                                <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                                  {workout.exercises.map((exercise, index) => (
+                                  {(workout as Workout).exercises.map((exercise, index) => (
                                       <li key={index}>
                                           <span className="font-medium text-foreground">{exercise.name}:</span> {exercise.details}
                                       </li>

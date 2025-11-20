@@ -8,7 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2, AlertCircle, Award } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, AuthErrorCodes } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, AuthErrorCodes, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
 import { createUser } from '@/services/user-service-client';
 import { getTopPrograms, type ProgramRecommendation } from '@/services/program-recommendation';
@@ -70,6 +70,7 @@ export function LoginForm() {
                 await fetch('/api/auth/session', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include', // Ensure cookies are sent/received
                   body: JSON.stringify({ idToken }),
                 });
 
@@ -95,18 +96,34 @@ export function LoginForm() {
     setIsLoading(true);
     try {
       const auth = await getAuthInstance();
+
+      // CRITICAL: Set persistence BEFORE authentication
+      await setPersistence(auth, browserLocalPersistence);
+
       const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
 
       // CRITICAL FIX: Always create session cookie on login for server-side auth
       console.log('🍪 Creating session cookie after login...');
       const idToken = await userCredential.user.getIdToken(true);
       if (idToken) {
-          await fetch('/api/auth/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken }),
+          const sessionResponse = await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include', // Ensure cookies are sent/received
+            body: JSON.stringify({ idToken }),
           });
-          console.log('✅ Session cookie created successfully');
+
+          if (sessionResponse.ok) {
+            console.log('✅ Session cookie created successfully');
+
+            // Wait for cookie to be properly set before navigation
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Force Next.js to recognize the new session cookie
+            router.refresh();
+          } else {
+            console.error('❌ Failed to create session cookie:', await sessionResponse.text());
+          }
       }
 
       const wasRedirected = await completePendingStravaAuth();
@@ -246,6 +263,10 @@ export function SignupForm() {
 
     try {
       const auth = await getAuthInstance();
+
+      // CRITICAL: Set persistence BEFORE authentication
+      await setPersistence(auth, browserLocalPersistence);
+
       // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, finalData.email, finalData.password);
       const user = userCredential.user;
@@ -254,12 +275,24 @@ export function SignupForm() {
       console.log('🍪 Creating session cookie after signup...');
       const idToken = await user.getIdToken(true);
       if (idToken) {
-        await fetch('/api/auth/session', {
+        const sessionResponse = await fetch('/api/auth/session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include', // Ensure cookies are sent/received
           body: JSON.stringify({ idToken }),
         });
-        console.log('✅ Session cookie created successfully');
+
+        if (sessionResponse.ok) {
+          console.log('✅ Session cookie created successfully');
+
+          // Wait for cookie to be properly set before navigation
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Force Next.js to recognize the new session cookie
+          router.refresh();
+        } else {
+          console.error('❌ Failed to create session cookie:', await sessionResponse.text());
+        }
       }
 
 

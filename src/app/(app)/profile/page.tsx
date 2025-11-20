@@ -306,7 +306,7 @@ export default function ProfilePage() {
     );
   }
 
-  const isStravaConnected = user?.strava?.accessToken && user?.strava?.athleteId;
+  const isStravaConnected = !!(user?.strava?.accessToken && user?.strava?.athleteId);
 
   return (
     <div className="space-y-6">
@@ -356,7 +356,7 @@ export default function ProfilePage() {
               <CardContent>
                   <Button onClick={initiateStravaAuth} variant="outline" disabled={isStravaConnected}>
                     <LinkIcon className="mr-2"/>
-                    {isStravaConnected ? `Connected to Strava (Athlete: ${user.strava.athleteId})` : 'Connect with Strava'}
+                    {isStravaConnected && user?.strava ? `Connected to Strava (Athlete: ${user.strava.athleteId})` : 'Connect with Strava'}
                   </Button>
               </CardContent>
             </Card>

@@ -274,6 +274,7 @@ export default function DashboardPage() {
         const oneOffWorkout: Workout = {
             ...generated,
             day: 0, // Day 0 can represent a non-program workout
+            programType: 'hyrox' // Explicitly set programType
         };
         
         const today = new Date();

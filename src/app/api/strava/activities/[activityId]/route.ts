@@ -41,10 +41,10 @@ async function getValidAccessToken(userId: string): Promise<string> {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { activityId: string } }
+  { params }: { params: Promise<{ activityId: string }> }
 ) {
   console.log('=== DETAILED STRAVA ACTIVITY API START ===');
-  const { activityId } = params;
+  const { activityId } = await params;
 
   if (!activityId) {
     return NextResponse.json({ error: 'Activity ID is required' }, { status: 400 });

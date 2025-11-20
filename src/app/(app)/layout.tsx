@@ -159,8 +159,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       const auth = await getAuthInstance();
       await signOut(auth);
 
-      // CRITICAL FIX: Clear session cookie on logout
-      document.cookie = '__session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+      // CRITICAL FIX: Clear session cookie on logout via API
+      await fetch('/api/auth/session', {
+        method: 'DELETE',
+        credentials: 'include',
+      });
       console.log('🧹 Session cookie cleared on logout');
 
       toast({
@@ -168,6 +171,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         description: 'You have been successfully logged out.',
       });
       router.push('/login');
+      router.refresh();
     } catch (error) {
       console.error('Logout error:', error);
       toast({
@@ -212,7 +216,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-14 items-center justify-between gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6 pt-safe">
+        <header className="flex h-14 items-center justify-between gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6">
             <div className="flex items-center gap-2">
                 <SidebarTrigger className="md:hidden" />
                  <Link href="/dashboard" className="flex items-center gap-2 md:hidden">
