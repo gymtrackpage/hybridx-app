@@ -216,7 +216,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-14 items-center justify-between gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6">
+        <header className="flex h-14 items-center justify-between gap-4 border-b bg-card px-4 pt-safe lg:h-[60px] lg:px-6">
             <div className="flex items-center gap-2">
                 <SidebarTrigger className="md:hidden" />
                  <Link href="/dashboard" className="flex items-center gap-2 md:hidden">
