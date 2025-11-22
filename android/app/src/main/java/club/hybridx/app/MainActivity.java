@@ -22,9 +22,9 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Enable edge-to-edge layout for proper safe-area-inset support
-        // This allows the WebView to receive window insets and CSS env(safe-area-inset-*) to work
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        // Let the system handle window insets - content will be placed below status bar automatically
+        // This is more reliable than edge-to-edge mode on Android WebView
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
 
         // Set a solid background color for the status bar
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
