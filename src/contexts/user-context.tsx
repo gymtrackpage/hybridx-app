@@ -196,3 +196,79 @@ export function useUser() {
     }
     return context;
 }
+
+// === PERFORMANCE OPTIMIZED SELECTOR HOOKS ===
+// Use these hooks to subscribe to specific parts of the context
+// This prevents unnecessary re-renders when unrelated state changes
+
+/**
+ * Subscribe to user profile only
+ * Re-renders only when user or trainingPaces change
+ */
+export function useUserProfile() {
+    const context = useContext(UserContext);
+    if (context === undefined) {
+        throw new Error('useUserProfile must be used within a UserProvider');
+    }
+    return useMemo(() => ({
+        user: context.user,
+        trainingPaces: context.trainingPaces,
+        loading: context.loading,
+        refreshData: context.refreshData
+    }), [context.user, context.trainingPaces, context.loading, context.refreshData]);
+}
+
+/**
+ * Subscribe to today's workout only
+ * Re-renders only when todaysWorkout, todaysSession, or program change
+ */
+export function useTodaysWorkout() {
+    const context = useContext(UserContext);
+    if (context === undefined) {
+        throw new Error('useTodaysWorkout must be used within a UserProvider');
+    }
+    return useMemo(() => ({
+        program: context.program,
+        todaysWorkout: context.todaysWorkout,
+        todaysSession: context.todaysSession,
+        loading: context.loading,
+        refreshData: context.refreshData
+    }), [context.program, context.todaysWorkout, context.todaysSession, context.loading, context.refreshData]);
+}
+
+/**
+ * Subscribe to sessions and streaks only
+ * Re-renders only when allSessions or streakData change
+ */
+export function useSessions() {
+    const context = useContext(UserContext);
+    if (context === undefined) {
+        throw new Error('useSessions must be used within a UserProvider');
+    }
+    return useMemo(() => ({
+        allSessions: context.allSessions,
+        streakData: context.streakData,
+        loading: context.loading,
+        refreshData: context.refreshData
+    }), [context.allSessions, context.streakData, context.loading, context.refreshData]);
+}
+
+/**
+ * Subscribe to user and today's workout (common combination)
+ * Re-renders only when user, program, todaysWorkout, or todaysSession change
+ */
+export function useUserAndWorkout() {
+    const context = useContext(UserContext);
+    if (context === undefined) {
+        throw new Error('useUserAndWorkout must be used within a UserProvider');
+    }
+    return useMemo(() => ({
+        user: context.user,
+        program: context.program,
+        todaysWorkout: context.todaysWorkout,
+        todaysSession: context.todaysSession,
+        trainingPaces: context.trainingPaces,
+        loading: context.loading,
+        refreshData: context.refreshData
+    }), [context.user, context.program, context.todaysWorkout, context.todaysSession, context.trainingPaces, context.loading, context.refreshData]);
+}
