@@ -110,13 +110,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAndroid, setIsAndroid] = useState(false);
   
   useEffect(() => {
+    setIsAndroid(Capacitor.getPlatform() === 'android');
+
     const initialize = async () => {
         const auth = await getAuthInstance();
 
         // CRITICAL FIX: Wait for Firebase to restore session from IndexedDB
-        // This prevents the race condition where the layout redirects before auth is ready.
         if (typeof auth.authStateReady === 'function') {
             await auth.authStateReady();
         }
@@ -154,11 +156,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (Capacitor.getPlatform() === 'android') {
         const configureStatusBar = async () => {
             try {
-                // Make the status bar overlap the content (transparent)
-                await StatusBar.setOverlaysWebView({ overlay: true });
-                // Set the style to light (dark icons) or dark (light icons)
+                // FIX: Force NO overlay so content sits below status bar
+                await StatusBar.setOverlaysWebView({ overlay: false });
+                // Set style and background color explicitly
                 await StatusBar.setStyle({ style: Style.Light });
-                // We don't set background color because it's transparent
+                await StatusBar.setBackgroundColor({ color: '#FFFFFF' });
             } catch (e) {
                 console.error("Status bar configuration failed", e);
             }
@@ -178,7 +180,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       const auth = await getAuthInstance();
       await signOut(auth);
 
-      // CRITICAL FIX: Clear session cookie on logout via API
       await fetch('/api/auth/session', {
         method: 'DELETE',
         credentials: 'include',
@@ -200,15 +201,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       });
     }
   };
-  
-  // Platform specific class
-  const isAndroid = Capacitor.getPlatform() === 'android';
 
   return (
       <UserProvider>
         <SidebarProvider>
             <Sidebar>
-            <SidebarHeader className={`p-4 ${isAndroid ? 'pt-12' : ''}`}>
+            <SidebarHeader className="p-4">
                 <Link href="/dashboard" className="flex items-center gap-2">
                 <Logo className="h-8 w-8 text-primary" />
                 <span className="text-lg font-semibold font-headline">HYBRIDX.CLUB</span>
@@ -239,8 +237,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarFooter>
             </Sidebar>
             <SidebarInset>
-            {/* Added mt-4 specifically for Android to give it that extra 16px margin from the top edge */}
-            <header className={`flex h-14 items-center justify-between gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6 ${isAndroid ? 'pt-8 mt-4 h-auto pb-2' : ''}`}>
+            {/* Added mt-4 for 10px+ margin on Android, removed pt-8 since no overlay */}
+            <header className={`flex h-14 items-center justify-between gap-4 border-b bg-card px-4 pt-safe lg:h-[60px] lg:px-6 ${isAndroid ? 'mt-4' : ''}`}>
                 <div className="flex items-center gap-2">
                     <SidebarTrigger className="md:hidden" />
                     <Link href="/dashboard" className="flex items-center gap-2 md:hidden">
