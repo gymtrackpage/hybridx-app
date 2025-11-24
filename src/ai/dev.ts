@@ -10,5 +10,6 @@ import '@/ai/flows/extend-workout.ts';
 import '@/ai/flows/generate-workout.ts';
 import '@/ai/flows/generate-article.ts';
 import '@/ai/flows/adjust-training-plan.ts';
+import '@/ai/flows/analyze-and-adjust.ts'; // Added this
 import '@/ai/flows/strava-description.ts';
 import '@/ai/schemas.ts';

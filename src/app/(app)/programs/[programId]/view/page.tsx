@@ -30,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ProgramCalendarView } from '@/components/program-calendar-view';
 import { ProgramScheduleDialog } from '@/components/program-schedule-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useUser } from '@/contexts/user-context';
 
 export default function ProgramViewPage({ params }: { params: Promise<{ programId: string }> }) {
   const [program, setProgram] = useState<Program | null>(null);
@@ -41,7 +42,8 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  
+  const { refreshData } = useUser();
+
   // Unwrap the params Promise
   const { programId } = use(params);
   
@@ -327,7 +329,10 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
         }
 
         await updateUser(user.id, updateData);
-        
+
+        // Refresh the UserContext to update Today's Workout on dashboard/workout pages
+        await refreshData();
+
         toast({
             title: 'Program Scheduled!',
             description: 'Your new training program has been added to your calendar.',

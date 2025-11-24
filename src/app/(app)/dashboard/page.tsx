@@ -1,12 +1,10 @@
-
 // src/app/(app)/dashboard/page.tsx
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { onAuthStateChanged } from 'firebase/auth';
-import { BarChart, Target, Sparkles, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History } from 'lucide-react';
-import { subWeeks, startOfWeek, isWithinInterval, isFuture, isToday } from 'date-fns';
+import { BarChart, Target, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History } from 'lucide-react';
+import { subWeeks, startOfWeek, isWithinInterval, isFuture } from 'date-fns';
 
 import { dashboardSummary } from '@/ai/flows/dashboard-summary';
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -20,26 +18,23 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, ChartTooltip, CartesianGrid, ChartTooltipContent } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getAuthInstance } from '@/lib/firebase';
-import { getUserClient } from '@/services/user-service-client';
-import { getProgramClient } from '@/services/program-service-client';
-import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getTodaysOneOffSession, getTodaysProgramSession, getOrCreateWorkoutSession, getAllUserSessions, type WorkoutSession } from '@/services/session-service-client';
-import type { User, Program, Workout, RunningWorkout, PlannedRun } from '@/models/types';
+import { getOrCreateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
+import type { Workout, RunningWorkout, PlannedRun } from '@/models/types';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
+import { formatPace } from '@/lib/pace-utils';
 import { useToast } from '@/hooks/use-toast';
 import { CustomWorkoutDialog } from '@/components/custom-workout-dialog';
 import { checkAndScheduleNotification } from '@/utils/notification-scheduler';
 import { useNotificationPermission } from '@/hooks/use-notification-permission';
 import { StatsWidget } from '@/components/stats-widget';
-import { calculateStreakData, type StreakData } from '@/utils/streak-calculator';
 import { Badge } from '@/components/ui/badge';
+import { useUser } from '@/contexts/user-context';
+import { isRunningWorkout } from '@/lib/type-guards';
+import { WeeklyAnalysisDialog } from '@/components/weekly-analysis-dialog'; // Added import
 
 const chartConfig = {
   workouts: {
@@ -49,14 +44,8 @@ const chartConfig = {
 };
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [program, setProgram] = useState<Program | null>(null);
-  const [todaysWorkout, setTodaysWorkout] = useState<{ day: number; workout: Workout | RunningWorkout | null } | null>(null);
-  const [todaysSession, setTodaysSession] = useState<WorkoutSession | null>(null);
+  const { user, program, todaysWorkout, todaysSession, allSessions, streakData, trainingPaces, loading } = useUser();
   const [progressData, setProgressData] = useState<{ week: string, workouts: number }[]>([]);
-  const [streakData, setStreakData] = useState<StreakData>({ currentStreak: 0, longestStreak: 0, totalWorkouts: 0, thisWeekWorkouts: 0, thisMonthWorkouts: 0 });
-  const [trainingPaces, setTrainingPaces] = useState<Record<string, number> | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
   const [isCustomWorkoutDialogOpen, setIsCustomWorkoutDialogOpen] = useState(false);
   const [summary, setSummary] = useState("Here's your plan for today. Let's get it done.");
@@ -67,108 +56,13 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const { isGranted } = useNotificationPermission();
   
-  const fetchCoreData = async (userId: string) => {
-    setLoading(true);
-    try {
-      const currentUser = await getUserClient(userId);
-      setUser(currentUser);
-
-      if (!currentUser) return;
-
-      if (currentUser.runningProfile) {
-          const paces = calculateTrainingPaces(currentUser);
-          setTrainingPaces(paces);
-      }
-
-      const sessions = await getAllUserSessions(userId);
-      const weeklyProgress = generateProgressData(sessions);
-      setProgressData(weeklyProgress);
-
-      const streak = calculateStreakData(sessions);
-      setStreakData(streak);
-
-      let workoutSession;
-      let currentWorkoutInfo;
-      let currentProgram: Program | null = null;
-      const today = new Date();
-      today.setHours(0,0,0,0);
-
-      // Priority 1: Check for a one-off or custom workout for today
-      const oneOffSession = await getTodaysOneOffSession(userId, today);
-
-      if (oneOffSession) {
-          workoutSession = oneOffSession;
-          currentWorkoutInfo = {
-              day: 0,
-              workout: oneOffSession.workoutDetails as Workout,
-          };
-      } else if (currentUser.programId && currentUser.startDate) {
-          if (currentUser.customProgram) {
-            currentProgram = { id: currentUser.programId, workouts: currentUser.customProgram } as Program;
-          } else {
-            currentProgram = await getProgramClient(currentUser.programId);
-          }
-          setProgram(currentProgram);
-
-          // Priority 2: Check for an existing program session (which could be swapped)
-          const programSession = await getTodaysProgramSession(userId, today);
-          
-          if (programSession && programSession.workoutDetails) {
-              workoutSession = programSession;
-              // Use the details from the session itself, which will reflect any swaps
-              currentWorkoutInfo = {
-                  day: getWorkoutForDay(currentProgram!, currentUser.startDate, today).day,
-                  workout: programSession.workoutDetails,
-              };
-          } else if (currentProgram) {
-              // Priority 3: No session exists, so create one based on the original program schedule
-              const scheduledWorkoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, today);
-              if (scheduledWorkoutInfo.workout) {
-                 workoutSession = await getOrCreateWorkoutSession(userId, currentProgram.id, today, scheduledWorkoutInfo.workout);
-                 currentWorkoutInfo = scheduledWorkoutInfo;
-              }
-          }
-      }
-
-      if (currentWorkoutInfo) {
-        setTodaysWorkout(currentWorkoutInfo);
-      }
-      if (workoutSession) {
-        setTodaysSession(workoutSession);
-      }
-
-    } catch (error) {
-        console.error("Error fetching core dashboard data:", error);
-    } finally {
-        setLoading(false);
-    }
-  };
-  
+  // Calculate progress data when allSessions changes
   useEffect(() => {
-    const initialize = async () => {
-        const auth = await getAuthInstance();
-        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-        if (firebaseUser) {
-            fetchCoreData(firebaseUser.uid);
-        } else {
-            setUser(null);
-            setProgram(null);
-            setTodaysWorkout(null);
-            setLoading(false);
-        }
-        });
-        return unsubscribe;
-    };
-
-    let unsubscribe: () => void;
-    initialize().then(unsub => unsubscribe = unsub);
-
-    return () => {
-        if (unsubscribe) {
-            unsubscribe();
-        }
-    };
-  }, []);
+    if (allSessions.length > 0) {
+        const weeklyProgress = generateProgressData(allSessions);
+        setProgressData(weeklyProgress);
+    }
+  }, [allSessions]);
 
   // Effect for AI Dashboard Summary
   useEffect(() => {
@@ -194,7 +88,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (user && todaysWorkout?.workout && todaysSession) {
       setWorkoutSummaryLoading(true);
-      const exercisesForSummary = todaysWorkout.workout.programType === 'running'
+      const exercisesForSummary = isRunningWorkout(todaysWorkout.workout)
         ? (todaysWorkout.workout as RunningWorkout).runs.map(r => r.type).join(', ')
         : (todaysWorkout.workout as Workout).exercises.map(e => e.name).join(', ');
 
@@ -219,7 +113,7 @@ export default function DashboardPage() {
   // Effect to schedule daily notifications
   useEffect(() => {
     if (isGranted && todaysWorkout?.workout && user) {
-      const exercisesForNotification = todaysWorkout.workout.programType === 'running'
+      const exercisesForNotification = isRunningWorkout(todaysWorkout.workout)
         ? (todaysWorkout.workout as RunningWorkout).runs.map(r => r.type).join(', ')
         : (todaysWorkout.workout as Workout).exercises.map(e => e.name).join(', ');
 
@@ -319,21 +213,25 @@ export default function DashboardPage() {
     );
   }
 
-  const isRunningProgram = todaysWorkout?.workout?.programType === 'running';
+  const isProgramRunning = isRunningWorkout(todaysWorkout?.workout as any);
   const isStravaConnected = user?.strava?.accessToken;
 
   return (
     <>
       <div className="space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-            Welcome back, {user?.firstName || 'Athlete'}
-          </h1>
-          {summaryLoading ? (
-              <Skeleton className="h-5 w-2/3" />
-          ) : (
-              <p className="text-muted-foreground">{summary}</p>
-          )}
+        <div className="space-y-1 flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+                Welcome back, {user?.firstName || 'Athlete'}
+              </h1>
+              {summaryLoading ? (
+                  <Skeleton className="h-5 w-2/3" />
+              ) : (
+                  <p className="text-muted-foreground">{summary}</p>
+              )}
+            </div>
+            
+            {user && <WeeklyAnalysisDialog userId={user.id} />}
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -342,7 +240,7 @@ export default function DashboardPage() {
               <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <CardTitle className="flex items-center gap-2">
-                      {isRunningProgram ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
+                      {isProgramRunning ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
                       {program && todaysWorkout?.workout && !programStartsInFuture ? `Today's Workout (Day ${todaysWorkout.day})` : "Today's Plan"}
                     </CardTitle>
                   </div>
@@ -375,7 +273,7 @@ export default function DashboardPage() {
                   <div className="space-y-4">
                       <Separator />
                       <ul className="space-y-4 pt-4">
-                        {isRunningProgram ? (
+                        {isProgramRunning ? (
                             (todaysWorkout.workout as RunningWorkout).runs.map((run: PlannedRun) => (
                                 <li key={run.description}>
                                   <p className="font-medium">{run.description}</p>

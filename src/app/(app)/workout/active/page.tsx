@@ -1,8 +1,7 @@
-// src/app/workout/active/page.tsx
+// src/app/(app)/workout/active/page.tsx
 'use client';
 
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
 import { Flag, Loader2, CalendarDays, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
@@ -13,27 +12,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { getAuthInstance } from '@/lib/firebase';
-import { getUserClient } from '@/services/user-service-client';
-import { getProgramClient } from '@/services/program-service-client';
-import { getWorkoutForDay } from '@/lib/workout-utils';
-import { getTodaysOneOffSession, getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession, getTodaysProgramSession } from '@/services/session-service-client';
-import type { Workout, RunningWorkout, User, Exercise, Program } from '@/models/types';
-import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
+import { updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
+import type { Workout, RunningWorkout, Exercise, PlannedRun } from '@/models/types';
+import { formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
 import { Separator } from '@/components/ui/separator';
 import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
+import { useUser } from '@/contexts/user-context';
+import { isRunningWorkout, isRunningProgram as isRunningProgramGuard } from '@/lib/type-guards';
+import { ExerciseHistory } from '@/components/exercise-history';
+import { convertDistanceInText, convertTextWithUnits } from '@/lib/unit-conversion';
 
 // Lazy load the modal component
 const WorkoutCompleteModal = lazy(() => import('@/components/workout-complete-modal'));
 
 export default function ActiveWorkoutPage() {
+  const { user, todaysWorkout, todaysSession, trainingPaces, loading, refreshData } = useUser();
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [workoutInfo, setWorkoutInfo] = useState<{ day: number, workout: Workout | RunningWorkout | null } | null>(null);
   const [extendedExercises, setExtendedExercises] = useState<Exercise[]>([]);
-  const [user, setUser] = useState<User | null>(null);
-  const [trainingPaces, setTrainingPaces] = useState<Record<string, number> | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isExtending, setIsExtending] = useState(false);
   const [notes, setNotes] = useState('');
   const [summaryText, setSummaryText] = useState('');
@@ -41,100 +38,36 @@ export default function ActiveWorkoutPage() {
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   
-  const today = useMemo(() => {
-      const d = new Date();
-      d.setHours(0,0,0,0);
-      return d;
-  }, []);
+  // Sync context state to local state
+  useEffect(() => {
+      if (!loading) {
+          setWorkoutInfo(todaysWorkout);
+          setSession(todaysSession);
+          if (todaysSession) {
+             setNotes(todaysSession.notes || '');
+             if (!['one-off-ai', 'custom-workout'].includes(todaysSession.programId)) {
+                  setExtendedExercises(todaysSession.extendedExercises || []);
+             }
+          }
+      }
+  }, [todaysWorkout, todaysSession, loading]);
 
-  const fetchWorkoutData = async (firebaseUser: any) => {
-    const currentUser = await getUserClient(firebaseUser.uid);
-    setUser(currentUser);
 
-    if (currentUser) {
-        if (currentUser.runningProfile) {
-            const paces = calculateTrainingPaces(currentUser);
-            setTrainingPaces(paces);
-        }
-
-        let workoutSession;
-        let currentWorkoutInfo;
-
-        // Priority 1: Check for a one-off or custom workout for today
-        const oneOffSession = await getTodaysOneOffSession(firebaseUser.uid, today);
-
-        if (oneOffSession) {
-            workoutSession = oneOffSession;
-            currentWorkoutInfo = {
-                day: 0,
-                workout: oneOffSession.workoutDetails as Workout,
-            };
-        } else if (currentUser.programId && currentUser.startDate) {
-            // Priority 2: Check for an existing program session (which could be swapped)
-            const programSession = await getTodaysProgramSession(firebaseUser.uid, today);
-            
-            if (programSession && programSession.workoutDetails) {
-                workoutSession = programSession;
-                // Use the details from the session itself, which will reflect any swaps
-                const mockProgram: Program = { 
-                    id: programSession.programId, 
-                    workouts: [programSession.workoutDetails], 
-                    name: '', 
-                    description: '', 
-                    programType: 'hyrox' // Default or infer from workoutDetails
-                };
-
-                currentWorkoutInfo = {
-                    day: getWorkoutForDay(
-                        mockProgram, 
-                        currentUser.startDate, 
-                        today
-                    ).day,
-                    workout: programSession.workoutDetails,
-                };
-            } else {
-                // Priority 3: No session exists, so create one based on the original program schedule
-                const program = await getProgramClient(currentUser.programId);
-                if (program) {
-                    const scheduledWorkoutInfo = getWorkoutForDay(program, currentUser.startDate, today);
-                    if (scheduledWorkoutInfo.workout) {
-                       workoutSession = await getOrCreateWorkoutSession(firebaseUser.uid, program.id, today, scheduledWorkoutInfo.workout);
-                       currentWorkoutInfo = scheduledWorkoutInfo;
-                    }
-                }
-            }
-        }
-        
-        // We check if currentWorkoutInfo is valid before setting state
-        if (currentWorkoutInfo) {
-           setWorkoutInfo(currentWorkoutInfo);
-        } else {
-           setWorkoutInfo(null);
-        }
-
-        if (workoutSession) {
-            setSession(workoutSession);
-            setNotes(workoutSession.notes || '');
-            if (!['one-off-ai', 'custom-workout'].includes(workoutSession.programId)) {
-                 setExtendedExercises(workoutSession.extendedExercises || []);
-            }
-
-        }
-    }
-  };
-
-  const loadWorkoutSummary = async (currentUser: User, workoutInfo: { workout: Workout | RunningWorkout }, session: WorkoutSession) => {
-    if (!workoutInfo?.workout || summaryText) return; // Don't reload if already loaded
+  const loadWorkoutSummary = async () => {
+    if (!user || !workoutInfo?.workout || summaryText || summaryLoading) return; 
 
     setSummaryLoading(true);
 
     try {
-      const exercisesForSummary = workoutInfo.workout.programType === 'running'
-        ? (workoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ')
-        : [...(workoutInfo.workout as Workout).exercises, ...(session.extendedExercises || [])].map(e => e.name).join(', ');
+      let exercisesForSummary = '';
+      if (isRunningWorkout(workoutInfo.workout)) {
+          exercisesForSummary = (workoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ');
+      } else {
+          exercisesForSummary = [...(workoutInfo.workout as Workout).exercises, ...extendedExercises].map(e => e.name).join(', ');
+      }
 
       const summaryPromise = workoutSummary({
-        userName: currentUser.firstName,
+        userName: user.firstName,
         workoutTitle: workoutInfo.workout.title,
         exercises: exercisesForSummary,
       });
@@ -152,39 +85,16 @@ export default function ActiveWorkoutPage() {
     }
   };
 
-  useEffect(() => {
-    const initialize = async () => {
-        setLoading(true);
-        const auth = await getAuthInstance();
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        if (firebaseUser) {
-           await fetchWorkoutData(firebaseUser);
-        }
-        setLoading(false);
-        });
-        return unsubscribe;
-    };
-    
-    let unsubscribe: () => void;
-    initialize().then(unsub => unsubscribe = unsub);
-
-    return () => {
-        if (unsubscribe) {
-            unsubscribe();
-        }
-    };
-  }, [today]);
 
   useEffect(() => {
     if (user && workoutInfo && session && !loading) {
       const timer = setTimeout(() => {
-        // Cast workoutInfo to the type expected by loadWorkoutSummary (where workout is not null)
-        loadWorkoutSummary(user, workoutInfo as { workout: Workout | RunningWorkout }, session);
+        loadWorkoutSummary();
       }, 100);
 
       return () => clearTimeout(timer);
     }
-  }, [user, workoutInfo, session, loading, summaryText]);
+  }, [user, workoutInfo, session, loading]); // Remove summaryText dependency to prevent loops, checks internal state
 
   const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
     if (!session) return;
@@ -201,7 +111,11 @@ export default function ActiveWorkoutPage() {
 
     setIsExtending(true);
     try {
-        const originalExercises = (workoutInfo.workout as Workout).exercises || [];
+        let originalExercises: Exercise[] = [];
+        if (!isRunningWorkout(workoutInfo.workout)) {
+            originalExercises = (workoutInfo.workout as Workout).exercises || [];
+        }
+
         const result = await extendWorkout({
             workoutTitle: workoutInfo.workout.title,
             workoutType: workoutInfo.workout.programType,
@@ -242,6 +156,7 @@ export default function ActiveWorkoutPage() {
           programType: workoutInfo.workout.programType
       });
       setIsCompleteModalOpen(true);
+      refreshData();
   }
 
   const handleSkipWorkout = async () => {
@@ -266,16 +181,12 @@ export default function ActiveWorkoutPage() {
           skipped: true
       });
       setIsCompleteModalOpen(true);
+      refreshData();
   }
 
   const handleLinkSuccess = async () => {
     setIsLinkerOpen(false);
-    setLoading(true);
-    const auth = await getAuthInstance();
-    if (auth.currentUser) {
-        await fetchWorkoutData(auth.currentUser);
-    }
-    setLoading(false);
+    await refreshData();
     setIsCompleteModalOpen(true);
   };
 
@@ -309,11 +220,8 @@ export default function ActiveWorkoutPage() {
   const week = Math.ceil(day / 7);
   const dayOfWeek = day % 7 === 0 ? 7 : day % 7;
 
-  const originalWorkoutItems = workout.programType === 'running' 
-    ? (workout as RunningWorkout).runs 
-    : (workout as Workout).exercises;
   
-  const isRunningProgram = workout.programType === 'running';
+  const isRunning = isRunningWorkout(workout);
   const isOneOffWorkout = ['one-off-ai', 'custom-workout'].includes(session.programId);
   const canExtendWorkout = workout.programType === 'hyrox' || isOneOffWorkout;
 
@@ -337,7 +245,7 @@ export default function ActiveWorkoutPage() {
                             </div>
                         ) : (
                             <div className="relative">
-                                {workoutInfo.workout.title}
+                                {workout.title}
                                 <span className="text-xs text-muted-foreground/60 ml-2">⏳ Enhancing...</span>
                             </div>
                         )}
@@ -360,7 +268,7 @@ export default function ActiveWorkoutPage() {
                     )}
                 </div>
                 
-                {isRunningProgram && !trainingPaces && (
+                {isRunning && !trainingPaces && (
                     <div className="p-4 border border-yellow-400 bg-yellow-50 rounded-md text-yellow-800 flex items-start gap-3">
                         <AlertTriangle className="h-5 w-5 mt-0.5" />
                         <div>
@@ -381,34 +289,48 @@ export default function ActiveWorkoutPage() {
                 </Button>
                 
                 <div>
-                    <h3 className="text-base font-semibold mb-3">{isRunningProgram ? 'Runs:' : 'Exercises:'}</h3>
+                    <h3 className="text-base font-semibold mb-3">{isRunning ? 'Runs:' : 'Exercises:'}</h3>
                     <div className="space-y-3">
-                        {originalWorkoutItems.map((item, index) => {
-                            const key = isRunningProgram ? (item as any).description : (item as any).name;
-                            return (
-                                <Card key={`${key}-${index}`}>
-                                    <CardContent className="py-4 px-2 flex items-center gap-4">
-                                        <div className="flex-1">
-                                            {isRunningProgram ? (
-                                                <>
-                                                    <p className="font-semibold">{(item as any).description}</p>
-                                                    {trainingPaces && (
-                                                        <p className="text-sm text-muted-foreground">
-                                                            Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[(item as any).paceZone])}</span> / km
-                                                        </p>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <p className="font-semibold">{(item as any).name}</p>
-                                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{(item as any).details}</p>
-                                                </>
-                                            )}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            );
-                        })}
+                        {isRunning ? (
+                             (workout as RunningWorkout).runs.map((run: PlannedRun, index) => {
+                                 const description = user?.unitSystem === 'imperial' 
+                                    ? convertDistanceInText(run.description, 'imperial')
+                                    : run.description;
+
+                                 return (
+                                    <Card key={`${run.description}-${index}`}>
+                                        <CardContent className="py-4 px-2 flex items-center gap-4">
+                                            <div className="flex-1">
+                                                <p className="font-semibold">{description}</p>
+                                                {trainingPaces && (
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                 );
+                             })
+                        ) : (
+                             (workout as Workout).exercises.map((ex: Exercise, index) => {
+                                 const details = user?.unitSystem ? convertTextWithUnits(ex.details, user.unitSystem) : ex.details;
+                                 return (
+                                    <Card key={`${ex.name}-${index}`}>
+                                        <CardContent className="py-4 px-2 flex items-center gap-4">
+                                            <div className="flex-1">
+                                                <p className="font-semibold">{ex.name}</p>
+                                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{details}</p>
+                                                
+                                                {/* Exercise History Component */}
+                                                {user && <ExerciseHistory userId={user.id} exerciseName={ex.name} />}
+                                                
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                 );
+                            })
+                        )}
                         
                         {extendedExercises.length > 0 && (
                             <>
@@ -418,13 +340,15 @@ export default function ActiveWorkoutPage() {
                         )}
                         
                         {extendedExercises.map((item, index) => {
-                            const key = (item as any).name;
+                            const details = user?.unitSystem ? convertTextWithUnits(item.details, user.unitSystem) : item.details;
                             return (
-                                <Card key={`${key}-${index}`} className="border-dashed border-primary/50">
+                                <Card key={`${item.name}-${index}`} className="border-dashed border-primary/50">
                                     <CardContent className="py-4 px-2 flex items-center gap-4">
                                         <div className="flex-1">
-                                            <p className="font-semibold">{(item as any).name}</p>
-                                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{(item as any).details}</p>
+                                            <p className="font-semibold">{item.name}</p>
+                                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{details}</p>
+                                            {/* History for extended exercises too */}
+                                            {user && <ExerciseHistory userId={user.id} exerciseName={item.name} />}
                                         </div>
                                     </CardContent>
                                 </Card>

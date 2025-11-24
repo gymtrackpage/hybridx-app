@@ -36,6 +36,9 @@ import { OfflineIndicator } from '@/components/offline-indicator';
 import { getUserClient } from '@/services/user-service-client';
 import { addMonths, isAfter } from 'date-fns';
 import { MobileNavBar, primaryNavItems, secondaryNavItems, adminNavItems } from '@/components/mobile-nav-bar';
+import { UserProvider } from '@/contexts/user-context';
+import { Capacitor } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
 
 
 function NavMenu() {
@@ -146,6 +149,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     let unsubscribe: () => void;
     initialize().then(unsub => unsubscribe = unsub);
+    
+    // Status Bar handling for Android
+    if (Capacitor.getPlatform() === 'android') {
+        const configureStatusBar = async () => {
+            try {
+                // Make the status bar overlap the content (transparent)
+                await StatusBar.setOverlaysWebView({ overlay: true });
+                // Set the style to light (dark icons) or dark (light icons)
+                await StatusBar.setStyle({ style: Style.Light });
+                // We don't set background color because it's transparent
+            } catch (e) {
+                console.error("Status bar configuration failed", e);
+            }
+        };
+        configureStatusBar();
+    }
 
     return () => {
         if (unsubscribe) {
@@ -181,72 +200,78 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       });
     }
   };
+  
+  // Platform specific class
+  const isAndroid = Capacitor.getPlatform() === 'android';
 
   return (
-    <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader className="p-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <Logo className="h-8 w-8 text-primary" />
-            <span className="text-lg font-semibold font-headline">HYBRIDX.CLUB</span>
-          </Link>
-        </SidebarHeader>
-        <SidebarContent>
-            <NavMenu />
-        </SidebarContent>
-        <SidebarFooter>
-          <div className="flex w-full items-center justify-between p-2">
-            {loading ? (
-                <div className="flex items-center gap-2 w-full">
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                    <Skeleton className="h-4 w-24" />
-                </div>
-            ) : user ? (
-                <div className="flex items-center gap-2 overflow-hidden">
-                    <Avatar className="h-8 w-8">
-                        <AvatarFallback>{user.email?.[0].toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <span className="truncate text-sm font-medium">{user.email}</span>
-                </div>
-            ) : null}
-            <Button variant="ghost" size="icon" onClick={handleLogout} className="flex-shrink-0">
-                <LogOut className="h-5 w-5" />
-            </Button>
-          </div>
-        </SidebarFooter>
-      </Sidebar>
-      <SidebarInset>
-        <header className="flex h-14 items-center justify-between gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6">
-            <div className="flex items-center gap-2">
-                <SidebarTrigger className="md:hidden" />
-                 <Link href="/dashboard" className="flex items-center gap-2 md:hidden">
-                    <Logo className="h-6 w-6 text-primary" />
-                    <span className="font-bold text-md font-headline">HYBRIDX.CLUB</span>
+      <UserProvider>
+        <SidebarProvider>
+            <Sidebar>
+            <SidebarHeader className={`p-4 ${isAndroid ? 'pt-12' : ''}`}>
+                <Link href="/dashboard" className="flex items-center gap-2">
+                <Logo className="h-8 w-8 text-primary" />
+                <span className="text-lg font-semibold font-headline">HYBRIDX.CLUB</span>
                 </Link>
+            </SidebarHeader>
+            <SidebarContent>
+                <NavMenu />
+            </SidebarContent>
+            <SidebarFooter>
+                <div className="flex w-full items-center justify-between p-2">
+                {loading ? (
+                    <div className="flex items-center gap-2 w-full">
+                        <Skeleton className="h-8 w-8 rounded-full" />
+                        <Skeleton className="h-4 w-24" />
+                    </div>
+                ) : user ? (
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        <Avatar className="h-8 w-8">
+                            <AvatarFallback>{user.email?.[0].toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <span className="truncate text-sm font-medium">{user.email}</span>
+                    </div>
+                ) : null}
+                <Button variant="ghost" size="icon" onClick={handleLogout} className="flex-shrink-0">
+                    <LogOut className="h-5 w-5" />
+                </Button>
+                </div>
+            </SidebarFooter>
+            </Sidebar>
+            <SidebarInset>
+            {/* Added mt-4 specifically for Android to give it that extra 16px margin from the top edge */}
+            <header className={`flex h-14 items-center justify-between gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6 ${isAndroid ? 'pt-8 mt-4 h-auto pb-2' : ''}`}>
+                <div className="flex items-center gap-2">
+                    <SidebarTrigger className="md:hidden" />
+                    <Link href="/dashboard" className="flex items-center gap-2 md:hidden">
+                        <Logo className="h-6 w-6 text-primary" />
+                        <span className="font-bold text-md font-headline">HYBRIDX.CLUB</span>
+                    </Link>
+                </div>
+                <div className="w-full flex-1">
+                    {/* Header content can go here, like breadcrumbs */}
+                </div>
+            </header>
+
+            {/* Offline Indicator */}
+            <OfflineIndicator />
+
+            <main className="flex-1 overflow-auto p-4 lg:p-6 pb-28 md:pb-6">{children}</main>
+
+            {/* PWA Banner for Desktop */}
+            <div className="hidden md:block">
+                <InstallPwaBanner />
             </div>
-            <div className="w-full flex-1">
-                {/* Header content can go here, like breadcrumbs */}
+
+            {/* Notification Permission Prompt */}
+            <NotificationPermissionPrompt />
+
+            {/* Mobile Nav Bar for smaller screens */}
+            <div className="md:hidden">
+                <MobileNavBar />
             </div>
-        </header>
-
-        {/* Offline Indicator */}
-        <OfflineIndicator />
-
-        <main className="flex-1 overflow-auto p-4 lg:p-6 pb-28 md:pb-6">{children}</main>
-
-        {/* PWA Banner for Desktop */}
-        <div className="hidden md:block">
-            <InstallPwaBanner />
-        </div>
-
-        {/* Notification Permission Prompt */}
-        <NotificationPermissionPrompt />
-
-         {/* Mobile Nav Bar for smaller screens */}
-        <div className="md:hidden">
-          <MobileNavBar />
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+            </SidebarInset>
+        </SidebarProvider>
+    </UserProvider>
   );
 }

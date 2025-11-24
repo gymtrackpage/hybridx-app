@@ -30,6 +30,8 @@ export interface UserRunningProfile {
 
 export type SubscriptionStatus = 'trial' | 'active' | 'canceled' | 'expired' | 'incomplete' | 'paused';
 
+export type UnitSystem = 'metric' | 'imperial';
+
 export interface User {
   id: string;
   email: string;
@@ -38,6 +40,7 @@ export interface User {
   experience: 'beginner' | 'intermediate' | 'advanced';
   frequency: '3' | '4' | '5+';
   goal: 'strength' | 'endurance' | 'hybrid';
+  unitSystem?: UnitSystem; // Preference for metric vs imperial
   programId?: string | null;
   startDate?: Date;
   personalRecords?: PersonalRecords;

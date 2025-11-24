@@ -22,18 +22,19 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Let the system handle window insets - content will be placed below status bar automatically
-        // This is more reliable than edge-to-edge mode on Android WebView
+        // *** CRITICAL FIX FOR OVERLAP ***
+        // Set decorFitsSystemWindows to TRUE. This tells Android NOT to draw content
+        // behind the system bars (status bar, nav bar). The system will handle
+        // the window insets and push your WebView down automatically.
         WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
 
-        // Set a solid background color for the status bar
+        // Set a solid background color for the status bar to match your app's header
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            // Use white to match your app header
-            getWindow().setStatusBarColor(Color.WHITE);
+            getWindow().setStatusBarColor(Color.WHITE); 
             getWindow().setNavigationBarColor(Color.WHITE);
         }
 
-        // Set dark icons for the white status bar
+        // Set dark icons for the status bar so they are visible on the white background
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             View decorView = getWindow().getDecorView();
             int flags = decorView.getSystemUiVisibility();
@@ -111,6 +112,8 @@ public class MainActivity extends BridgeActivity {
                     "    const { StatusBar } = window.Capacitor.Plugins || {};" +
                     "    if (StatusBar) {" +
                     "      await StatusBar.setOverlaysWebView({ overlay: false });" +
+                    "      await StatusBar.setBackgroundColor({ color: '#FFFFFF' });" +
+                    "      await StatusBar.setStyle({ style: 'LIGHT' });" +
                     "      console.log('✅ StatusBar overlay disabled');" +
                     "    }" +
                     "  } catch(e) { console.log('StatusBar plugin not ready yet'); }" +

@@ -6,7 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Loader2, Link as LinkIcon, Bell } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Bell, Settings } from 'lucide-react';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 
 import { Button } from '@/components/ui/button';
@@ -21,11 +21,13 @@ import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient, updateUser } from '@/services/user-service-client';
 import type { User, PersonalRecords, UserRunningProfile } from '@/models/types';
 import { timeStringToSeconds, secondsToTimeString } from '@/lib/pace-utils';
+import { Label } from '@/components/ui/label';
 
 const profileFormSchema = z.object({
   firstName: z.string().min(1, 'First name is required.'),
   lastName: z.string().min(1, 'Last name is required.'),
   experience: z.enum(['beginner', 'intermediate', 'advanced']),
+  unitSystem: z.enum(['metric', 'imperial']).optional(),
 });
 
 const recordsFormSchema = z.object({
@@ -91,6 +93,7 @@ export default function ProfilePage() {
                     firstName: currentUser.firstName,
                     lastName: currentUser.lastName,
                     experience: currentUser.experience,
+                    unitSystem: currentUser.unitSystem || 'metric',
                 });
                 recordsForm.reset({
                     backSquat: currentUser.personalRecords?.backSquat || '',
@@ -176,7 +179,12 @@ export default function ProfilePage() {
   const handleProfileSubmit = async (data: ProfileFormData) => {
     if (!user) return;
     try {
-      await updateUser(user.id, data);
+      await updateUser(user.id, {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          experience: data.experience,
+          unitSystem: data.unitSystem
+      });
       toast({ title: 'Success', description: 'Your profile has been updated.' });
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to update profile.', variant: 'destructive' });
@@ -320,7 +328,7 @@ export default function ProfilePage() {
             <form onSubmit={profileForm.handleSubmit(handleProfileSubmit)}>
               <CardHeader>
                 <CardTitle>Personal Information</CardTitle>
-                <CardDescription>Update your name and experience level.</CardDescription>
+                <CardDescription>Update your name, experience level, and unit preferences.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <FormField control={profileForm.control} name="firstName" render={({ field }) => (
@@ -334,6 +342,12 @@ export default function ProfilePage() {
                     <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="beginner" /></FormControl><FormLabel className="font-normal">Beginner</FormLabel></FormItem>
                     <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="intermediate" /></FormControl><FormLabel className="font-normal">Intermediate</FormLabel></FormItem>
                     <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="advanced" /></FormControl><FormLabel className="font-normal">Advanced</FormLabel></FormItem>
+                  </RadioGroup></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={profileForm.control} name="unitSystem" render={({ field }) => (
+                  <FormItem><FormLabel>Unit System</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value || 'metric'} className="space-y-1">
+                    <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="metric" /></FormControl><FormLabel className="font-normal">Metric (kg / km)</FormLabel></FormItem>
+                    <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="imperial" /></FormControl><FormLabel className="font-normal">Imperial (lbs / mi)</FormLabel></FormItem>
                   </RadioGroup></FormControl><FormMessage /></FormItem>
                 )} />
               </CardContent>
