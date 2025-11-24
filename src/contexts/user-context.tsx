@@ -11,6 +11,7 @@ import { getWorkoutForDay } from '@/lib/workout-utils';
 import type { User, Program, Workout, RunningWorkout } from '@/models/types';
 import { calculateTrainingPaces } from '@/lib/pace-utils';
 import { calculateStreakData, type StreakData } from '@/utils/streak-calculator';
+import { OfflineCache } from '@/utils/offline-cache';
 
 interface UserContextType {
     user: User | null;
@@ -41,6 +42,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         if (!auth.currentUser) return;
 
         setLoading(true);
+
+        // Try to load cached data first for offline-first experience
+        const cachedWorkout = OfflineCache.getTodaysWorkout();
+        const cachedSession = OfflineCache.getTodaysSession();
+
+        if (cachedWorkout) {
+            setTodaysWorkout(cachedWorkout);
+        }
+        if (cachedSession) {
+            setTodaysSession(cachedSession);
+        }
+
         try {
             const userId = auth.currentUser.uid;
             const currentUser = await getUserClient(userId);
@@ -57,6 +70,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             setAllSessions(sessions);
             const streak = calculateStreakData(sessions);
             setStreakData(streak);
+
+            // Update sync time
+            OfflineCache.updateSyncTime();
 
             let workoutSession;
             let currentWorkoutInfo;
@@ -104,11 +120,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
             if (currentWorkoutInfo) {
                 setTodaysWorkout(currentWorkoutInfo);
+                // Cache today's workout for offline access
+                OfflineCache.saveTodaysWorkout(currentWorkoutInfo);
             } else {
                 setTodaysWorkout(null);
             }
             if (workoutSession) {
                 setTodaysSession(workoutSession);
+                // Cache today's session for offline access
+                OfflineCache.saveTodaysSession(workoutSession);
             } else {
                 setTodaysSession(null);
             }

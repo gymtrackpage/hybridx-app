@@ -8,10 +8,13 @@ const CACHE_KEYS = {
   SESSIONS: 'cached_sessions',
   PROGRAM: 'cached_program',
   TODAYS_WORKOUT: 'cached_todays_workout',
+  TODAYS_SESSION: 'cached_todays_session',
   LAST_SYNC: 'last_sync_time',
+  PENDING_UPDATES: 'pending_updates',
 };
 
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+const TODAYS_WORKOUT_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days for today's workout (never expires while relevant)
 
 interface CacheEntry<T> {
   data: T;
@@ -189,5 +192,140 @@ export const OfflineCache = {
 
   clearProgram(): void {
     localStorage.removeItem(CACHE_KEYS.PROGRAM);
+  },
+
+  /**
+   * Save today's workout - CRITICAL for offline access
+   * Never expires on the same day
+   */
+  saveTodaysWorkout(workout: any, date: Date = new Date()): void {
+    try {
+      const entry: CacheEntry<any> = {
+        data: {
+          workout,
+          date: date.toISOString().split('T')[0], // Store just the date
+        },
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(CACHE_KEYS.TODAYS_WORKOUT, JSON.stringify(entry));
+    } catch (error) {
+      console.error('Error caching today\'s workout:', error);
+    }
+  },
+
+  /**
+   * Get today's workout from cache
+   * Returns null if cached workout is not for today
+   */
+  getTodaysWorkout(): any | null {
+    try {
+      const cached = localStorage.getItem(CACHE_KEYS.TODAYS_WORKOUT);
+      if (!cached) return null;
+
+      const entry: CacheEntry<any> = JSON.parse(cached);
+      const today = new Date().toISOString().split('T')[0];
+
+      // Check if cached workout is for today
+      if (entry.data.date !== today) {
+        this.clearTodaysWorkout();
+        return null;
+      }
+
+      return entry.data.workout;
+    } catch (error) {
+      console.error('Error reading cached today\'s workout:', error);
+      return null;
+    }
+  },
+
+  clearTodaysWorkout(): void {
+    localStorage.removeItem(CACHE_KEYS.TODAYS_WORKOUT);
+  },
+
+  /**
+   * Save today's session for offline access
+   */
+  saveTodaysSession(session: WorkoutSession): void {
+    try {
+      const entry: CacheEntry<any> = {
+        data: {
+          ...session,
+          workoutDate: session.workoutDate instanceof Date ? session.workoutDate.toISOString() : session.workoutDate,
+          startedAt: session.startedAt instanceof Date ? session.startedAt.toISOString() : session.startedAt,
+          finishedAt: session.finishedAt instanceof Date ? session.finishedAt?.toISOString() : session.finishedAt,
+        },
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(CACHE_KEYS.TODAYS_SESSION, JSON.stringify(entry));
+    } catch (error) {
+      console.error('Error caching today\'s session:', error);
+    }
+  },
+
+  /**
+   * Get today's session from cache
+   */
+  getTodaysSession(): WorkoutSession | null {
+    try {
+      const cached = localStorage.getItem(CACHE_KEYS.TODAYS_SESSION);
+      if (!cached) return null;
+
+      const entry: CacheEntry<any> = JSON.parse(cached);
+      const today = new Date().toISOString().split('T')[0];
+      const sessionDate = new Date(entry.data.workoutDate).toISOString().split('T')[0];
+
+      // Only return if it's for today
+      if (sessionDate !== today) {
+        this.clearTodaysSession();
+        return null;
+      }
+
+      return {
+        ...entry.data,
+        workoutDate: new Date(entry.data.workoutDate),
+        startedAt: new Date(entry.data.startedAt),
+        finishedAt: entry.data.finishedAt ? new Date(entry.data.finishedAt) : undefined,
+      };
+    } catch (error) {
+      console.error('Error reading cached today\'s session:', error);
+      return null;
+    }
+  },
+
+  clearTodaysSession(): void {
+    localStorage.removeItem(CACHE_KEYS.TODAYS_SESSION);
+  },
+
+  /**
+   * Queue an update for when connection is restored
+   */
+  queuePendingUpdate(update: { type: string; data: any; timestamp: number }): void {
+    try {
+      const pending = this.getPendingUpdates();
+      pending.push(update);
+      localStorage.setItem(CACHE_KEYS.PENDING_UPDATES, JSON.stringify(pending));
+    } catch (error) {
+      console.error('Error queuing pending update:', error);
+    }
+  },
+
+  /**
+   * Get all pending updates
+   */
+  getPendingUpdates(): Array<{ type: string; data: any; timestamp: number }> {
+    try {
+      const cached = localStorage.getItem(CACHE_KEYS.PENDING_UPDATES);
+      return cached ? JSON.parse(cached) : [];
+    } catch (error) {
+      console.error('Error reading pending updates:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Clear all pending updates (after successful sync)
+   */
+  clearPendingUpdates(): void {
+    localStorage.removeItem(CACHE_KEYS.PENDING_UPDATES);
   },
 };
