@@ -1,5 +1,6 @@
 // src/components/exercise-history.tsx
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState, useEffect } from 'react';
 import { getLastPerformedExercise } from '@/lib/workout-utils';
@@ -26,7 +27,7 @@ export function ExerciseHistory({ userId, exerciseName }: ExerciseHistoryProps) 
                     setLastPerformed(result);
                 }
             } catch (error) {
-                console.error("Error fetching exercise history:", error);
+                logger.error("Error fetching exercise history:", error);
             } finally {
                 if (isMounted) {
                     setLoading(false);

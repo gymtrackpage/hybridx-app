@@ -1,4 +1,5 @@
 'use client';
+import { logger } from '@/lib/logger';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useFieldArray, useForm } from 'react-hook-form';
@@ -124,7 +125,7 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
       onSuccess();
       form.reset();
     } catch (error) {
-      console.error('Failed to save program:', error);
+      logger.error('Failed to save program:', error);
       toast({
         title: 'Error',
         description: 'Failed to save the program.',

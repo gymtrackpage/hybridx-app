@@ -1,4 +1,5 @@
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,9 +16,9 @@ export function AuthDiagnostics() {
     try {
       const result = await diagnoseAuth();
       setDiagnosis(result);
-      console.log('🔍 Auth Diagnosis:', result);
+      logger.log('🔍 Auth Diagnosis:', result);
     } catch (error) {
-      console.error('Diagnosis failed:', error);
+      logger.error('Diagnosis failed:', error);
       setDiagnosis({ error: (error as Error).message });
     } finally {
       setLoading(false);
@@ -32,7 +33,7 @@ export function AuthDiagnostics() {
     const setupListener = async () => {
         const auth = await getAuthInstance();
         const unsubscribe = onAuthStateChanged(auth, (user) => {
-            console.log('🔄 Auth state changed, re-running diagnosis...');
+            logger.log('🔄 Auth state changed, re-running diagnosis...');
             runDiagnosis();
         });
         return unsubscribe;

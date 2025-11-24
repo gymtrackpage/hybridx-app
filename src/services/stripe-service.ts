@@ -1,4 +1,5 @@
 
+import { logger } from '@/lib/logger';
 // src/services/stripe-service.ts
 'use server';
 
@@ -63,7 +64,7 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
              };
              await getAdminDb().collection('users').doc(userId).set(newUser);
              user = { id: userId, ...newUser };
-             console.log(`Created missing Firestore document for user ${userId} during checkout.`);
+             logger.log(`Created missing Firestore document for user ${userId} during checkout.`);
         }
 
         let customerId = user.stripeCustomerId;
@@ -81,7 +82,7 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
                 customerId = customer.id;
                 await updateUserAdmin(userId, { stripeCustomerId: customerId });
             } catch (err: any) {
-                console.error('Error creating Stripe customer:', err);
+                logger.error('Error creating Stripe customer:', err);
                 throw new Error(`Failed to create Stripe customer: ${err.message}`);
             }
         }
@@ -105,12 +106,12 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
 
             return { url: session.url };
         } catch (err: any) {
-            console.error('Error creating Stripe checkout session:', err);
+            logger.error('Error creating Stripe checkout session:', err);
             throw new Error(`Failed to create Stripe checkout session: ${err.message}`);
         }
 
     } catch (error: any) {
-        console.error('An error occurred in createCheckoutSession:', error);
+        logger.error('An error occurred in createCheckoutSession:', error);
         
         if (error.message && error.message.includes('Could not refresh access token')) {
             throw new Error('Could not authenticate with Firebase. Please check server permissions.');
@@ -137,7 +138,7 @@ export async function pauseSubscription(userId: string): Promise<void> {
         });
         await updateUserAdmin(userId, { subscriptionStatus: 'paused' });
     } catch (error: any) {
-        console.error(`Failed to pause subscription for user ${userId}:`, error);
+        logger.error(`Failed to pause subscription for user ${userId}:`, error);
         throw new Error('Could not pause subscription. Please try again.');
     }
 }
@@ -163,7 +164,7 @@ export async function cancelSubscription(userId: string): Promise<void> {
             cancellation_effective_date: cancelAt ? new Date(cancelAt * 1000) : undefined
         });
     } catch (error: any) {
-        console.error(`Failed to cancel subscription for user ${userId}:`, error);
+        logger.error(`Failed to cancel subscription for user ${userId}:`, error);
         throw new Error('Could not cancel subscription. Please try again.');
     }
 }

@@ -1,4 +1,5 @@
 // src/services/strava-service.ts
+import { logger } from '@/lib/logger';
 'use server';
 
 import { getAuth } from 'firebase-admin/auth';
@@ -72,7 +73,7 @@ async function getValidAccessToken(userId: string): Promise<string> {
     
     // Check if token is expired or expires soon (5 minutes buffer)
     if (!expiresAt || expiresAt.getTime() - now.getTime() < 300000) {
-        console.log(`Token expired or expiring soon for user ${userId}, refreshing...`);
+        logger.log(`Token expired or expiring soon for user ${userId}, refreshing...`);
         if (!stravaTokens.refreshToken) {
             throw new Error('Refresh token not available. Please reconnect your Strava account.');
         }
@@ -97,11 +98,11 @@ async function getValidAccessToken(userId: string): Promise<string> {
             };
 
             await updateUserAdmin(userId, { strava: newTokens });
-            console.log(`Successfully refreshed Strava token for user ${userId}`);
+            logger.log(`Successfully refreshed Strava token for user ${userId}`);
             return newTokens.accessToken;
             
         } catch (error: any) {
-            console.error('Failed to refresh Strava token:', {
+            logger.error('Failed to refresh Strava token:', {
                 userId,
                 error: error.response?.data || error.message,
                 status: error.response?.status

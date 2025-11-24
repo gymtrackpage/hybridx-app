@@ -1,5 +1,6 @@
 // src/components/strava-upload-button.tsx
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -77,7 +78,7 @@ export function StravaUploadButton({
       });
 
     } catch (error: any) {
-      console.error('Upload error:', error);
+      logger.error('Upload error:', error);
       toast({
         title: 'Upload Failed',
         description: error.message || 'Failed to upload activity to Strava.',

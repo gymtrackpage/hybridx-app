@@ -1,4 +1,5 @@
 // src/services/session-service-client.ts
+import { logger } from '@/lib/logger';
 // This file contains functions for client-side components. NO 'use server' here.
 
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy, getDoc, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
@@ -176,7 +177,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
     }
 
     if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai' && programId !== 'custom-workout' ))) {
-        console.log(`Overwriting existing workout session for date: ${workoutDate.toISOString()}`);
+        logger.log(`Overwriting existing workout session for date: ${workoutDate.toISOString()}`);
     }
 
     const newSessionData = {

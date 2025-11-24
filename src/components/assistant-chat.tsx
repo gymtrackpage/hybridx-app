@@ -1,4 +1,5 @@
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState, useRef, useEffect } from 'react';
 import { CornerDownLeft, Loader2, Sparkles } from 'lucide-react';
@@ -134,7 +135,7 @@ export function AssistantChat() {
       };
       setMessages((prev) => [...prev, aiResponse]);
     } catch (error) {
-      console.error("Error calling training assistant:", error);
+      logger.error("Error calling training assistant:", error);
       const errorResponse: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',

@@ -1,4 +1,5 @@
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ export default function AppError({
 
   useEffect(() => {
     // Log the error to an error reporting service
-    console.error('App error boundary caught:', error);
+    logger.error('App error boundary caught:', error);
   }, [error]);
 
   const handleBack = () => {

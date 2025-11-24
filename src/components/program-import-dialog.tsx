@@ -1,5 +1,6 @@
 
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState } from 'react';
 import Papa from 'papaparse';
@@ -74,7 +75,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
       complete: (results) => {
         if (results.errors.length > 0) {
           setError('Failed to parse CSV. Please check the file format and headers.');
-          console.error('CSV parsing errors:', results.errors);
+          logger.error('CSV parsing errors:', results.errors);
           setIsLoading(false);
           return;
         }
@@ -94,7 +95,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
       },
       error: (err) => {
         setError('An error occurred while reading the file.');
-        console.error(err);
+        logger.error(err);
         setIsLoading(false);
       },
     });
@@ -192,7 +193,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
       onSuccess();
       resetState();
     } catch (err) {
-      console.error('Failed to import program:', err);
+      logger.error('Failed to import program:', err);
       toast({
         title: 'Error',
         description: 'Failed to save the imported program.',

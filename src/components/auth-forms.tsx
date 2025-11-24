@@ -1,5 +1,6 @@
 
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState } from 'react';
 import Link from 'next/link';
@@ -79,7 +80,7 @@ export function LoginForm() {
                 return true; // Indicate that a redirect is happening
             }
         } catch (error) {
-            console.error('Failed to parse pending Strava auth:', error);
+            logger.error('Failed to parse pending Strava auth:', error);
         }
         
         localStorage.removeItem('pending-strava-auth');
@@ -103,7 +104,7 @@ export function LoginForm() {
       const userCredential = await signInWithEmailAndPassword(auth, values.email, values.password);
 
       // CRITICAL FIX: Always create session cookie on login for server-side auth
-      console.log('🍪 Creating session cookie after login...');
+      logger.log('🍪 Creating session cookie after login...');
       const idToken = await userCredential.user.getIdToken(true);
       if (idToken) {
           const sessionResponse = await fetch('/api/auth/session', {
@@ -114,7 +115,7 @@ export function LoginForm() {
           });
 
           if (sessionResponse.ok) {
-            console.log('✅ Session cookie created successfully');
+            logger.log('✅ Session cookie created successfully');
 
             // Wait for cookie to be properly set before navigation
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -122,7 +123,7 @@ export function LoginForm() {
             // Force Next.js to recognize the new session cookie
             router.refresh();
           } else {
-            console.error('❌ Failed to create session cookie:', await sessionResponse.text());
+            logger.error('❌ Failed to create session cookie:', await sessionResponse.text());
           }
       }
 
@@ -136,7 +137,7 @@ export function LoginForm() {
           router.push('/dashboard');
       }
     } catch (error: any) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       let description = 'An unexpected error occurred. Please try again.';
       if (error.code === AuthErrorCodes.INVALID_LOGIN_CREDENTIALS) {
         description = 'Invalid email or password. Please try again.';
@@ -272,7 +273,7 @@ export function SignupForm() {
       const user = userCredential.user;
 
       // 1.5. CRITICAL FIX: Create session cookie immediately after signup
-      console.log('🍪 Creating session cookie after signup...');
+      logger.log('🍪 Creating session cookie after signup...');
       const idToken = await user.getIdToken(true);
       if (idToken) {
         const sessionResponse = await fetch('/api/auth/session', {
@@ -283,7 +284,7 @@ export function SignupForm() {
         });
 
         if (sessionResponse.ok) {
-          console.log('✅ Session cookie created successfully');
+          logger.log('✅ Session cookie created successfully');
 
           // Wait for cookie to be properly set before navigation
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -291,7 +292,7 @@ export function SignupForm() {
           // Force Next.js to recognize the new session cookie
           router.refresh();
         } else {
-          console.error('❌ Failed to create session cookie:', await sessionResponse.text());
+          logger.error('❌ Failed to create session cookie:', await sessionResponse.text());
         }
       }
 
@@ -333,7 +334,7 @@ export function SignupForm() {
             }
           }
         } catch (adjustError) {
-          console.error('Program adjustment failed:', adjustError);
+          logger.error('Program adjustment failed:', adjustError);
           // Continue without adjustment if it fails
         }
       }
@@ -362,7 +363,7 @@ export function SignupForm() {
       router.push('/dashboard');
 
     } catch (error: any) {
-        console.error('Signup error:', error);
+        logger.error('Signup error:', error);
         let description = "An unexpected error occurred. Please try again.";
         if (error.code === AuthErrorCodes.EMAIL_EXISTS) {
             description = "This email address is already in use.";

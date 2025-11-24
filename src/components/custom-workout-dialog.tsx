@@ -1,4 +1,5 @@
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -82,7 +83,7 @@ export function CustomWorkoutDialog({ isOpen, setIsOpen, userId }: CustomWorkout
       form.reset();
       router.push('/workout/active');
     } catch (error) {
-      console.error('Failed to create custom workout:', error);
+      logger.error('Failed to create custom workout:', error);
       toast({
         title: 'Error',
         description: 'Could not log your custom workout. Please try again.',

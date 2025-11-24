@@ -2,6 +2,7 @@
 'use client';
 
 import { User, WorkoutSession, Program } from '@/models/types';
+import { logger } from '@/lib/logger';
 
 const CACHE_KEYS = {
   USER: 'cached_user',
@@ -36,7 +37,7 @@ export const OfflineCache = {
       };
       localStorage.setItem(CACHE_KEYS.USER, JSON.stringify(entry));
     } catch (error) {
-      console.error('Error caching user:', error);
+      logger.error('Error caching user:', error);
     }
   },
 
@@ -58,7 +59,7 @@ export const OfflineCache = {
 
       return entry.data;
     } catch (error) {
-      console.error('Error reading cached user:', error);
+      logger.error('Error reading cached user:', error);
       return null;
     }
   },
@@ -79,7 +80,7 @@ export const OfflineCache = {
       };
       localStorage.setItem(CACHE_KEYS.SESSIONS, JSON.stringify(entry));
     } catch (error) {
-      console.error('Error caching sessions:', error);
+      logger.error('Error caching sessions:', error);
     }
   },
 
@@ -106,7 +107,7 @@ export const OfflineCache = {
         finishedAt: s.finishedAt ? new Date(s.finishedAt) : undefined,
       }));
     } catch (error) {
-      console.error('Error reading cached sessions:', error);
+      logger.error('Error reading cached sessions:', error);
       return null;
     }
   },
@@ -122,7 +123,7 @@ export const OfflineCache = {
       };
       localStorage.setItem(CACHE_KEYS.PROGRAM, JSON.stringify(entry));
     } catch (error) {
-      console.error('Error caching program:', error);
+      logger.error('Error caching program:', error);
     }
   },
 
@@ -143,7 +144,7 @@ export const OfflineCache = {
 
       return entry.data;
     } catch (error) {
-      console.error('Error reading cached program:', error);
+      logger.error('Error reading cached program:', error);
       return null;
     }
   },
@@ -209,7 +210,7 @@ export const OfflineCache = {
       };
       localStorage.setItem(CACHE_KEYS.TODAYS_WORKOUT, JSON.stringify(entry));
     } catch (error) {
-      console.error('Error caching today\'s workout:', error);
+      logger.error('Error caching today\'s workout:', error);
     }
   },
 
@@ -233,7 +234,7 @@ export const OfflineCache = {
 
       return entry.data.workout;
     } catch (error) {
-      console.error('Error reading cached today\'s workout:', error);
+      logger.error('Error reading cached today\'s workout:', error);
       return null;
     }
   },
@@ -258,7 +259,7 @@ export const OfflineCache = {
       };
       localStorage.setItem(CACHE_KEYS.TODAYS_SESSION, JSON.stringify(entry));
     } catch (error) {
-      console.error('Error caching today\'s session:', error);
+      logger.error('Error caching today\'s session:', error);
     }
   },
 
@@ -287,7 +288,7 @@ export const OfflineCache = {
         finishedAt: entry.data.finishedAt ? new Date(entry.data.finishedAt) : undefined,
       };
     } catch (error) {
-      console.error('Error reading cached today\'s session:', error);
+      logger.error('Error reading cached today\'s session:', error);
       return null;
     }
   },
@@ -305,7 +306,7 @@ export const OfflineCache = {
       pending.push(update);
       localStorage.setItem(CACHE_KEYS.PENDING_UPDATES, JSON.stringify(pending));
     } catch (error) {
-      console.error('Error queuing pending update:', error);
+      logger.error('Error queuing pending update:', error);
     }
   },
 
@@ -317,7 +318,7 @@ export const OfflineCache = {
       const cached = localStorage.getItem(CACHE_KEYS.PENDING_UPDATES);
       return cached ? JSON.parse(cached) : [];
     } catch (error) {
-      console.error('Error reading pending updates:', error);
+      logger.error('Error reading pending updates:', error);
       return [];
     }
   },

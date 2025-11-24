@@ -1,4 +1,5 @@
 
+import { logger } from '@/lib/logger';
 // src/services/user-service.ts
 'use server';
 
@@ -59,11 +60,11 @@ export async function getUser(userId: string): Promise<User | null> {
         return user;
     } else {
         // The user exists in Auth but not in Firestore. Let's create their document.
-        console.warn(`User document not found for UID: ${userId}. Creating one now.`);
+        logger.warn(`User document not found for UID: ${userId}. Creating one now.`);
         try {
             const authUser = await getAuth().getUser(userId);
             if (!authUser.email) {
-                console.error(`User ${userId} does not have an email in Firebase Auth.`);
+                logger.error(`User ${userId} does not have an email in Firebase Auth.`);
                 return null;
             }
 
@@ -87,7 +88,7 @@ export async function getUser(userId: string): Promise<User | null> {
             };
 
             await docRef.set(newUser);
-            console.log(`Successfully created Firestore document for user ${userId}`);
+            logger.log(`Successfully created Firestore document for user ${userId}`);
             
             return {
                 id: userId,
@@ -95,7 +96,7 @@ export async function getUser(userId: string): Promise<User | null> {
             };
 
         } catch (error) {
-            console.error(`Failed to create Firestore document for user ${userId}:`, error);
+            logger.error(`Failed to create Firestore document for user ${userId}:`, error);
             return null;
         }
     }

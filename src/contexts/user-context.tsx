@@ -12,6 +12,7 @@ import type { User, Program, Workout, RunningWorkout } from '@/models/types';
 import { calculateTrainingPaces } from '@/lib/pace-utils';
 import { calculateStreakData, type StreakData } from '@/utils/streak-calculator';
 import { OfflineCache } from '@/utils/offline-cache';
+import { logger } from '@/lib/logger';
 
 interface UserContextType {
     user: User | null;
@@ -134,7 +135,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             }
 
         } catch (error) {
-            console.error("Error fetching user data:", error);
+            logger.error("Error fetching user data:", error);
         } finally {
             setLoading(false);
         }

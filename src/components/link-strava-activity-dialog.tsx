@@ -1,5 +1,6 @@
 // src/components/link-strava-activity-dialog.tsx
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState, useEffect } from 'react';
 import {
@@ -73,7 +74,7 @@ export function LinkStravaActivityDialog({ isOpen, setIsOpen, session, onLinkSuc
             setActivities(fetchedActivities);
             
         } catch (error: any) {
-            console.error('❌ Error in fetchStravaActivities:', error);
+            logger.error('❌ Error in fetchStravaActivities:', error);
             toast({
                 title: 'Error Loading Activities',
                 description: error.message,

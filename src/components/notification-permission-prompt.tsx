@@ -1,4 +1,5 @@
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useEffect, useState } from 'react';
 import { Bell, X } from 'lucide-react';
@@ -37,7 +38,7 @@ export function NotificationPermissionPrompt() {
           headers: { 'Content-Type': 'application/json' },
         });
       } catch (error) {
-        console.error('Error scheduling notifications:', error);
+        logger.error('Error scheduling notifications:', error);
       }
     }
     setIsVisible(false);

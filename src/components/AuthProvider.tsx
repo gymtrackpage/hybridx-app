@@ -1,4 +1,5 @@
 'use client';
+import { logger } from '@/lib/logger';
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
@@ -29,10 +30,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const auth = await getAuthInstance();
 
         // Set persistence on mount
-        await setPersistence(auth, browserLocalPersistence).catch(console.error);
+        await setPersistence(auth, browserLocalPersistence).catch(logger.error);
 
         unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-          console.log('🔐 [AuthProvider] Auth state changed:', firebaseUser?.email || 'null');
+          logger.log('🔐 [AuthProvider] Auth state changed:', firebaseUser?.email || 'null');
 
           if (firebaseUser) {
             // User is signed in - ensure session cookie exists
@@ -43,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
               if (!hasSessionCookie) {
                 // No valid session cookie - create one
-                console.log('🍪 [AuthProvider] No session cookie found, creating one...');
+                logger.log('🍪 [AuthProvider] No session cookie found, creating one...');
                 const idToken = await firebaseUser.getIdToken();
 
                 const response = await fetch('/api/auth/session', {
@@ -54,30 +55,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 });
 
                 if (response.ok) {
-                  console.log('✅ [AuthProvider] Session cookie created');
+                  logger.log('✅ [AuthProvider] Session cookie created');
                 } else {
-                  console.error('❌ [AuthProvider] Failed to create session cookie');
+                  logger.error('❌ [AuthProvider] Failed to create session cookie');
                 }
               } else {
-                console.log('✅ [AuthProvider] Session cookie already exists');
+                logger.log('✅ [AuthProvider] Session cookie already exists');
               }
 
               setUser(firebaseUser);
             } catch (error) {
-              console.error('❌ [AuthProvider] Error syncing session:', error);
+              logger.error('❌ [AuthProvider] Error syncing session:', error);
               // Still set the user even if session sync fails
               setUser(firebaseUser);
             }
           } else {
             // User is signed out
-            console.log('🚪 [AuthProvider] User signed out');
+            logger.log('🚪 [AuthProvider] User signed out');
             setUser(null);
           }
 
           setLoading(false);
         });
       } catch (error) {
-        console.error('❌ [AuthProvider] Setup error:', error);
+        logger.error('❌ [AuthProvider] Setup error:', error);
         setLoading(false);
       }
     };

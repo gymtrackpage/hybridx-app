@@ -1,5 +1,6 @@
 
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -125,7 +126,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
-                console.log('✅ [Layout] User authenticated:', currentUser.email);
+                logger.log('✅ [Layout] User authenticated:', currentUser.email);
                 setUser(currentUser);
 
                 const appUser = await getUserClient(currentUser.uid);
@@ -141,7 +142,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     }
                 }
             } else {
-                console.log('❌ [Layout] No authenticated user, redirecting to login');
+                logger.log('❌ [Layout] No authenticated user, redirecting to login');
                 router.push('/login');
             }
             setLoading(false);
@@ -162,7 +163,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 await StatusBar.setStyle({ style: Style.Light });
                 await StatusBar.setBackgroundColor({ color: '#FFFFFF' });
             } catch (e) {
-                console.error("Status bar configuration failed", e);
+                logger.error("Status bar configuration failed", e);
             }
         };
         configureStatusBar();
@@ -184,7 +185,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         method: 'DELETE',
         credentials: 'include',
       });
-      console.log('🧹 Session cookie cleared on logout');
+      logger.log('🧹 Session cookie cleared on logout');
 
       toast({
         title: 'Logged Out',
@@ -193,7 +194,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       router.push('/login');
       router.refresh();
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('Logout error:', error);
       toast({
         title: 'Error',
         description: 'Failed to log out. Please try again.',

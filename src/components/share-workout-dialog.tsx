@@ -1,4 +1,5 @@
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState, useRef } from 'react';
 import { Share2, Download, X, Copy, Check } from 'lucide-react';
@@ -61,7 +62,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
         });
       });
     } catch (error) {
-      console.error('Error generating image:', error);
+      logger.error('Error generating image:', error);
       toast({
         title: 'Error',
         description: 'Failed to generate image. Please try again.',
@@ -92,7 +93,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
           url: 'https://hybridx.club',
         });
       } catch (error) {
-        console.error('Error sharing:', error);
+        logger.error('Error sharing:', error);
       }
     } else {
       handleCopyText();

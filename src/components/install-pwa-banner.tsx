@@ -1,5 +1,6 @@
 
 'use client';
+import { logger } from '@/lib/logger';
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -53,9 +54,9 @@ export function InstallPwaBanner() {
     await installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     if (outcome === 'accepted') {
-      console.log('User accepted the A2HS prompt');
+      logger.log('User accepted the A2HS prompt');
     } else {
-      console.log('User dismissed the A2HS prompt');
+      logger.log('User dismissed the A2HS prompt');
     }
     setInstallPrompt(null);
     setIsVisible(false);
