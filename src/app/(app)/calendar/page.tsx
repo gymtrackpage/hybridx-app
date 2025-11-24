@@ -1,11 +1,10 @@
 // src/app/(app)/calendar/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { Badge } from '@/components/ui/badge';
-import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getAuthInstance } from '@/lib/firebase';
@@ -16,13 +15,16 @@ import { getAllUserSessions, getOrCreateWorkoutSession, updateWorkoutSession } f
 import { swapWorkouts } from '@/services/session-service'; // Import the new server action
 import type { User, Program, Workout, WorkoutSession, RunningWorkout, Exercise } from '@/models/types';
 import { addDays, format, isSameDay, parseISO, isValid, isToday, startOfDay } from 'date-fns';
-import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
 import { Button } from '@/components/ui/button';
 import { Link as LinkIcon, Activity, Clock, MapPin, Forward, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatTextWithBullets } from '@/utils/text-formatter';
 import { Textarea } from '@/components/ui/textarea';
 import { useDebouncedCallback } from 'use-debounce';
+
+// Lazy load heavy components
+const Calendar = lazy(() => import('@/components/ui/calendar').then(mod => ({ default: mod.Calendar })));
+const LinkStravaActivityDialog = lazy(() => import('@/components/link-strava-activity-dialog').then(mod => ({ default: mod.LinkStravaActivityDialog })));
 
 interface WorkoutEvent {
   date: Date;
@@ -372,28 +374,30 @@ export default function CalendarPage() {
               <Skeleton className="h-[300px] w-full" />
             </div>
           ) : (
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              className="rounded-md"
-              components={{
-                DayContent: ({ date }) => {
-                  const event = workoutEvents.find(e => isSameDay(e.date, date));
-                  if (event && !event.isRestDay) {
-                    return (
-                      <div className="relative h-full w-full flex items-center justify-center">
-                        <span className="relative z-10">{date.getDate()}</span>
-                        <div
-                          className={`absolute bottom-1 h-1.5 w-1.5 rounded-full ${event.color}`}
-                        />
-                      </div>
-                    );
-                  }
-                  return <span>{date.getDate()}</span>;
-                },
-              }}
-            />
+            <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                className="rounded-md"
+                components={{
+                  DayContent: ({ date }) => {
+                    const event = workoutEvents.find(e => isSameDay(e.date, date));
+                    if (event && !event.isRestDay) {
+                      return (
+                        <div className="relative h-full w-full flex items-center justify-center">
+                          <span className="relative z-10">{date.getDate()}</span>
+                          <div
+                            className={`absolute bottom-1 h-1.5 w-1.5 rounded-full ${event.color}`}
+                          />
+                        </div>
+                      );
+                    }
+                    return <span>{date.getDate()}</span>;
+                  },
+                }}
+              />
+            </Suspense>
           )}
         </CardContent>
       </Card>
@@ -565,12 +569,14 @@ export default function CalendarPage() {
       )}
     </div>
     {sessionToLink && (
-        <LinkStravaActivityDialog
-            isOpen={isLinkerOpen}
-            setIsOpen={setIsLinkerOpen}
-            session={sessionToLink}
-            onLinkSuccess={handleLinkSuccess}
-        />
+        <Suspense fallback={null}>
+          <LinkStravaActivityDialog
+              isOpen={isLinkerOpen}
+              setIsOpen={setIsLinkerOpen}
+              session={sessionToLink}
+              onLinkSuccess={handleLinkSuccess}
+          />
+        </Suspense>
     )}
     </>
   );

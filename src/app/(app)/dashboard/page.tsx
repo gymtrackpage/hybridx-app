@@ -1,7 +1,7 @@
 // src/app/(app)/dashboard/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { BarChart, Target, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval, isFuture } from 'date-fns';
@@ -27,14 +27,16 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { formatPace } from '@/lib/pace-utils';
 import { useToast } from '@/hooks/use-toast';
-import { CustomWorkoutDialog } from '@/components/custom-workout-dialog';
 import { checkAndScheduleNotification } from '@/utils/notification-scheduler';
 import { useNotificationPermission } from '@/hooks/use-notification-permission';
 import { StatsWidget } from '@/components/stats-widget';
 import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/contexts/user-context';
 import { isRunningWorkout } from '@/lib/type-guards';
-import { WeeklyAnalysisDialog } from '@/components/weekly-analysis-dialog'; // Added import
+
+// Lazy load heavy AI-powered components
+const WeeklyAnalysisDialog = lazy(() => import('@/components/weekly-analysis-dialog').then(mod => ({ default: mod.WeeklyAnalysisDialog })));
+const CustomWorkoutDialog = lazy(() => import('@/components/custom-workout-dialog').then(mod => ({ default: mod.CustomWorkoutDialog })));
 
 const chartConfig = {
   workouts: {
@@ -230,8 +232,12 @@ export default function DashboardPage() {
                   <p className="text-muted-foreground">{summary}</p>
               )}
             </div>
-            
-            {user && <WeeklyAnalysisDialog userId={user.id} />}
+
+            {user && (
+              <Suspense fallback={null}>
+                <WeeklyAnalysisDialog userId={user.id} />
+              </Suspense>
+            )}
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -403,11 +409,13 @@ export default function DashboardPage() {
         <StatsWidget streakData={streakData} loading={loading} />
       </div>
       {user && (
-         <CustomWorkoutDialog
+        <Suspense fallback={null}>
+          <CustomWorkoutDialog
             isOpen={isCustomWorkoutDialogOpen}
             setIsOpen={setIsCustomWorkoutDialogOpen}
             userId={user.id}
          />
+        </Suspense>
       )}
     </>
   );

@@ -1,7 +1,7 @@
 // src/app/(app)/history/page.tsx
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { format } from 'date-fns';
 import { Search, Filter, Calendar, CheckCircle2, XCircle, Clock, Trophy, Dumbbell, Route, ChevronDown, ChevronUp } from 'lucide-react';
@@ -21,7 +21,9 @@ import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import Link from 'next/link';
 import { formatExerciseDetails } from '@/utils/text-formatter';
 import type { Workout, RunningWorkout, Exercise, PlannedRun } from '@/models/types';
-import { ShareWorkoutDialog } from '@/components/share-workout-dialog';
+
+// Lazy load ShareWorkoutDialog - only loads when user has completed workouts
+const ShareWorkoutDialog = lazy(() => import('@/components/share-workout-dialog').then(mod => ({ default: mod.ShareWorkoutDialog })));
 
 export default function WorkoutHistoryPage() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
@@ -513,7 +515,9 @@ export default function WorkoutHistoryPage() {
 
                       <div className="flex md:flex-col gap-2 md:items-end">
                         {isCompleted && (
-                          <ShareWorkoutDialog session={session} />
+                          <Suspense fallback={<div className="h-10 w-10" />}>
+                            <ShareWorkoutDialog session={session} />
+                          </Suspense>
                         )}
                       </div>
                     </div>
