@@ -15,8 +15,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { getAuthInstance } from '@/lib/firebase';
-import { getAllUserSessions, type WorkoutSession } from '@/services/session-service-client';
+import { getPaginatedUserSessions, type WorkoutSession, type PaginatedSessions } from '@/services/session-service-client';
 import { cn } from '@/lib/utils';
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import Link from 'next/link';
 import { formatExerciseDetails } from '@/utils/text-formatter';
 import type { Workout, RunningWorkout, Exercise, PlannedRun } from '@/models/types';
@@ -25,6 +26,9 @@ import { ShareWorkoutDialog } from '@/components/share-workout-dialog';
 export default function WorkoutHistoryPage() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'skipped'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'hyrox' | 'running'>('all');
@@ -49,8 +53,10 @@ export default function WorkoutHistoryPage() {
       const unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (user) {
           try {
-            const userSessions = await getAllUserSessions(user.uid);
-            setSessions(userSessions);
+            const result = await getPaginatedUserSessions(user.uid, 20);
+            setSessions(result.sessions);
+            setLastDoc(result.lastDoc);
+            setHasMore(result.hasMore);
           } catch (error) {
             console.error('Error fetching workout history:', error);
           } finally {
@@ -72,6 +78,25 @@ export default function WorkoutHistoryPage() {
       }
     };
   }, []);
+
+  const loadMore = async () => {
+    const auth = await getAuthInstance();
+    const user = auth.currentUser;
+
+    if (!user || !lastDoc || !hasMore || loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const result = await getPaginatedUserSessions(user.uid, 20, lastDoc);
+      setSessions(prev => [...prev, ...result.sessions]);
+      setLastDoc(result.lastDoc);
+      setHasMore(result.hasMore);
+    } catch (error) {
+      console.error('Error loading more sessions:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const filteredAndSortedSessions = useMemo(() => {
     let filtered = sessions;
@@ -496,6 +521,20 @@ export default function WorkoutHistoryPage() {
                 </Card>
               );
             })}
+
+            {/* Load More Button */}
+            {hasMore && !loading && (
+              <div className="flex justify-center pt-4">
+                <Button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  variant="outline"
+                  size="lg"
+                >
+                  {loadingMore ? 'Loading...' : 'Load More Workouts'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

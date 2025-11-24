@@ -1,13 +1,20 @@
 // src/services/session-service-client.ts
 // This file contains functions for client-side components. NO 'use server' here.
 
-import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy, getDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy, getDoc, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db, getAuthInstance } from '@/lib/firebase';
 import type { WorkoutSession, Workout, RunningWorkout, Exercise, ProgramType } from '@/models/types';
 import type { StravaActivity } from './strava-service';
 
 // Re-export WorkoutSession type for convenience
 export type { WorkoutSession };
+
+// Pagination result type
+export interface PaginatedSessions {
+    sessions: WorkoutSession[];
+    lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+    hasMore: boolean;
+}
 
 function fromFirestore(doc: any): WorkoutSession {
     const data = doc.data();
@@ -42,6 +49,55 @@ export async function getAllUserSessions(userId: string): Promise<WorkoutSession
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(fromFirestore);
+}
+
+/**
+ * Fetch user sessions with pagination
+ * @param userId - The user ID
+ * @param pageSize - Number of sessions per page (default: 20)
+ * @param lastDoc - Last document from previous page for pagination
+ * @returns Paginated sessions with cursor for next page
+ */
+export async function getPaginatedUserSessions(
+    userId: string,
+    pageSize: number = 20,
+    lastDoc?: QueryDocumentSnapshot<DocumentData> | null
+): Promise<PaginatedSessions> {
+    let q = query(
+        sessionsCollection,
+        where('userId', '==', userId),
+        orderBy('workoutDate', 'desc'),
+        limit(pageSize + 1) // Fetch one extra to check if there are more
+    );
+
+    // If we have a cursor, start after it
+    if (lastDoc) {
+        q = query(
+            sessionsCollection,
+            where('userId', '==', userId),
+            orderBy('workoutDate', 'desc'),
+            startAfter(lastDoc),
+            limit(pageSize + 1)
+        );
+    }
+
+    const snapshot = await getDocs(q);
+    const docs = snapshot.docs;
+
+    // Check if there are more results
+    const hasMore = docs.length > pageSize;
+
+    // Get only the requested page size
+    const sessions = docs.slice(0, pageSize).map(fromFirestore);
+
+    // Store the last document for next page
+    const newLastDoc = sessions.length > 0 ? docs[pageSize - 1] : null;
+
+    return {
+        sessions,
+        lastDoc: hasMore ? newLastDoc : null,
+        hasMore
+    };
 }
 
 export async function getTodaysOneOffSession(userId: string, workoutDate: Date): Promise<WorkoutSession | null> {
