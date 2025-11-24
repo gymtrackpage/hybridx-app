@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import type { SVGProps } from 'react';
+import { cn } from '@/lib/utils';
 
 export function Logo({ className }: { className?: string }) {
   // The className is passed to control size via Tailwind (e.g., h-8 w-8)
@@ -11,7 +12,7 @@ export function Logo({ className }: { className?: string }) {
       alt="HYBRIDX.CLUB Logo" 
       width={100} // Intrinsic width, actual size controlled by className
       height={100} // Intrinsic height, actual size controlled by className
-      className={className}
+      className={cn("dark:invert", className)}
       priority // Preload logo as it's likely LCP
     />
   );
