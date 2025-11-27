@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meet Your AI Coach - Personalized Training That Adapts to You</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Grotesk:wght@700&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            font-family: 'Inter', Arial, sans-serif;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+        }
+        .header {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .header img {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 15px;
+        }
+        .header h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #ffffff;
+            font-size: 28px;
+            margin: 0 0 10px 0;
+        }
+        .header p {
+            color: #e0e7ff;
+            margin: 0;
+            font-size: 14px;
+        }
+        .content {
+            padding: 40px 30px;
+            color: #333333;
+            line-height: 1.6;
+        }
+        .content h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 24px;
+            color: #18181b;
+            margin-top: 0;
+        }
+        .content h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 20px;
+            color: #18181b;
+            margin-top: 30px;
+        }
+        .highlight-box {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-left: 4px solid #f59e0b;
+            padding: 25px;
+            margin: 25px 0;
+            border-radius: 8px;
+        }
+        .highlight-box h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #18181b;
+            font-size: 18px;
+            margin-top: 0;
+        }
+        .highlight-box p {
+            margin-bottom: 0;
+        }
+        .feature-grid {
+            margin: 30px 0;
+        }
+        .feature-item {
+            background-color: #f9fafb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid #e5e7eb;
+        }
+        .feature-item h4 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #18181b;
+            font-size: 16px;
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+        }
+        .feature-item p {
+            margin: 0;
+            font-size: 14px;
+            color: #52525b;
+        }
+        .emoji {
+            font-size: 24px;
+            margin-right: 12px;
+        }
+        .button-container {
+            text-align: center;
+            margin: 35px 0;
+        }
+        .button {
+            background-color: #E6B31E;
+            color: #18181b;
+            padding: 16px 32px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 700;
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+        }
+        .button-secondary {
+            background-color: #6366f1;
+            color: #ffffff;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            margin: 10px 5px;
+        }
+        .example-box {
+            background-color: #f0fdf4;
+            border: 2px solid #86efac;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        .example-box strong {
+            color: #15803d;
+            font-weight: 600;
+        }
+        .example-box p {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        .tip-box {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        .tip-box strong {
+            color: #1e40af;
+            font-weight: 600;
+        }
+        .steps-container {
+            margin: 25px 0;
+        }
+        .step {
+            display: flex;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+        .step-number {
+            background-color: #6366f1;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        .step-content h4 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 16px;
+            margin: 0 0 5px 0;
+            color: #18181b;
+        }
+        .step-content p {
+            margin: 0;
+            color: #52525b;
+            font-size: 14px;
+        }
+        .footer {
+            background-color: #f4f4f4;
+            color: #888888;
+            padding: 30px 20px;
+            text-align: center;
+            font-size: 12px;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+            <td align="center">
+                <div class="container">
+                    <!-- Header -->
+                    <div class="header">
+                        <img src="https://hybridx.club/Full%20Logo%20(2).png" alt="HybridX.Club Logo">
+                        <h1>Day 3: Meet Your AI Coach</h1>
+                        <p>The secret to training that actually adapts to YOU</p>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="content">
+                        <h2>Your Training Program is Smarter Than You Think</h2>
+                        <p>Most fitness apps give you a rigid program and expect you to follow it blindly. HybridX.Club is different. <strong>Your AI Coach analyzes every workout, learns from your feedback, and adjusts your program in real-time.</strong></p>
+
+                        <p>Here's what makes your training truly personalized...</p>
+
+                        <div class="highlight-box">
+                            <h3>🧠 How Your AI Coach Works</h3>
+                            <p>Every time you complete a workout and add notes, your AI Coach is learning. Too easy? Too hard? Want more running? Less volume? Just tell us, and the AI will adjust your upcoming workouts to match your needs.</p>
+                        </div>
+
+                        <h3>Unlock AI-Powered Weekly Analysis</h3>
+                        <p>The most powerful feature in HybridX.Club is the <strong>"Analyze My Week"</strong> button on your dashboard. Here's how it works:</p>
+
+                        <div class="steps-container">
+                            <div class="step">
+                                <div class="step-number">1</div>
+                                <div class="step-content">
+                                    <h4>Click "Analyze My Week"</h4>
+                                    <p>The AI reviews your last 5 completed workouts and your upcoming 7-day schedule.</p>
+                                </div>
+                            </div>
+
+                            <div class="step">
+                                <div class="step-number">2</div>
+                                <div class="step-content">
+                                    <h4>Tell the AI What You Want</h4>
+                                    <p>Add a custom request like "I want longer metcon workouts" or "Add more running this week" or "Reduce volume, I'm tired."</p>
+                                </div>
+                            </div>
+
+                            <div class="step">
+                                <div class="step-number">3</div>
+                                <div class="step-content">
+                                    <h4>Review AI Recommendations</h4>
+                                    <p>The AI shows you EXACTLY what will change, day by day, with explanations for every modification.</p>
+                                </div>
+                            </div>
+
+                            <div class="step">
+                                <div class="step-number">4</div>
+                                <div class="step-content">
+                                    <h4>Apply Adjustments</h4>
+                                    <p>One click applies all changes to your program. Your training is now customized to your current needs.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="example-box">
+                            <strong>Real Example:</strong>
+                            <p><em>"I want more running volume this week because I'm training for a 10K next month."</em></p>
+                            <p><strong>AI Response:</strong> Extends your Tuesday run from 5K to 7K at easy pace, adds a 3K tempo run on Thursday, and reduces Friday's strength session to accommodate the extra running load. Total weekly running: +8km.</p>
+                        </div>
+
+                        <div class="button-container">
+                            <a href="https://hybridx.club/dashboard" class="button">Try "Analyze My Week" Now</a>
+                        </div>
+
+                        <h3>Other Ways Your AI Coach Helps You</h3>
+
+                        <div class="feature-grid">
+                            <div class="feature-item">
+                                <h4><span class="emoji">📝</span> Daily AI Summaries</h4>
+                                <p>Every workout comes with an AI-generated summary explaining what you'll work on and why it matters for your training.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">💪</span> Generate Custom Workouts</h4>
+                                <p>Can't do today's programmed workout? Click "Generate Workout" and the AI will create a custom session based on your experience level and available time.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">➕</span> Extend Your Workouts</h4>
+                                <p>Feeling strong? During any workout, ask the AI to suggest additional exercises to add to your session.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">💬</span> AI Training Assistant</h4>
+                                <p>Have questions about training, nutrition, or race strategy? Chat with your AI Assistant anytime for personalized coaching advice.</p>
+                            </div>
+                        </div>
+
+                        <div class="tip-box">
+                            <strong>💡 Pro Tip:</strong> The more feedback you give, the smarter your program becomes. Add quick notes after every workout: "Felt great," "Too hard," "Perfect difficulty," or specific requests. Your AI Coach uses this data to continuously optimize your training.
+                        </div>
+
+                        <h3>Set Up Your Training Paces</h3>
+                        <p>If you're doing running workouts, make sure you've added your personal best times to your profile. The AI uses these to calculate your perfect training paces for every run.</p>
+
+                        <div class="button-container">
+                            <a href="https://hybridx.club/profile" class="button-secondary">Update Your Profile</a>
+                            <a href="https://hybridx.club/assistant" class="button-secondary">Chat with AI Coach</a>
+                        </div>
+
+                        <p style="margin-top: 30px;">Your training should work around your life—not the other way around. That's why we built AI that adapts to you, not a rigid program that expects perfection.</p>
+
+                        <p><strong>Train smarter,</strong><br>The HybridX.Club Team</p>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="footer">
+                        <p>&copy; 2025 HybridX.Club. All rights reserved.</p>
+                        <p>You're receiving this because you recently joined HybridX.Club</p>
+                        <p style="margin-top: 15px;">
+                            <a href="https://hybridx.club/dashboard" style="color: #888888; text-decoration: underline;">Dashboard</a> |
+                            <a href="https://hybridx.club/profile" style="color: #888888; text-decoration: underline;">Profile Settings</a> |
+                            <a href="https://hybridx.club/assistant" style="color: #888888; text-decoration: underline;">AI Assistant</a>
+                        </p>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

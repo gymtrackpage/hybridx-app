@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track Your Progress - See How Far You've Come</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Grotesk:wght@700&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            font-family: 'Inter', Arial, sans-serif;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+        }
+        .header {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .header img {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 15px;
+        }
+        .header h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #ffffff;
+            font-size: 28px;
+            margin: 0 0 10px 0;
+        }
+        .header p {
+            color: #d1fae5;
+            margin: 0;
+            font-size: 14px;
+        }
+        .content {
+            padding: 40px 30px;
+            color: #333333;
+            line-height: 1.6;
+        }
+        .content h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 24px;
+            color: #18181b;
+            margin-top: 0;
+        }
+        .content h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 20px;
+            color: #18181b;
+            margin-top: 30px;
+        }
+        .highlight-box {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-left: 4px solid #3b82f6;
+            padding: 25px;
+            margin: 25px 0;
+            border-radius: 8px;
+        }
+        .highlight-box h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #18181b;
+            font-size: 18px;
+            margin-top: 0;
+        }
+        .highlight-box p {
+            margin-bottom: 0;
+        }
+        .stats-grid {
+            display: table;
+            width: 100%;
+            margin: 25px 0;
+        }
+        .stat-row {
+            display: table-row;
+        }
+        .stat-item {
+            display: table-cell;
+            width: 50%;
+            padding: 15px;
+            text-align: center;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+        }
+        .stat-item:first-child {
+            border-radius: 8px 0 0 8px;
+        }
+        .stat-item:last-child {
+            border-radius: 0 8px 8px 0;
+        }
+        .stat-number {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 32px;
+            font-weight: 700;
+            color: #10b981;
+            margin: 0;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #71717a;
+            margin: 5px 0 0 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .feature-grid {
+            margin: 30px 0;
+        }
+        .feature-item {
+            background-color: #f9fafb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid #e5e7eb;
+        }
+        .feature-item h4 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #18181b;
+            font-size: 16px;
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+        }
+        .feature-item p {
+            margin: 0;
+            font-size: 14px;
+            color: #52525b;
+        }
+        .emoji {
+            font-size: 24px;
+            margin-right: 12px;
+        }
+        .button-container {
+            text-align: center;
+            margin: 35px 0;
+        }
+        .button {
+            background-color: #E6B31E;
+            color: #18181b;
+            padding: 16px 32px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 700;
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+        }
+        .button-secondary {
+            background-color: #10b981;
+            color: #ffffff;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            margin: 10px 5px;
+        }
+        .tip-box {
+            background-color: #fef3c7;
+            border: 1px solid #fde68a;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        .tip-box strong {
+            color: #92400e;
+            font-weight: 600;
+        }
+        .consistency-message {
+            background-color: #ecfdf5;
+            border: 2px solid #10b981;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .consistency-message h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #065f46;
+            font-size: 20px;
+            margin: 0 0 10px 0;
+        }
+        .consistency-message p {
+            color: #047857;
+            margin: 0;
+            font-size: 15px;
+        }
+        .footer {
+            background-color: #f4f4f4;
+            color: #888888;
+            padding: 30px 20px;
+            text-align: center;
+            font-size: 12px;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+            <td align="center">
+                <div class="container">
+                    <!-- Header -->
+                    <div class="header">
+                        <img src="https://hybridx.club/Full%20Logo%20(2).png" alt="HybridX.Club Logo">
+                        <h1>Day 7: Track Your Progress</h1>
+                        <p>You've completed one week—let's see how far you've come</p>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="content">
+                        <h2>Congratulations on Your First Week! 🎉</h2>
+                        <p>You've been training with HybridX.Club for a full week now. Whether you've completed every workout or just a few, you're building something powerful: <strong>consistency</strong>.</p>
+
+                        <p>Let's explore how to track your progress and stay motivated for the long haul.</p>
+
+                        <div class="consistency-message">
+                            <h3>🔥 The Power of Consistency</h3>
+                            <p>Athletes who complete 3+ workouts per week see 3x better results than those who train sporadically. Small, consistent effort beats occasional intensity every time.</p>
+                        </div>
+
+                        <h3>Your Progress Dashboard Explained</h3>
+                        <p>HybridX.Club tracks everything you need to stay motivated and measure improvement. Here's what you should be checking:</p>
+
+                        <div class="feature-grid">
+                            <div class="feature-item">
+                                <h4><span class="emoji">📊</span> 4-Week Consistency Chart</h4>
+                                <p>See your weekly workout completion at a glance. This bar chart on your dashboard shows workouts completed each week for the past 4 weeks. Watch those bars grow!</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">⚡</span> Current Streak Counter</h4>
+                                <p>Your workout streak shows how many consecutive training days you've maintained. Plus, see your personal best streak to beat.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">📈</span> Session Statistics</h4>
+                                <p>View total sessions completed, completion rate percentage, average workout duration, and skipped workouts. Real data, real accountability.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">📅</span> Visual Calendar</h4>
+                                <p>Color-coded calendar shows completed workouts, rest days, and upcoming sessions. Quickly see patterns in your training schedule.</p>
+                            </div>
+                        </div>
+
+                        <div class="button-container">
+                            <a href="https://app.hybridx.club/dashboard" class="button">View Your Dashboard</a>
+                        </div>
+
+                        <h3>Dive Into Your Workout History</h3>
+                        <p>Your complete training history is more than just a log—it's a powerful tool for understanding what works for you.</p>
+
+                        <div class="highlight-box">
+                            <h3>Advanced History Features</h3>
+                            <p>Search for specific workouts, filter by status (completed/skipped), filter by type (HYROX/running), and sort by date or duration. Every workout includes your notes, duration, and exercise details.</p>
+                        </div>
+
+                        <div class="feature-grid">
+                            <div class="feature-item">
+                                <h4><span class="emoji">🔍</span> Search Your Notes</h4>
+                                <p>Remember that great workout last week? Search your workout notes to find it instantly. Great for repeating workouts that felt perfect.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">📝</span> Add Notes from Calendar</h4>
+                                <p>Click any completed workout in your calendar to view details or add notes retroactively. Capture insights even after the session.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">🔄</span> Swap Workouts</h4>
+                                <p>Life happens. Need to swap tomorrow's workout to today? Click any upcoming workout in the calendar and select "Do this workout today."</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">⏱️</span> Duration Tracking</h4>
+                                <p>Every workout automatically tracks your session duration. See how your workout times improve as you get fitter and more efficient.</p>
+                            </div>
+                        </div>
+
+                        <div class="button-container">
+                            <a href="https://app.hybridx.club/history" class="button-secondary">View Full History</a>
+                            <a href="https://app.hybridx.club/dashboard" class="button-secondary">See Your Calendar</a>
+                        </div>
+
+                        <h3>Set Goals and Track Personal Records</h3>
+                        <p>Head to your profile to update your strength and running benchmarks. These aren't just numbers—they're the foundation for:</p>
+
+                        <ul style="color: #52525b; font-size: 15px; line-height: 1.8;">
+                            <li><strong style="color: #18181b;">Calculated Training Paces:</strong> Your running PRs determine your perfect training paces for every run</li>
+                            <li><strong style="color: #18181b;">Progress Measurement:</strong> Test your benchmarks monthly to see real strength and speed gains</li>
+                            <li><strong style="color: #18181b;">Program Scaling:</strong> The AI uses your benchmarks to suggest appropriate workout intensities</li>
+                        </ul>
+
+                        <div class="tip-box">
+                            <strong>💡 Pro Tip:</strong> Set a recurring reminder to update your benchmarks once a month. Test your 1RM lifts and run a 5K time trial. Watching these numbers improve is incredibly motivating and helps your AI Coach optimize your training.
+                        </div>
+
+                        <h3>This Week's Challenge</h3>
+                        <div class="consistency-message">
+                            <h3>🎯 Complete 4 Workouts This Week</h3>
+                            <p>You've got the momentum. Push for one more session than last week. Small improvements compound into major results.</p>
+                        </div>
+
+                        <p style="margin-top: 30px;">Progress isn't always linear, but it's always measurable. Check your dashboard regularly, celebrate small wins, and trust the process.</p>
+
+                        <p><strong>Keep showing up,</strong><br>The HybridX.Club Team</p>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="footer">
+                        <p>&copy; 2025 HybridX.Club. All rights reserved.</p>
+                        <p>You're receiving this because you recently joined HybridX.Club</p>
+                        <p style="margin-top: 15px;">
+                            <a href="https://app.hybridx.club/dashboard" style="color: #888888; text-decoration: underline;">Dashboard</a> |
+                            <a href="https://app.hybridx.club/history" style="color: #888888; text-decoration: underline;">Workout History</a> |
+                            <a href="https://app.hybridx.club/profile" style="color: #888888; text-decoration: underline;">Update Profile</a>
+                        </p>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

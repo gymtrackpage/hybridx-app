@@ -248,6 +248,12 @@ export default function DashboardPage() {
                     <CardTitle className="flex items-center gap-2">
                       {isProgramRunning ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
                       {program && todaysWorkout?.workout && !programStartsInFuture ? `Today's Workout (Day ${todaysWorkout.day})` : "Today's Plan"}
+                      {user?.customProgram && user.customProgram.length > 0 && (
+                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 ml-2">
+                          <Zap className="mr-1 h-3 w-3" />
+                          Personalized
+                        </Badge>
+                      )}
                     </CardTitle>
                   </div>
                   {isWorkoutCompleted && (

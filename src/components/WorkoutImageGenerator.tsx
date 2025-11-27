@@ -15,7 +15,7 @@ interface WorkoutImageGeneratorProps {
     calories?: number;
     startTime: Date;
     notes?: string;
-    duration?: string; // New optional duration
+    duration?: string;
   };
 }
 
@@ -23,285 +23,187 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
   const [generating, setGenerating] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
+  // --- Derived Variables ---
   const formatDistance = (meters?: number): string | null => {
     if (!meters) return null;
-    const km = meters / 1000;
-    return km >= 1 ? `${km.toFixed(1)} km` : `${meters.toFixed(0)} m`;
-  };
-
-  const generateImage = async () => {
-    if (!cardRef.current) return;
-    
-    setGenerating(true);
-    
-    try {
-      // Wait for images to load
-      const logoImg = new Image();
-      logoImg.src = '/icon-logo.png';
-      await new Promise((resolve) => {
-          if (logoImg.complete) resolve(true);
-          logoImg.onload = () => resolve(true);
-          logoImg.onerror = () => resolve(true); // Proceed even if logo fails
-      });
-
-      const canvas = await html2canvas(cardRef.current, {
-        width: 1080,
-        height: 1350, // Portrait ratio 4:5 for Instagram/Socials
-        scale: 2,
-        backgroundColor: '#0A0A0A', // Ensuring a dark background
-        useCORS: true,
-        logging: false,
-        allowTaint: true,
-      });
-      
-      const link = document.createElement('a');
-      link.download = `hybridx_${workout.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.png`;
-      link.href = canvas.toDataURL('image/png', 1.0);
-      link.click();
-      
-    } catch (error) {
-      logger.error('Error generating image:', error);
-    } finally {
-      setGenerating(false);
-    }
+    return meters >= 1000
+      ? `${(meters / 1000).toFixed(2)} km`
+      : `${meters} m`;
   };
 
   const distance = formatDistance(workout.distance);
+
   const date = new Date(workout.startTime).toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric'
   });
 
+  const time = new Date(workout.startTime).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const generateImage = async () => {
+    if (!cardRef.current) return;
+    setGenerating(true);
+
+    try {
+      // Step 1: Font Loading
+      await document.fonts.ready;
+      if ('fonts' in document) {
+        try {
+          await document.fonts.load('400 16px "Space Grotesk"');
+          await document.fonts.load('700 16px "Space Grotesk"');
+        } catch (fontError) {
+          logger.error('Font loading failed:', fontError);
+        }
+      }
+
+      // Step 2: Image Preloading
+      const logoImg = new Image();
+      logoImg.src = '/icon-logo.png';
+      await new Promise((resolve) => {
+        if (logoImg.complete) resolve(true);
+        logoImg.onload = () => resolve(true);
+        logoImg.onerror = () => resolve(true); // Fail gracefully
+      });
+
+      // Step 3: Canvas Generation
+      const canvas = await html2canvas(cardRef.current, {
+        width: 1080,
+        height: 1350,
+        scale: 2,
+        backgroundColor: '#0A0A0A',
+        useCORS: true,
+        logging: false,
+        allowTaint: true,
+      });
+
+      // Export (Download)
+      const link = document.createElement('a');
+      link.download = `hybridx-workout-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+
+    } catch (err) {
+      logger.error('Error generating workout image:', err);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
-    <div className="space-y-4">
-       <div 
-        ref={cardRef}
-        className="fixed -left-[9999px] top-0"
-        style={{
+    <div className="flex flex-col items-center gap-6 p-4">
+      {/* --- PREVIEW CONTAINER --- */}
+      <div className="overflow-hidden shadow-2xl rounded-lg border border-gray-800">
+        <div
+          ref={cardRef}
+          className="relative bg-[#0A0A0A] text-white flex flex-col"
+          style={{
             width: '1080px',
-            height: '1350px', // 4:5 Aspect Ratio
-            background: '#0A0A0A',
-            fontFamily: '"Space Grotesk", sans-serif',
-            color: '#FFFFFF',
-            position: 'relative',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-        }}
+            height: '1350px',
+            fontFamily: 'var(--font-space-grotesk), "Space Grotesk", sans-serif',
+            // Simple grid pattern background for the "Blueprint" vibe
+            backgroundImage: `
+              linear-gradient(to right, #1a1a1a 1px, transparent 1px),
+              linear-gradient(to bottom, #1a1a1a 1px, transparent 1px)
+            `,
+            backgroundSize: '40px 40px'
+          }}
         >
-            {/* Dynamic Background Elements */}
-            <div style={{
-                position: 'absolute',
-                top: '-20%',
-                right: '-20%',
-                width: '800px',
-                height: '800px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(255, 193, 7, 0.15) 0%, rgba(10, 10, 10, 0) 70%)',
-                filter: 'blur(60px)',
-                zIndex: 0,
-            }} />
-            
-            <div style={{
-                position: 'absolute',
-                bottom: '-10%',
-                left: '-10%',
-                width: '600px',
-                height: '600px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, rgba(10, 10, 10, 0) 70%)',
-                filter: 'blur(40px)',
-                zIndex: 0,
-            }} />
-
-            {/* Content Container */}
-            <div style={{
-                position: 'relative',
-                zIndex: 1,
-                height: '100%',
-                padding: '80px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-            }}>
-                
-                {/* Header */}
-                <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    borderBottom: '1px solid rgba(255,255,255,0.1)',
-                    paddingBottom: '40px'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-                        <div style={{
-                            width: '80px',
-                            height: '80px',
-                            background: '#FFC107',
-                            borderRadius: '16px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 4px 20px rgba(255, 193, 7, 0.3)'
-                        }}>
-                             <img src="/icon-logo.png" style={{ width: '48px', height: '48px', filter: 'brightness(0)' }} alt="Logo" />
-                        </div>
-                        <div>
-                            <div style={{ fontSize: '32px', fontWeight: '700', lineHeight: '1', letterSpacing: '-0.5px' }}>
-                                HYBRIDX
-                            </div>
-                            <div style={{ fontSize: '18px', color: '#FFC107', letterSpacing: '2px', fontWeight: '600', marginTop: '4px' }}>
-                                CLUB
-                            </div>
-                        </div>
-                    </div>
-                    <div style={{
-                        border: '1px solid rgba(255, 193, 7, 0.3)',
-                        background: 'rgba(255, 193, 7, 0.1)',
-                        color: '#FFC107',
-                        padding: '12px 24px',
-                        borderRadius: '100px',
-                        fontSize: '20px',
-                        fontWeight: '600',
-                        textTransform: 'uppercase',
-                        letterSpacing: '1px'
-                    }}>
-                        {workout.type}
-                    </div>
-                </div>
-
-                {/* Main Content Area */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '40px' }}>
-                    <div>
-                        <div style={{
-                            display: 'inline-block',
-                            fontSize: '20px',
-                            fontWeight: '600',
-                            color: 'rgba(255,255,255,0.6)',
-                            marginBottom: '16px',
-                            textTransform: 'uppercase',
-                            letterSpacing: '1px'
-                        }}>
-                            {date}
-                        </div>
-                        <h1 style={{
-                            fontSize: '96px',
-                            fontWeight: '800',
-                            lineHeight: '0.95',
-                            textTransform: 'uppercase',
-                            margin: 0,
-                            backgroundImage: 'linear-gradient(180deg, #FFFFFF 0%, #AAAAAA 100%)',
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                            letterSpacing: '-2px'
-                        }}>
-                            {workout.name}
-                        </h1>
-                    </div>
-
-                    {/* Stats Grid */}
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(2, 1fr)',
-                        gap: '30px',
-                        marginTop: '20px'
-                    }}>
-                        {workout.duration && (
-                            <div style={{
-                                background: 'rgba(255,255,255,0.03)',
-                                border: '1px solid rgba(255,255,255,0.05)',
-                                borderRadius: '24px',
-                                padding: '32px'
-                            }}>
-                                <div style={{ fontSize: '18px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Time</div>
-                                <div style={{ fontSize: '56px', fontWeight: '700', color: '#FFC107' }}>{workout.duration}</div>
-                            </div>
-                        )}
-                        
-                        {distance ? (
-                            <div style={{
-                                background: 'rgba(255,255,255,0.03)',
-                                border: '1px solid rgba(255,255,255,0.05)',
-                                borderRadius: '24px',
-                                padding: '32px'
-                            }}>
-                                <div style={{ fontSize: '18px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Distance</div>
-                                <div style={{ fontSize: '56px', fontWeight: '700', color: '#FFC107' }}>{distance}</div>
-                            </div>
-                        ) : (
-                             <div style={{
-                                background: 'rgba(255,255,255,0.03)',
-                                border: '1px solid rgba(255,255,255,0.05)',
-                                borderRadius: '24px',
-                                padding: '32px'
-                            }}>
-                                <div style={{ fontSize: '18px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Effort</div>
-                                <div style={{ fontSize: '56px', fontWeight: '700', color: '#FFC107' }}>HIGH</div>
-                            </div>
-                        )}
-                    </div>
-
-                    {workout.notes && (
-                        <div style={{
-                            marginTop: '20px',
-                            paddingLeft: '30px',
-                            borderLeft: '4px solid #FFC107',
-                        }}>
-                            <p style={{
-                                fontSize: '28px',
-                                lineHeight: '1.4',
-                                color: 'rgba(255,255,255,0.9)',
-                                fontFamily: '"Inter", sans-serif',
-                                fontStyle: 'italic',
-                                margin: 0,
-                                display: '-webkit-box',
-                                WebkitLineClamp: '3',
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden'
-                            }}>
-                                "{workout.notes}"
-                            </p>
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer */}
-                <div style={{ 
-                    paddingTop: '40px',
-                    borderTop: '1px solid rgba(255,255,255,0.1)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-end'
-                }}>
-                    <div>
-                        <div style={{ fontSize: '16px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Train Smarter</div>
-                        <div style={{ fontSize: '24px', fontWeight: '700' }}>APP.HYBRIDX.CLUB</div>
-                    </div>
-                    
-                    {/* Abstract decorative element */}
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        {[100, 70, 40, 100, 60, 90].map((h, i) => (
-                            <div key={i} style={{
-                                width: '8px',
-                                height: `${h}%`,
-                                background: i % 2 === 0 ? '#FFC107' : 'rgba(255,255,255,0.2)',
-                                borderRadius: '4px'
-                            }} />
-                        ))}
-                    </div>
-                </div>
+          {/* Top Bar / Branding */}
+          <div className="flex justify-between items-center p-12 border-b-2 border-white/10">
+            <div className="flex items-center gap-4">
+              <img
+                src="/icon-logo.png"
+                alt="HybridX"
+                className="w-16 h-16 object-contain"
+                crossOrigin="anonymous"
+              />
+              <div className="flex flex-col">
+                <span className="text-2xl font-bold tracking-wider uppercase">HybridX.Club</span>
+                <span className="text-xl text-gray-400">Performance Hub</span>
+              </div>
             </div>
+            <div className="text-right">
+              <div className="text-2xl font-medium text-gray-300">{date}</div>
+              <div className="text-xl text-gray-500">{time}</div>
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col justify-center px-12 relative">
+            {/* Background Accent Gradient (Subtle Glow) */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/5 blur-[100px] rounded-full pointer-events-none" />
+
+            {/* Workout Type Badge */}
+            <div className="mb-6 relative z-10">
+              <span className="inline-block px-6 py-2 border border-white/30 text-2xl font-bold tracking-widest uppercase rounded-full">
+                {workout.type}
+              </span>
+            </div>
+
+            {/* Workout Name */}
+            <h1 className="text-8xl font-bold leading-tight uppercase mb-8 relative z-10">
+              {workout.name}
+            </h1>
+
+            {/* Notes Section (Visualized as 'Terminal/Data' output) */}
+            {workout.notes && (
+              <div className="mt-8 p-8 bg-white/5 border-l-4 border-white/20 relative z-10">
+                <p className="text-3xl text-gray-300 italic">
+                  "{workout.notes}"
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 border-t-2 border-white/10">
+            {/* Duration Stat */}
+            <div className="p-12 border-r-2 border-white/10 flex flex-col justify-center">
+              <span className="text-2xl text-gray-500 uppercase tracking-widest mb-2">Duration</span>
+              <span className="text-8xl font-bold tabular-nums">
+                {workout.duration || "--:--"}
+              </span>
+            </div>
+
+            {/* Distance Stat */}
+            <div className="p-12 flex flex-col justify-center">
+              <span className="text-2xl text-gray-500 uppercase tracking-widest mb-2">Distance</span>
+              <span className="text-8xl font-bold tabular-nums">
+                {distance || "---"}
+              </span>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-8 bg-white text-black flex justify-between items-center">
+            <span className="text-2xl font-bold tracking-tighter">HYBRIDX.CLUB</span>
+            <span className="text-xl font-medium uppercase tracking-widest">Train Hybrid. Race Strong.</span>
+          </div>
         </div>
-        
-        <Button 
-            onClick={generateImage} 
-            disabled={generating}
-            className="w-full bg-[#FFC107] text-black hover:bg-[#E0A800]"
-        >
-            {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-            {generating ? 'Generating...' : 'Download Story Image'}
-        </Button>
+      </div>
+
+      {/* Control Button */}
+      <Button
+        onClick={generateImage}
+        disabled={generating}
+        className="px-8 py-3 bg-white text-black font-bold rounded hover:bg-gray-200 transition disabled:opacity-50"
+      >
+        {generating ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Generating...
+          </>
+        ) : (
+          <>
+            <Download className="h-4 w-4 mr-2" />
+            Download Image
+          </>
+        )}
+      </Button>
     </div>
   );
 }

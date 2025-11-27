@@ -1,12 +1,13 @@
-
-import { logger } from '@/lib/logger';
 // src/services/user-service.ts
 'use server';
+
+import { logger } from '@/lib/logger';
 
 import { Timestamp } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin'; // Use Admin SDK for server-side
 import { getAuth } from 'firebase-admin/auth';
 import type { User, SubscriptionStatus } from '@/models/types';
+import { sendWelcomeEmail } from '@/lib/email-service';
 
 // Helper function to safely convert Firestore timestamp to Date
 function safeToDate(timestamp: any): Date | undefined {
@@ -89,6 +90,14 @@ export async function getUser(userId: string): Promise<User | null> {
 
             await docRef.set(newUser);
             logger.log(`Successfully created Firestore document for user ${userId}`);
+
+            // Send welcome email to new user
+            if (newUser.email) {
+                // We don't await this so it doesn't block the user creation flow
+                sendWelcomeEmail(newUser.email).catch(e => 
+                    logger.error(`Failed to send welcome email to ${newUser.email}:`, e)
+                );
+            }
             
             return {
                 id: userId,

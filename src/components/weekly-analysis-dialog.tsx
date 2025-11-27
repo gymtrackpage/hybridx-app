@@ -12,6 +12,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Loader2, Sparkles, CheckCircle, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { updateUser } from '@/services/user-service-client'; // Need to expose this or similar
@@ -28,6 +30,7 @@ export function WeeklyAnalysisDialog({ userId, trigger }: WeeklyAnalysisDialogPr
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
+  const [customRequest, setCustomRequest] = useState('');
   const { toast } = useToast();
 
   const handleAnalyze = async () => {
@@ -37,7 +40,10 @@ export function WeeklyAnalysisDialog({ userId, trigger }: WeeklyAnalysisDialogPr
       const response = await fetch('/api/ai/analyze-week', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({
+          userId,
+          customRequest: customRequest.trim() || undefined,
+        }),
       });
 
       if (!response.ok) throw new Error('Analysis failed');
@@ -55,15 +61,53 @@ export function WeeklyAnalysisDialog({ userId, trigger }: WeeklyAnalysisDialogPr
   };
   
   const handleApplyChanges = async () => {
-      // Logic to actually save these changes to the user's profile would go here.
-      // E.g., updating user.customProgram with the new workouts.
-      // For this demo, we'll just show a success toast.
+    if (!result?.adjustments || result.adjustments.length === 0) {
       toast({
-          title: "Plan Updated",
-          description: "Your training schedule has been adjusted based on the AI recommendations."
+        title: 'No Adjustments',
+        description: 'There are no adjustments to apply.',
+        variant: 'destructive',
       });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch('/api/ai/apply-adjustments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          adjustments: result.adjustments,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to apply adjustments');
+      }
+
+      const data = await response.json();
+
+      toast({
+        title: 'Plan Updated! 🎉',
+        description: `Applied ${data.adjustmentsApplied} adjustment(s) to your personalized training plan.`,
+      });
+
       setIsOpen(false);
-  }
+
+      // Refresh the page to show updated workouts
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Error applying adjustments:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to apply adjustments. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -87,11 +131,31 @@ export function WeeklyAnalysisDialog({ userId, trigger }: WeeklyAnalysisDialogPr
         </DialogHeader>
 
         {!result && !loading && (
-             <div className="py-8 text-center space-y-4">
-                 <p className="text-muted-foreground">
-                     Ready to check your progress? The AI will look at your recent workout notes (fatigue, pain, ease) and suggest tweaks to your schedule.
+             <div className="py-6 space-y-6">
+                 <p className="text-muted-foreground text-center">
+                     Ready to check your progress? The AI will look at your recent workout notes and suggest tweaks to your schedule.
                  </p>
-                 <Button onClick={handleAnalyze} className="w-full sm:w-auto">
+
+                 {/* Custom Request Input */}
+                 <div className="space-y-2">
+                   <Label htmlFor="customRequest" className="text-sm font-medium">
+                     Custom Request (Optional)
+                   </Label>
+                   <Textarea
+                     id="customRequest"
+                     placeholder="e.g., 'I want longer metcon workouts', 'Add more running', 'Reduce volume this week'..."
+                     value={customRequest}
+                     onChange={(e) => setCustomRequest(e.target.value)}
+                     className="min-h-[100px] resize-none"
+                     maxLength={500}
+                   />
+                   <p className="text-xs text-muted-foreground">
+                     Tell the AI how you'd like to adjust your program
+                   </p>
+                 </div>
+
+                 <Button onClick={handleAnalyze} className="w-full">
+                     <Sparkles className="mr-2 h-4 w-4" />
                      Start Analysis
                  </Button>
              </div>
@@ -106,6 +170,18 @@ export function WeeklyAnalysisDialog({ userId, trigger }: WeeklyAnalysisDialogPr
 
         {result && (
             <div className="space-y-6">
+                {customRequest && (
+                  <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-purple-900 dark:text-purple-100">Your Request:</p>
+                        <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">{customRequest}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                     <h3 className="font-semibold text-lg">Coach's Summary</h3>
                     <p className="text-sm text-foreground/90 leading-relaxed bg-muted p-4 rounded-md">

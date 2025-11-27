@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unlock Advanced Features - Strava, Sharing & More</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Grotesk:wght@700&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            font-family: 'Inter', Arial, sans-serif;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+        }
+        .header {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .header img {
+            width: 60px;
+            height: 60px;
+            margin-bottom: 15px;
+        }
+        .header h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #ffffff;
+            font-size: 28px;
+            margin: 0 0 10px 0;
+        }
+        .header p {
+            color: #fed7aa;
+            margin: 0;
+            font-size: 14px;
+        }
+        .content {
+            padding: 40px 30px;
+            color: #333333;
+            line-height: 1.6;
+        }
+        .content h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 24px;
+            color: #18181b;
+            margin-top: 0;
+        }
+        .content h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 20px;
+            color: #18181b;
+            margin-top: 30px;
+        }
+        .highlight-box {
+            background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+            border-left: 4px solid #ec4899;
+            padding: 25px;
+            margin: 25px 0;
+            border-radius: 8px;
+        }
+        .highlight-box h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #18181b;
+            font-size: 18px;
+            margin-top: 0;
+        }
+        .highlight-box p {
+            margin-bottom: 0;
+        }
+        .feature-grid {
+            margin: 30px 0;
+        }
+        .feature-item {
+            background-color: #f9fafb;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid #e5e7eb;
+        }
+        .feature-item h4 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #18181b;
+            font-size: 16px;
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+        }
+        .feature-item p {
+            margin: 0;
+            font-size: 14px;
+            color: #52525b;
+        }
+        .emoji {
+            font-size: 24px;
+            margin-right: 12px;
+        }
+        .button-container {
+            text-align: center;
+            margin: 35px 0;
+        }
+        .button {
+            background-color: #E6B31E;
+            color: #18181b;
+            padding: 16px 32px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 700;
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+        }
+        .button-strava {
+            background-color: #fc4c02;
+            color: #ffffff;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            margin: 10px 5px;
+        }
+        .button-secondary {
+            background-color: #f97316;
+            color: #ffffff;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            display: inline-block;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            margin: 10px 5px;
+        }
+        .strava-box {
+            background-color: #fff7ed;
+            border: 2px solid #fc4c02;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 25px 0;
+        }
+        .strava-box h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #18181b;
+            font-size: 18px;
+            margin-top: 0;
+        }
+        .strava-features {
+            margin: 15px 0;
+        }
+        .strava-features li {
+            color: #52525b;
+            font-size: 14px;
+            margin: 8px 0;
+        }
+        .tip-box {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        .tip-box strong {
+            color: #1e40af;
+            font-weight: 600;
+        }
+        .premium-box {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border: 2px solid #f59e0b;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .premium-box h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #18181b;
+            font-size: 20px;
+            margin: 0 0 10px 0;
+        }
+        .premium-box p {
+            color: #78350f;
+            margin: 5px 0;
+            font-size: 15px;
+        }
+        .premium-price {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 32px;
+            font-weight: 700;
+            color: #18181b;
+            margin: 15px 0;
+        }
+        .steps-container {
+            margin: 25px 0;
+        }
+        .step {
+            display: flex;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+        .step-number {
+            background-color: #f97316;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        .step-content h4 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 16px;
+            margin: 0 0 5px 0;
+            color: #18181b;
+        }
+        .step-content p {
+            margin: 0;
+            color: #52525b;
+            font-size: 14px;
+        }
+        .footer {
+            background-color: #f4f4f4;
+            color: #888888;
+            padding: 30px 20px;
+            text-align: center;
+            font-size: 12px;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+            <td align="center">
+                <div class="container">
+                    <!-- Header -->
+                    <div class="header">
+                        <img src="https://hybridx.club/Full%20Logo%20(2).png" alt="HybridX.Club Logo">
+                        <h1>Day 14: Level Up Your Training</h1>
+                        <p>Connect Strava, share your success, and unlock everything</p>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="content">
+                        <h2>You're Officially a HybridX.Club Athlete 💪</h2>
+                        <p>Two weeks in! You've experienced the fundamentals of AI-powered training. Now let's unlock the advanced features that will take your training to the next level.</p>
+
+                        <h3>🚴 Connect Your Strava Account</h3>
+                        <p>Strava is the world's leading platform for tracking running and cycling activities. HybridX.Club integrates seamlessly with Strava to give you the best of both worlds:</p>
+
+                        <div class="strava-box">
+                            <h3>Why Connect Strava?</h3>
+                            <ul class="strava-features">
+                                <li><strong>Automatic Activity Sync:</strong> Your Strava runs, rides, and workouts appear automatically in HybridX.Club</li>
+                                <li><strong>Complete Activity Data:</strong> See distance, duration, elevation gain, and heart rate for every activity</li>
+                                <li><strong>Link Activities to Workouts:</strong> Associate Strava activities with your programmed workouts to track completion</li>
+                                <li><strong>Activity Feed:</strong> Browse all your recent Strava activities in one convenient view</li>
+                                <li><strong>Strava Badges:</strong> Workouts linked to Strava show a special badge in your history</li>
+                            </ul>
+                        </div>
+
+                        <div class="steps-container">
+                            <div class="step">
+                                <div class="step-number">1</div>
+                                <div class="step-content">
+                                    <h4>Go to Your Profile</h4>
+                                    <p>Navigate to your profile settings in HybridX.Club.</p>
+                                </div>
+                            </div>
+
+                            <div class="step">
+                                <div class="step-number">2</div>
+                                <div class="step-content">
+                                    <h4>Click "Connect with Strava"</h4>
+                                    <p>You'll be redirected to Strava to authorize the connection (it takes 10 seconds).</p>
+                                </div>
+                            </div>
+
+                            <div class="step">
+                                <div class="step-number">3</div>
+                                <div class="step-content">
+                                    <h4>View Your Activity Feed</h4>
+                                    <p>Once connected, visit your Activity Feed to see all recent Strava activities.</p>
+                                </div>
+                            </div>
+
+                            <div class="step">
+                                <div class="step-number">4</div>
+                                <div class="step-content">
+                                    <h4>Link Activities to Workouts</h4>
+                                    <p>In your calendar, link Strava activities to planned workouts to keep everything organized.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="button-container">
+                            <a href="https://hybridx.club/profile" class="button-strava">Connect Strava Now</a>
+                        </div>
+
+                        <h3>📸 Share Your Workout Success</h3>
+                        <p>You've been working hard—it's time to celebrate your achievements and inspire others!</p>
+
+                        <div class="highlight-box">
+                            <h3>Beautiful Workout Completion Images</h3>
+                            <p>Every time you complete a workout, HybridX.Club can generate a stunning, Instagram-ready image with your workout details, stats, and HybridX branding. Download it in one click and share your success on social media.</p>
+                        </div>
+
+                        <div class="feature-grid">
+                            <div class="feature-item">
+                                <h4><span class="emoji">🎨</span> Professionally Designed Cards</h4>
+                                <p>High-quality graphics with workout name, type, duration, distance, and date—all beautifully formatted.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">📲</span> Instant Download</h4>
+                                <p>After completing any workout, generate and download your completion image in seconds.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">📱</span> Instagram-Ready Format</h4>
+                                <p>Optimized dimensions for social media sharing. Perfect for Instagram stories or feed posts.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">💯</span> Build Accountability</h4>
+                                <p>Share your workouts publicly to stay accountable and inspire your followers to train harder.</p>
+                            </div>
+                        </div>
+
+                        <div class="tip-box">
+                            <strong>💡 Pro Tip:</strong> Sharing your workouts publicly increases accountability by 67%. Tag @hybridxclub when you share to join our community of athletes and potentially get featured!
+                        </div>
+
+                        <h3>🔔 Set Up Daily Workout Notifications</h3>
+                        <p>Never forget to train again. Enable daily push notifications and choose your preferred reminder time.</p>
+
+                        <div class="feature-grid">
+                            <div class="feature-item">
+                                <h4><span class="emoji">⏰</span> Custom Timing</h4>
+                                <p>Set notifications for your ideal training time—morning, lunch, or evening. Choose the exact hour and minute.</p>
+                            </div>
+
+                            <div class="feature-item">
+                                <h4><span class="emoji">🤖</span> AI-Generated Messages</h4>
+                                <p>Each notification includes a personalized, AI-generated message about today's workout to keep you motivated.</p>
+                            </div>
+                        </div>
+
+                        <div class="button-container">
+                            <a href="https://hybridx.club/profile" class="button-secondary">Configure Notifications</a>
+                        </div>
+
+                        <h3>📚 Browse Training Articles & Education</h3>
+                        <p>Knowledge is power. HybridX.Club includes a growing library of articles on training, nutrition, race strategy, and hybrid fitness. Access expert content to complement your training program.</p>
+
+                        <div class="button-container">
+                            <a href="https://hybridx.club/articles" class="button-secondary">Read Articles</a>
+                        </div>
+
+                        <h3>💬 Chat with Your AI Training Assistant</h3>
+                        <p>Have specific questions about your training, nutrition, or race prep? Your AI Training Assistant is available 24/7 for personalized coaching advice.</p>
+
+                        <ul style="color: #52525b; font-size: 15px; line-height: 1.8;">
+                            <li><strong style="color: #18181b;">Training Questions:</strong> "Should I train through soreness?" "How do I improve my 5K time?"</li>
+                            <li><strong style="color: #18181b;">Nutrition Guidance:</strong> "What should I eat before a long run?" "How much protein do I need?"</li>
+                            <li><strong style="color: #18181b;">Race Strategy:</strong> "How should I pace my first HYROX race?" "What's a good taper strategy?"</li>
+                            <li><strong style="color: #18181b;">Technique Tips:</strong> "How can I improve my running form?" "What's proper squat depth?"</li>
+                        </ul>
+
+                        <div class="button-container">
+                            <a href="https://hybridx.club/assistant" class="button-secondary">Chat with AI Assistant</a>
+                        </div>
+
+                        <h3>🌙 Dark Mode & Customization</h3>
+                        <p>Train your way. Toggle between light and dark mode in your profile settings to match your preference and reduce eye strain during early morning or late evening sessions.</p>
+
+                        <div class="premium-box">
+                            <h3>🎯 Your Free Trial is Active</h3>
+                            <p>You have <strong>1 month of free access</strong> to all HybridX.Club features. After your trial, continue for just:</p>
+                            <p class="premium-price">£5/month</p>
+                            <p>Cancel anytime. Pause your subscription without losing data. Resume whenever you're ready.</p>
+                            <p style="margin-top: 20px;"><strong>Full access to AI Coach, unlimited workouts, Strava sync, and all future features.</strong></p>
+                        </div>
+
+                        <div class="button-container">
+                            <a href="https://hybridx.club/profile" class="button">Manage Your Subscription</a>
+                        </div>
+
+                        <h3>What's Next?</h3>
+                        <p>You now have all the tools to become a stronger, faster hybrid athlete:</p>
+
+                        <ul style="color: #52525b; font-size: 15px; line-height: 1.8;">
+                            <li>✅ AI-powered training that adapts weekly to your feedback</li>
+                            <li>✅ Complete progress tracking and analytics</li>
+                            <li>✅ Strava integration for seamless activity management</li>
+                            <li>✅ Shareable workout images to celebrate success</li>
+                            <li>✅ 24/7 AI Training Assistant for personalized coaching</li>
+                            <li>✅ Customizable notifications to stay consistent</li>
+                        </ul>
+
+                        <p style="margin-top: 30px;"><strong>The only thing left to do is keep showing up.</strong></p>
+
+                        <p>We're in this together. If you ever need help, have questions, or want to share feedback, just reply to this email. We read every message.</p>
+
+                        <p style="margin-top: 30px;"><strong>Now go train,</strong><br>The HybridX.Club Team</p>
+
+                        <div class="button-container" style="margin-top: 40px;">
+                            <a href="https://hybridx.club/dashboard" class="button">Go to Dashboard</a>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="footer">
+                        <p>&copy; 2025 HybridX.Club. All rights reserved.</p>
+                        <p>You're receiving this because you recently joined HybridX.Club</p>
+                        <p style="margin-top: 15px;">
+                            <a href="https://hybridx.club/dashboard" style="color: #888888; text-decoration: underline;">Dashboard</a> |
+                            <a href="https://hybridx.club/profile" style="color: #888888; text-decoration: underline;">Profile Settings</a> |
+                            <a href="https://hybridx.club/assistant" style="color: #888888; text-decoration: underline;">AI Assistant</a> |
+                            <a href="mailto:training@hybridx.club" style="color: #888888; text-decoration: underline;">Contact Us</a>
+                        </p>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
