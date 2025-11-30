@@ -11,6 +11,9 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false, // All traffic over HTTPS
   },
+  ios: {
+    contentInset: 'automatic',
+  },
   plugins: {
     StatusBar: {
       style: 'light', // 'light' for dark icons, 'dark' for light icons

@@ -154,3 +154,75 @@ workflows:
         notify:
           success: true
           failure: true
+
+  ios-release-workflow:
+    name: iOS Capacitor Build (Release)
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: hybridx_app_store_connect
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: club.hybridx.app
+      vars:
+        XCODE_WORKSPACE: "App.xcworkspace"
+        XCODE_SCHEME: "App"
+        BUNDLE_ID: "club.hybridx.app"
+        APP_STORE_APP_ID: YOUR_APP_STORE_ID # Replace with your App Store Connect app ID
+      xcode: 15.4
+      node: 20
+      cocoapods: default
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'ios-v*'
+          include: true
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm install
+      - name: Build Next.js app
+        script: |
+          npm run build
+      - name: Install Capacitor CLI
+        script: |
+          npm install -g @capacitor/cli
+      - name: Create assets directory
+        script: |
+          mkdir -p ios/App/App/public
+      - name: Sync Capacitor
+        script: |
+          npx cap sync ios
+      - name: Set build number
+        script: |
+          cd ios/App
+          BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_APP_ID") + 1))
+          agvtool new-version -all $BUILD_NUMBER
+      - name: Set up code signing settings on Xcode project
+        script: |
+          xcode-project use-profiles
+      - name: Build ipa for App Store distribution
+        script: |
+          xcode-project build-ipa \
+            --workspace "ios/App/$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
+        submit_to_app_store: false
