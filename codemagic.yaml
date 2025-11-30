@@ -146,6 +146,7 @@ workflows:
           ./gradlew bundleRelease --stacktrace
     artifacts:
       - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/native-debug-symbols/**/*.zip
     publishing:
       email:
         recipients:
