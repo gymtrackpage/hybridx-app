@@ -33,6 +33,7 @@ import { StatsWidget } from '@/components/stats-widget';
 import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/contexts/user-context';
 import { isRunningWorkout } from '@/lib/type-guards';
+import { AndroidBetaBanner } from '@/components/android-beta-banner';
 
 // Lazy load heavy AI-powered components
 const WeeklyAnalysisDialog = lazy(() => import('@/components/weekly-analysis-dialog').then(mod => ({ default: mod.WeeklyAnalysisDialog })));
@@ -239,6 +240,12 @@ export default function DashboardPage() {
               </Suspense>
             )}
         </div>
+
+        {/* Android Beta Testing Banner */}
+        <AndroidBetaBanner
+          userEmail={user?.email}
+          userName={user?.firstName}
+        />
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <Card className={cn("lg:col-span-2", isWorkoutCompleted && "bg-muted/30")}>
