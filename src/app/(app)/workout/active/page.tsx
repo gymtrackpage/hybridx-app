@@ -19,7 +19,7 @@ import Link from 'next/link';
 import { Separator } from '@/components/ui/separator';
 import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
 import { useUser } from '@/contexts/user-context';
-import { isRunningWorkout, isRunningProgram as isRunningProgramGuard } from '@/lib/type-guards';
+import { isRunningWorkout } from '@/lib/type-guards';
 import { ExerciseHistory } from '@/components/exercise-history';
 import { convertDistanceInText, convertTextWithUnits } from '@/lib/unit-conversion';
 
@@ -29,7 +29,7 @@ const WorkoutCompleteModal = lazy(() => import('@/components/workout-complete-mo
 export default function ActiveWorkoutPage() {
   const { user, todaysWorkout, todaysSession, trainingPaces, loading, refreshData } = useUser();
   const [session, setSession] = useState<WorkoutSession | null>(null);
-  const [workoutInfo, setWorkoutInfo] = useState<{ day: number, workout: Workout | RunningWorkout | null } | null>(null);
+  const [workoutInfo, setWorkoutInfo] = useState<{ day: number; workout: Workout | RunningWorkout | null } | null>(null);
   const [extendedExercises, setExtendedExercises] = useState<Exercise[]>([]);
   const [isExtending, setIsExtending] = useState(false);
   const [notes, setNotes] = useState('');

@@ -34,6 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/contexts/user-context';
 import { isRunningWorkout } from '@/lib/type-guards';
 import { AndroidBetaBanner } from '@/components/android-beta-banner';
+import { RacePrepDialog } from '@/components/race-prep-dialog'; // IMPORTED
 
 // Lazy load heavy AI-powered components
 const WeeklyAnalysisDialog = lazy(() => import('@/components/weekly-analysis-dialog').then(mod => ({ default: mod.WeeklyAnalysisDialog })));
@@ -357,6 +358,10 @@ export default function DashboardPage() {
           </Card>
 
           <div className="space-y-6">
+            
+            {/* ADDED RACE PREP DIALOG HERE */}
+            <RacePrepDialog />
+
             {!isStravaConnected && (
               <Card className="bg-orange-50 border-orange-200">
                 <CardHeader>

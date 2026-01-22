@@ -13,6 +13,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, update: if request.auth != null && request.auth.uid == userId;
       allow create: if request.auth != null;
+      
+      // Allow access to subcollections like personalPrograms
+      match /personalPrograms/{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     match /programs/{programId} {
@@ -26,6 +31,12 @@ service cloud.firestore {
       
       // For write operations, we check the incoming resource from the client
       allow create, update, delete: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+    
+    match /notifications/{notificationId} {
+        allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+        // Allow creating notifications (e.g. from client side logic, though usually backend does this)
+        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
     }
   }
 }

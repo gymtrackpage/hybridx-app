@@ -16,6 +16,7 @@ import { getTopPrograms, type ProgramRecommendation } from '@/services/program-r
 import { getProgramClient } from '@/services/program-service-client';
 import { adjustTrainingPlan } from '@/ai/flows/adjust-training-plan';
 import type { Workout } from '@/models/types';
+import { ProgramPreviewDialog } from '@/components/program-preview-dialog'; // IMPORTED
 
 import { Button } from '@/components/ui/button';
 import {
@@ -592,7 +593,7 @@ function Step6({ onSubmit, onPrev, defaultValues, isLoading }: any) {
                     return (
                       <div
                         key={rec.program.id}
-                        className={`relative border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                        className={`relative border-2 rounded-lg p-4 transition-all ${
                           isSelected
                             ? 'border-primary bg-primary/5'
                             : isTopMatch
@@ -605,7 +606,7 @@ function Step6({ onSubmit, onPrev, defaultValues, isLoading }: any) {
                             <RadioGroupItem value={rec.program.id} className="mt-1" />
                           </FormControl>
                           <div className="flex-1 space-y-3">
-                            <div>
+                            <div className="cursor-pointer" onClick={() => field.onChange(rec.program.id)}>
                               <div className="flex items-center gap-2 mb-1">
                                 <FormLabel className="font-bold text-base cursor-pointer">
                                   {rec.program.name}
@@ -635,8 +636,14 @@ function Step6({ onSubmit, onPrev, defaultValues, isLoading }: any) {
                               </div>
                             )}
 
+                            {/* ADDED PREVIEW BUTTON HERE */}
+                            <ProgramPreviewDialog 
+                                programId={rec.program.id} 
+                                programName={rec.program.name}
+                            />
+
                             {rec.considerations.length > 0 && isSelected && (
-                              <div className="space-y-1 border-t pt-2">
+                              <div className="space-y-1 border-t pt-2 mt-2">
                                 <p className="text-xs font-medium text-muted-foreground">Things to consider:</p>
                                 {rec.considerations.map((consideration, idx) => (
                                   <div key={idx} className="flex items-start gap-2 text-xs">

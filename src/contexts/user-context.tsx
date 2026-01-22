@@ -96,25 +96,29 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 } else {
                     currentProgram = await getProgramClient(currentUser.programId);
                 }
-                setProgram(currentProgram);
+                
+                // Only proceed if a program was found
+                if (currentProgram) {
+                    setProgram(currentProgram);
 
-                // Priority 2: Check for an existing program session (which could be swapped)
-                const programSession = await getTodaysProgramSession(userId, today);
+                    // Priority 2: Check for an existing program session (which could be swapped)
+                    const programSession = await getTodaysProgramSession(userId, today);
 
-                if (programSession && programSession.workoutDetails) {
-                    workoutSession = programSession;
-                    // Use the details from the session itself, which will reflect any swaps
-                    currentWorkoutInfo = {
-                        day: getWorkoutForDay(currentProgram!, currentUser.startDate, today).day,
-                        workout: programSession.workoutDetails,
-                    };
-                } else if (currentProgram) {
-                    // Priority 3: No session exists, so create one based on the original program schedule
-                    const scheduledWorkoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, today);
-                    if (scheduledWorkoutInfo.workout) {
-                        // Create the session so Workout page has it immediately
-                        workoutSession = await getOrCreateWorkoutSession(userId, currentProgram.id, today, scheduledWorkoutInfo.workout);
-                        currentWorkoutInfo = scheduledWorkoutInfo;
+                    if (programSession && programSession.workoutDetails) {
+                        workoutSession = programSession;
+                        // Use the details from the session itself, which will reflect any swaps
+                        currentWorkoutInfo = {
+                            day: getWorkoutForDay(currentProgram, currentUser.startDate, today).day,
+                            workout: programSession.workoutDetails,
+                        };
+                    } else {
+                        // Priority 3: No session exists, so create one based on the original program schedule
+                        const scheduledWorkoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, today);
+                        if (scheduledWorkoutInfo.workout) {
+                            // Create the session so Workout page has it immediately
+                            workoutSession = await getOrCreateWorkoutSession(userId, currentProgram.id, today, scheduledWorkoutInfo.workout);
+                            currentWorkoutInfo = scheduledWorkoutInfo;
+                        }
                     }
                 }
             }

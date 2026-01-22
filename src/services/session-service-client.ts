@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger';
 // This file contains functions for client-side components. NO 'use server' here.
 
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy, getDoc, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
-import { db, getAuthInstance } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import type { WorkoutSession, Workout, RunningWorkout, Exercise, ProgramType } from '@/models/types';
 import type { StravaActivity } from './strava-service';
 
@@ -152,7 +152,7 @@ export async function createCustomWorkoutSession(userId: string, title: string, 
     };
     
     // For custom workouts, we always overwrite any existing session for today
-    return getOrCreateWorkoutSession(userId, 'custom-workout', today, workout, true, duration);
+    await getOrCreateWorkoutSession(userId, 'custom-workout', today, workout, true, duration);
 }
 
 
