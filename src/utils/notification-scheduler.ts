@@ -2,9 +2,12 @@
 
 /**
  * Utility for scheduling daily workout notifications
+ * Hybrid implementation: Support both Web (PWA) and Native (Capacitor)
  */
 
 import { getAuthInstance } from '@/lib/firebase';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 export interface WorkoutNotificationData {
   workoutTitle: string;
@@ -13,36 +16,13 @@ export interface WorkoutNotificationData {
 
 /**
  * Schedules a daily notification for tomorrow's workout
- * Uses the browser's Notification API with service worker
  */
 export async function scheduleDailyNotification(
   workoutData: WorkoutNotificationData,
   preferredTime: { hour: number; minute: number } = { hour: 8, minute: 0 }
 ): Promise<boolean> {
   try {
-    // Check if notifications are supported and permitted
-    if (!('Notification' in window) || Notification.permission !== 'granted') {
-      console.warn('Notifications not available or not granted');
-      return false;
-    }
-
-    // Check if service worker is available
-    if (!('serviceWorker' in navigator)) {
-      console.warn('Service workers not supported');
-      return false;
-    }
-
-    const registration = await navigator.serviceWorker.ready;
-
-    // Calculate the time for tomorrow's notification
-    const now = new Date();
-    const scheduledTime = new Date();
-    scheduledTime.setDate(now.getDate() + 1);
-    scheduledTime.setHours(preferredTime.hour, preferredTime.minute, 0, 0);
-
-    const delay = scheduledTime.getTime() - now.getTime();
-
-    // Get auth token for API call
+    // 1. Generate the AI Message first
     const auth = await getAuthInstance();
     const user = auth.currentUser;
     if (!user) {
@@ -51,59 +31,88 @@ export async function scheduleDailyNotification(
     }
 
     const token = await user.getIdToken();
+    let message = `Time for ${workoutData.workoutTitle}!`;
 
-    // Generate AI message for the notification
-    const response = await fetch('/api/notifications/generate-message', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(workoutData),
-    });
+    try {
+        const response = await fetch('/api/notifications/generate-message', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(workoutData),
+        });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate notification message');
+        if (response.ok) {
+            const data = await response.json();
+            message = data.message;
+        }
+    } catch (e) {
+        console.warn("AI Message generation failed, using fallback.");
     }
 
-    const { message } = await response.json();
+    // Calculate time for tomorrow
+    const now = new Date();
+    const scheduledTime = new Date();
+    scheduledTime.setDate(now.getDate() + 1);
+    scheduledTime.setHours(preferredTime.hour, preferredTime.minute, 0, 0);
 
-    // Schedule the notification using setTimeout
-    // Note: This approach works for same-session scheduling
-    // For persistent scheduling across sessions, you'd need a backend service
-    setTimeout(() => {
-      registration.showNotification('HYBRIDX Workout', {
-        body: message,
-        icon: '/icons/icon-192x192.png',
-        badge: '/icons/icon-192x192.png',
-        // @ts-ignore - vibrate is a valid option but not in TypeScript types yet
-        vibrate: [200, 100, 200],
-        data: {
-          url: '/workout',
-          dateOfArrival: Date.now(),
-        },
-        actions: [
-          {
-            action: 'view',
-            title: 'View Workout',
-          },
-          {
-            action: 'close',
-            title: 'Dismiss',
-          },
-        ],
-      });
-    }, delay);
+    // If preferred time is already passed for tomorrow (edge case), add another day? No, tomorrow is fine.
+    // If user sets time to 7am and it's currently 8am, tomorrow 7am is correct.
 
-    // Store in localStorage to reschedule on next visit
-    const notificationData = {
-      workoutData,
-      preferredTime,
-      lastScheduled: now.toISOString(),
-    };
-    localStorage.setItem('workout_notification_schedule', JSON.stringify(notificationData));
+    const isNative = Capacitor.isNativePlatform();
 
-    return true;
+    if (isNative) {
+        // === NATIVE IMPLEMENTATION (Capacitor) ===
+        // Request permissions first
+        const permStatus = await LocalNotifications.requestPermissions();
+        if (permStatus.display === 'granted') {
+            await LocalNotifications.schedule({
+                notifications: [{
+                    title: "HYBRIDX Training",
+                    body: message,
+                    id: 1, // Constant ID to replace previous daily notification
+                    schedule: { at: scheduledTime },
+                    sound: undefined,
+                    attachments: undefined,
+                    actionTypeId: "",
+                    extra: {
+                        url: '/workout'
+                    }
+                }]
+            });
+            console.log("Native notification scheduled for", scheduledTime);
+            return true;
+        }
+        return false;
+
+    } else {
+        // === WEB IMPLEMENTATION (PWA) ===
+        // Check permissions
+        if (!('Notification' in window) || Notification.permission !== 'granted') {
+            return false;
+        }
+        
+        if (!('serviceWorker' in navigator)) {
+            return false;
+        }
+
+        const registration = await navigator.serviceWorker.ready;
+        const delay = scheduledTime.getTime() - now.getTime();
+
+        // This is still unreliable if tab closes, but best we can do without VAPID backend
+        setTimeout(() => {
+            registration.showNotification('HYBRIDX Workout', {
+                body: message,
+                icon: '/icons/icon-192x192.png',
+                badge: '/icons/icon-192x192.png',
+                data: { url: '/workout' }
+            });
+        }, delay);
+        
+        return true;
+    }
+
   } catch (error) {
     console.error('Error scheduling notification:', error);
     return false;
@@ -112,22 +121,27 @@ export async function scheduleDailyNotification(
 
 /**
  * Checks if a notification should be scheduled and schedules it
- * Call this on app load for users who have granted permission
  */
 export async function checkAndScheduleNotification(
   workoutData: WorkoutNotificationData,
   userPreferredTime?: { hour: number; minute: number }
 ): Promise<void> {
-  if (Notification.permission !== 'granted') {
-    return;
+  
+  // For native, we check permission via plugin
+  if (Capacitor.isNativePlatform()) {
+      // Permission check happens inside scheduleDailyNotification for native usually, 
+      // or we can pre-check. Let's just run logic.
+  } else {
+      if (Notification.permission !== 'granted') return;
   }
 
   const stored = localStorage.getItem('workout_notification_schedule');
   const preferredTime = userPreferredTime || { hour: 8, minute: 0 };
 
   if (!stored) {
-    // First time - schedule with preferred time
-    await scheduleDailyNotification(workoutData, preferredTime);
+    // First time
+    const success = await scheduleDailyNotification(workoutData, preferredTime);
+    if (success) markAsScheduled(workoutData, preferredTime);
     return;
   }
 
@@ -136,51 +150,53 @@ export async function checkAndScheduleNotification(
     const lastScheduledDate = new Date(lastScheduled);
     const now = new Date();
 
-    // If last scheduled was yesterday or earlier, schedule a new one
+    // Reset check time to start of day
     lastScheduledDate.setHours(0, 0, 0, 0);
     now.setHours(0, 0, 0, 0);
 
+    // If we haven't scheduled one TODAY (for tomorrow), do it.
     if (lastScheduledDate < now) {
-      await scheduleDailyNotification(workoutData, preferredTime);
+      const success = await scheduleDailyNotification(workoutData, preferredTime);
+      if (success) markAsScheduled(workoutData, preferredTime);
     }
   } catch (error) {
     console.error('Error checking notification schedule:', error);
   }
 }
 
+function markAsScheduled(data: WorkoutNotificationData, time: any) {
+    const notificationData = {
+      workoutData: data,
+      preferredTime: time,
+      lastScheduled: new Date().toISOString(),
+    };
+    localStorage.setItem('workout_notification_schedule', JSON.stringify(notificationData));
+}
+
 /**
  * Shows an immediate test notification
  */
 export async function sendTestNotification(message: string): Promise<void> {
-  if (Notification.permission !== 'granted') {
-    throw new Error('Notification permission not granted');
+  const isNative = Capacitor.isNativePlatform();
+
+  if (isNative) {
+      await LocalNotifications.requestPermissions();
+      await LocalNotifications.schedule({
+          notifications: [{
+              title: "HYBRIDX Test",
+              body: message,
+              id: 99,
+              schedule: { at: new Date(Date.now() + 1000) }, // 1 second later
+          }]
+      });
+  } else {
+      if (Notification.permission !== 'granted') {
+        throw new Error('Notification permission not granted');
+      }
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification('HYBRIDX Workout', {
+        body: message,
+        icon: '/icons/icon-192x192.png'
+      });
   }
-
-  if (!('serviceWorker' in navigator)) {
-    throw new Error('Service workers not supported');
-  }
-
-  const registration = await navigator.serviceWorker.ready;
-
-  await registration.showNotification('HYBRIDX Workout', {
-    body: message,
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-192x192.png',
-    // @ts-ignore - vibrate is a valid option but not in TypeScript types yet
-    vibrate: [200, 100, 200],
-    data: {
-      url: '/workout',
-      dateOfArrival: Date.now(),
-    },
-    actions: [
-      {
-        action: 'view',
-        title: 'View Workout',
-      },
-      {
-        action: 'close',
-        title: 'Dismiss',
-      },
-    ],
-  });
 }

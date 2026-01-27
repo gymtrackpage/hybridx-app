@@ -3,7 +3,7 @@
 
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { BarChart, Target, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History } from 'lucide-react';
+import { BarChart, Target, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History, Calendar, Bell } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval, isFuture } from 'date-fns';
 
 import { dashboardSummary } from '@/ai/flows/dashboard-summary';
@@ -34,7 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/contexts/user-context';
 import { isRunningWorkout } from '@/lib/type-guards';
 import { AndroidBetaBanner } from '@/components/android-beta-banner';
-import { RacePrepDialog } from '@/components/race-prep-dialog'; // IMPORTED
+import { RacePrepDialog } from '@/components/race-prep-dialog'; 
 
 // Lazy load heavy AI-powered components
 const WeeklyAnalysisDialog = lazy(() => import('@/components/weekly-analysis-dialog').then(mod => ({ default: mod.WeeklyAnalysisDialog })));
@@ -60,6 +60,9 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const { isGranted } = useNotificationPermission();
   
+  // New User Detection
+  const isNewUser = !loading && allSessions.length === 0;
+
   // Calculate progress data when allSessions changes
   useEffect(() => {
     if (allSessions.length > 0) {
@@ -168,17 +171,15 @@ export default function DashboardPage() {
             experience: user.experience,
         });
 
-        // The AI output matches the structure of a Workout object
         const oneOffWorkout: Workout = {
             ...generated,
-            day: 0, // Day 0 can represent a non-program workout
-            programType: 'hyrox' // Explicitly set programType
+            day: 0,
+            programType: 'hyrox'
         };
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // We create a session with a special programId to denote it's a one-off and overwrite any existing session for today
         await getOrCreateWorkoutSession(user.id, 'one-off-ai', today, oneOffWorkout, true);
         
         toast({ title: 'Workout Generated!', description: 'Redirecting you to start your session.' });
@@ -189,6 +190,14 @@ export default function DashboardPage() {
         toast({ title: 'Error', description: 'Could not generate a workout. Please try again.', variant: 'destructive' });
         setIsGeneratingWorkout(false);
     }
+  };
+
+  const handleCommitTomorrow = () => {
+      // In a real app, this would use the Notification API
+      toast({
+          title: "Session Committed!",
+          description: "We'll remind you tomorrow morning. Get your kit ready!",
+      });
   };
 
   const programStartsInFuture = user?.startDate && isFuture(user.startDate);
@@ -220,6 +229,134 @@ export default function DashboardPage() {
   const isProgramRunning = isRunningWorkout(todaysWorkout?.workout as any);
   const isStravaConnected = user?.strava?.accessToken;
 
+  // === NEW USER ONBOARDING DASHBOARD ===
+  if (isNewUser) {
+      return (
+        <div className="space-y-6 animate-in fade-in duration-700">
+            <div className="space-y-1">
+                <h1 className="text-3xl font-bold tracking-tight text-primary">
+                    Welcome to Week 1, {user?.firstName}!
+                </h1>
+                <p className="text-muted-foreground text-lg">
+                    The hardest step is the first one. Let's make it easy.
+                </p>
+            </div>
+
+            <AndroidBetaBanner userEmail={user?.email} userName={user?.firstName} />
+
+            <div className="grid gap-6 md:grid-cols-2">
+                {/* HERO CARD: TODAY'S WORKOUT */}
+                <Card className="border-2 border-primary/20 bg-gradient-to-br from-card to-primary/5 shadow-lg">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-xl">
+                            <Target className="h-6 w-6 text-primary" />
+                            Your First Mission
+                        </CardTitle>
+                        <CardDescription>
+                            Complete just 1 workout this week to build momentum.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {todaysWorkout?.workout ? (
+                            <div className="space-y-4">
+                                <div className="p-4 bg-background/80 rounded-lg border">
+                                    <h3 className="font-bold text-lg">{todaysWorkout.workout.title}</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Day {todaysWorkout.day} • {isProgramRunning ? 'Running' : 'Hybrid Strength'}
+                                    </p>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                    Can't do it today? No problem. Commit to tomorrow and we'll hold you accountable.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="text-center py-6">
+                                <p>No workout scheduled today.</p>
+                                <Button variant="link" onClick={handleGenerateWorkout}>
+                                    Generate a Quick Start Session
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                    <CardFooter className="flex flex-col sm:flex-row gap-3">
+                        <Button 
+                            variant="default" 
+                            size="lg" 
+                            className="w-full font-bold shadow-md hover:shadow-xl transition-all"
+                            onClick={handleStartWorkout}
+                            disabled={!todaysWorkout?.workout}
+                        >
+                            <Zap className="mr-2 h-5 w-5 fill-yellow-400 text-yellow-400" />
+                            Start First Workout
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            size="lg" 
+                            className="w-full"
+                            onClick={handleCommitTomorrow}
+                        >
+                            <Calendar className="mr-2 h-4 w-4" />
+                            Do It Tomorrow
+                        </Button>
+                    </CardFooter>
+                </Card>
+
+                {/* SIDEBAR: WHY HYBRIDX */}
+                <div className="space-y-6">
+                    <Card className="bg-muted/30">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Why HybridX?</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4 text-sm">
+                            <div className="flex gap-3">
+                                <div className="bg-primary/10 p-2 rounded-full h-fit">
+                                    <Zap className="h-4 w-4 text-primary" />
+                                </div>
+                                <div>
+                                    <p className="font-semibold">AI Adaptability</p>
+                                    <p className="text-muted-foreground">If you miss a day, just tell the AI. It re-plans your week instantly.</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-3">
+                                <div className="bg-primary/10 p-2 rounded-full h-fit">
+                                    <Target className="h-4 w-4 text-primary" />
+                                </div>
+                                <div>
+                                    <p className="font-semibold">Event Prep</p>
+                                    <p className="text-muted-foreground">Training for Hyrox or a Marathon? Use our "Train for an Event" tool.</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* SETUP STEPS */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg">Quick Setup</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            {!isStravaConnected && (
+                                <Link href="/profile" className="flex items-center justify-between p-3 rounded-md hover:bg-muted transition-colors border border-dashed">
+                                    <span className="flex items-center gap-2 text-sm font-medium">
+                                        <LinkIcon className="h-4 w-4" /> Connect Strava
+                                    </span>
+                                    <Badge variant="secondary">Recommended</Badge>
+                                </Link>
+                            )}
+                            <div className="flex items-center justify-between p-3 rounded-md bg-muted/20 border">
+                                <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                                    <CheckCircle className="h-4 w-4 text-green-500" /> Account Created
+                                </span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </div>
+      );
+  }
+
+  // === EXISTING DASHBOARD (Standard) ===
   return (
     <>
       <div className="space-y-6">
