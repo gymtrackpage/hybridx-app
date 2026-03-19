@@ -6,5 +6,22 @@ runConfig:
   # more instances in response to increased traffic.
   maxInstances: 1
 env:
+  # Public variables (not secret)
+  - variable: NEXT_PUBLIC_APP_URL
+    value: "https://app.hybridx.club"
+  - variable: NEXT_PUBLIC_STRAVA_CLIENT_ID
+    value: "12008"
+  - variable: STRIPE_PRICE_ID
+    value: "price_1S3Ki6GKLIEfAkDGEKkK9IIN"
+
+  # Secrets (stored in Google Secret Manager)
+  - variable: FIREBASE_SERVICE_ACCOUNT_KEY
+    secret: FIREBASE_SERVICE_ACCOUNT_KEY
+  - variable: STRIPE_SECRET_KEY
+    secret: STRIPE_SECRET_KEY
+  - variable: STRIPE_WEBHOOK_SECRET
+    secret: STRIPE_WEBHOOK_SECRET
   - variable: STRAVA_CLIENT_SECRET
     secret: STRAVA_CLIENT_SECRET
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
