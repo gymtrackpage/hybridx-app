@@ -17,6 +17,7 @@ const DashboardSummaryInputSchema = z.object({
   programName: z.string().describe('The name of the user active training program.'),
   daysCompleted: z.number().describe('The total number of days the user has completed in their program.'),
   weeklyConsistency: z.string().describe('A brief summary of workouts completed in the last 4 weeks.'),
+  todayStravaActivity: z.string().optional().describe("Brief description of any Strava activities the athlete has already completed today, e.g. 'a 10.2km run (52m) and a 45min strength session'."),
 });
 export type DashboardSummaryInput = z.infer<typeof DashboardSummaryInputSchema>;
 
@@ -33,16 +34,20 @@ const prompt = ai.definePrompt({
   name: 'dashboardSummaryPrompt',
   input: {schema: DashboardSummaryInputSchema},
   output: {schema: DashboardSummaryOutputSchema},
-  prompt: `You are an AI coach for an athlete named {{{userName}}}. 
-  
+  prompt: `You are an AI coach for an athlete named {{{userName}}}.
+
   Based on the following progress data, create a single, encouraging sentence that summarizes their progress and gives them a positive affirmation for the day. Keep it concise and impactful.
 
   Data:
   - Program: {{{programName}}}
   - Total Days Completed: {{{daysCompleted}}}
   - Recent Consistency: {{{weeklyConsistency}}}
-  
-  Example: "Your consistency on the {{{programName}}} program is paying off, keep that momentum going today!"`,
+  {{#if todayStravaActivity}}- Already completed today on Strava: {{{todayStravaActivity}}}{{/if}}
+
+  {{#if todayStravaActivity}}Since they have already trained today, acknowledge what they have done specifically and encourage them to keep the momentum or recover well. Reference the actual activity.{{else}}If they haven't trained yet today, motivate them to get their session in.{{/if}}
+
+  Example (no activity today): "Your consistency on the {{{programName}}} program is paying off — keep that momentum going today!"
+  Example (activity done): "Fantastic effort on that run this morning, {{{userName}}} — your body is building fitness with every session!"`,
 });
 
 const dashboardSummaryFlow = ai.defineFlow(

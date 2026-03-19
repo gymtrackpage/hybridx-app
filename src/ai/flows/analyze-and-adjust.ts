@@ -33,6 +33,7 @@ const AnalyzeAndAdjustInputSchema = z.object({
   recentHistory: z.array(SessionHistorySchema).describe("The last 3-5 workout sessions with user notes."),
   upcomingWorkouts: z.array(WorkoutSchema).describe("The scheduled workouts for the next 7 days."),
   customRequest: z.string().optional().describe("Optional custom request from the user (e.g., 'I want longer metcons', 'Add more running')."),
+  stravaTrainingContext: z.string().optional().describe("Optional Strava training load summary (ATL, CTL, TSB, activity breakdown) for the athlete."),
 });
 
 export type AnalyzeAndAdjustInput = z.infer<typeof AnalyzeAndAdjustInputSchema>;
@@ -77,6 +78,13 @@ const prompt = ai.definePrompt({
   {{#each upcomingWorkouts}}
   - Day {{day}}: {{title}} ({{programType}})
   {{/each}}
+
+  {{#if stravaTrainingContext}}
+  **Strava Training Load Data:**
+  {{{stravaTrainingContext}}}
+
+  Use this data to inform your analysis. If the athlete is fatigued (TSB strongly negative) or overreaching, factor that into your recommendations even if their session notes don't explicitly mention it. If ATL is significantly above CTL, consider recommending reduced intensity.
+  {{/if}}
 
   {{#if customRequest}}
   **Special Request from Athlete:**

@@ -1,9 +1,9 @@
 // src/app/(app)/dashboard/page.tsx
 'use client';
 
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, useState, useRef, lazy, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { BarChart, Target, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History, Calendar, Bell } from 'lucide-react';
+import { BarChart, Target, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History, Calendar, Bell, CheckSquare } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval, isFuture } from 'date-fns';
 
 import { dashboardSummary } from '@/ai/flows/dashboard-summary';
@@ -21,7 +21,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, ChartTooltip, CartesianGrid, ChartTooltipContent } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getOrCreateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
+import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
 import type { Workout, RunningWorkout, PlannedRun } from '@/models/types';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -34,11 +34,13 @@ import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/contexts/user-context';
 import { isRunningWorkout } from '@/lib/type-guards';
 import { AndroidBetaBanner } from '@/components/android-beta-banner';
-import { RacePrepDialog } from '@/components/race-prep-dialog'; 
+import { RacePrepDialog } from '@/components/race-prep-dialog';
 
 // Lazy load heavy AI-powered components
-const WeeklyAnalysisDialog = lazy(() => import('@/components/weekly-analysis-dialog').then(mod => ({ default: mod.WeeklyAnalysisDialog })));
+// const WeeklyAnalysisDialog = lazy(() => import('@/components/weekly-analysis-dialog').then(mod => ({ default: mod.WeeklyAnalysisDialog })));
 const CustomWorkoutDialog = lazy(() => import('@/components/custom-workout-dialog').then(mod => ({ default: mod.CustomWorkoutDialog })));
+const TrainingLoadCard = lazy(() => import('@/components/training-load-card').then(mod => ({ default: mod.TrainingLoadCard })));
+const TodayStravaFeed = lazy(() => import('@/components/today-strava-feed').then(mod => ({ default: mod.TodayStravaFeed })));
 
 const chartConfig = {
   workouts: {
@@ -48,9 +50,15 @@ const chartConfig = {
 };
 
 export default function DashboardPage() {
-  const { user, program, todaysWorkout, todaysSession, allSessions, streakData, trainingPaces, loading } = useUser();
+  const { user, program, todaysWorkout, todaysSession, allSessions, streakData, trainingPaces, loading, refreshData } = useUser();
   const [progressData, setProgressData] = useState<{ week: string, workouts: number }[]>([]);
+  const [todayStravaSummary, setTodayStravaSummary] = useState<string | null>(null);
+  // True once TodayStravaFeed has resolved (success OR no Strava connection) — gates the AI summary
+  const [todayStravaLoaded, setTodayStravaLoaded] = useState(false);
+  // Prevent the dashboard summary from firing more than once per mount
+  const summaryFiredRef = useRef(false);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
+  const [isMarkingDone, setIsMarkingDone] = useState(false);
   const [isCustomWorkoutDialogOpen, setIsCustomWorkoutDialogOpen] = useState(false);
   const [summary, setSummary] = useState("Here's your plan for today. Let's get it done.");
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -71,50 +79,68 @@ export default function DashboardPage() {
     }
   }, [allSessions]);
 
-  // Effect for AI Dashboard Summary
+  // Mark Strava as "not needed" for non-connected users so the summary doesn't wait forever
   useEffect(() => {
-    if (user && program && todaysWorkout && progressData.length > 0) {
-      setSummaryLoading(true);
-      dashboardSummary({
-        userName: user.firstName,
-        programName: program.name,
-        daysCompleted: todaysWorkout.day > 0 ? todaysWorkout.day : 0,
-        weeklyConsistency: `${progressData[3]?.workouts || 0} workouts completed in the last week.`
-      }).then(result => {
-        setSummary(result.summary);
-      }).catch(aiError => {
-        console.error("Failed to generate AI dashboard summary:", aiError);
-        setSummary("Here's your plan for today. Let's get it done."); // Fallback
-      }).finally(() => {
-        setSummaryLoading(false);
-      });
+    if (!loading && user && !user.strava?.accessToken) {
+      setTodayStravaLoaded(true);
     }
-  }, [user, program, todaysWorkout, progressData]);
+  }, [loading, user]);
 
-  // Effect for AI Workout Summary
+  // Effect for AI Dashboard Summary — fires ONCE after all data including Strava is ready.
+  // Using summaryFiredRef to prevent double-firing when todayStravaLoaded flips to true.
   useEffect(() => {
-    if (user && todaysWorkout?.workout && todaysSession) {
-      setWorkoutSummaryLoading(true);
-      const exercisesForSummary = isRunningWorkout(todaysWorkout.workout)
-        ? (todaysWorkout.workout as RunningWorkout).runs.map(r => r.type).join(', ')
-        : (todaysWorkout.workout as Workout).exercises.map(e => e.name).join(', ');
+    if (!user || !program || !todaysWorkout || progressData.length === 0) return;
+    if (!todayStravaLoaded) return; // Wait until we know whether there are Strava activities today
+    if (summaryFiredRef.current) return; // Don't fire more than once per mount
 
+    summaryFiredRef.current = true;
+    setSummaryLoading(true);
+    dashboardSummary({
+      userName: user.firstName,
+      programName: program.name,
+      daysCompleted: todaysWorkout.day > 0 ? todaysWorkout.day : 0,
+      weeklyConsistency: `${progressData[3]?.workouts || 0} workouts completed in the last week.`,
+      todayStravaActivity: todayStravaSummary ?? undefined,
+    }).then(result => {
+      setSummary(result.summary);
+    }).catch(aiError => {
+      console.error("Failed to generate AI dashboard summary:", aiError);
+      setSummary("Here's your plan for today. Let's get it done.");
+    }).finally(() => {
+      setSummaryLoading(false);
+    });
+  }, [user, program, todaysWorkout, progressData, todayStravaLoaded]); // todayStravaSummary intentionally excluded — read via closure after todayStravaLoaded is true
+
+  // Effect for AI Workout Summary — staggered 1s after mount to avoid concurrent Gemini calls
+  useEffect(() => {
+    if (!user || !todaysWorkout?.workout || !todaysSession) {
+      setWorkoutSummaryLoading(false);
+      return;
+    }
+
+    setWorkoutSummaryLoading(true);
+    const exercisesForSummary = isRunningWorkout(todaysWorkout.workout)
+      ? (todaysWorkout.workout as RunningWorkout).runs.map(r => r.type).join(', ')
+      : (todaysWorkout.workout as Workout).exercises.map(e => e.name).join(', ');
+
+    // Delay slightly so dashboard summary fires first, avoiding concurrent API calls
+    const timer = setTimeout(() => {
       workoutSummary({
         userName: user.firstName,
-        workoutTitle: todaysWorkout.workout.title,
+        workoutTitle: todaysWorkout.workout!.title,
         exercises: exercisesForSummary,
         userNotes: todaysSession.notes,
       }).then(result => {
         setWorkoutSummaryText(result.summary);
       }).catch(aiError => {
         console.error("Failed to generate AI workout summary:", aiError);
-        setWorkoutSummaryText(todaysWorkout.workout!.title); // Fallback
+        setWorkoutSummaryText(todaysWorkout.workout!.title);
       }).finally(() => {
         setWorkoutSummaryLoading(false);
       });
-    } else {
-      setWorkoutSummaryLoading(false);
-    }
+    }, 1000);
+
+    return () => clearTimeout(timer);
   }, [user, todaysWorkout, todaysSession]);
 
   // Effect to schedule daily notifications
@@ -198,6 +224,25 @@ export default function DashboardPage() {
           title: "Session Committed!",
           description: "We'll remind you tomorrow morning. Get your kit ready!",
       });
+  };
+
+  const handleMarkDone = async () => {
+      if (!todaysSession || !todaysWorkout?.workout) return;
+      setIsMarkingDone(true);
+      try {
+          await updateWorkoutSession(todaysSession.id, {
+              finishedAt: new Date(),
+              workoutTitle: todaysWorkout.workout.title,
+              programType: todaysWorkout.workout.programType,
+          });
+          await refreshData();
+          toast({ title: 'Workout Completed!', description: 'Nice work. Keep the streak alive!' });
+      } catch (error) {
+          console.error('Failed to mark workout done:', error);
+          toast({ title: 'Error', description: 'Could not mark workout as done.', variant: 'destructive' });
+      } finally {
+          setIsMarkingDone(false);
+      }
   };
 
   const programStartsInFuture = user?.startDate && isFuture(user.startDate);
@@ -372,11 +417,13 @@ export default function DashboardPage() {
               )}
             </div>
 
+            {/* Hiding Weekly Analysis for now 
             {user && (
               <Suspense fallback={null}>
                 <WeeklyAnalysisDialog userId={user.id} />
               </Suspense>
             )}
+            */}
         </div>
 
         {/* Android Beta Testing Banner */}
@@ -489,15 +536,36 @@ export default function DashboardPage() {
                       </Button>
                   </div>
               ) : (
-                  <Button variant="accent" className="w-full" onClick={handleStartWorkout} disabled={!todaysWorkout?.workout}>Start / Resume Workout</Button>
+                  <div className="w-full flex flex-col md:flex-row gap-2">
+                      <Button variant="accent" className="w-full" onClick={handleStartWorkout} disabled={!todaysWorkout?.workout}>
+                          <Zap className="mr-2 h-4 w-4" />
+                          Start / Resume Workout
+                      </Button>
+                      {todaysSession && (
+                          <Button variant="outline" className="w-full" onClick={handleMarkDone} disabled={isMarkingDone}>
+                              {isMarkingDone
+                                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  : <CheckSquare className="mr-2 h-4 w-4" />
+                              }
+                              Mark as Done
+                          </Button>
+                      )}
+                  </div>
               )}
             </CardFooter>
           </Card>
 
           <div className="space-y-6">
-            
+
             {/* ADDED RACE PREP DIALOG HERE */}
             <RacePrepDialog />
+
+            {/* Training Load Card — shown when Strava is connected */}
+            {isStravaConnected && user && (
+              <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
+                <TrainingLoadCard user={user} />
+              </Suspense>
+            )}
 
             {!isStravaConnected && (
               <Card className="bg-orange-50 border-orange-200">
@@ -560,6 +628,26 @@ export default function DashboardPage() {
             </Card>
           </div>
         </div>
+
+        {/* Today's Strava Activity Feed — only rendered when Strava is connected */}
+        {isStravaConnected && user && (
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Today&apos;s Activity
+            </h2>
+            <Suspense fallback={
+              <div className="flex gap-3">
+                <Skeleton className="h-16 flex-1 rounded-xl" />
+                <Skeleton className="h-16 flex-1 rounded-xl" />
+              </div>
+            }>
+              <TodayStravaFeed onActivitiesLoaded={(s) => {
+                setTodayStravaSummary(s);
+                setTodayStravaLoaded(true);
+              }} />
+            </Suspense>
+          </div>
+        )}
 
         <StatsWidget streakData={streakData} loading={loading} />
       </div>

@@ -130,6 +130,9 @@ export interface WorkoutSession {
     // Details of the workout that was performed, for sessions not linked to a program
     workoutDetails?: Workout | RunningWorkout;
 
+    // Per-exercise checklist for ticking off exercises during a workout
+    exerciseChecklist?: Record<string, boolean>;
+
     // Strava integration fields
     stravaId?: string;
     uploadedToStrava?: boolean;

@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { format } from 'date-fns';
-import { Search, Filter, Calendar, CheckCircle2, XCircle, Clock, Trophy, Dumbbell, Route, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Filter, Calendar, CheckCircle2, XCircle, Clock, Trophy, Dumbbell, Route, ChevronDown, ChevronUp, Link as LinkIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,8 +22,9 @@ import Link from 'next/link';
 import { formatExerciseDetails } from '@/utils/text-formatter';
 import type { Workout, RunningWorkout, Exercise, PlannedRun } from '@/models/types';
 
-// Lazy load ShareWorkoutDialog - only loads when user has completed workouts
+// Lazy load heavy dialogs
 const ShareWorkoutDialog = lazy(() => import('@/components/share-workout-dialog').then(mod => ({ default: mod.ShareWorkoutDialog })));
+const LinkStravaActivityDialog = lazy(() => import('@/components/link-strava-activity-dialog').then(mod => ({ default: mod.LinkStravaActivityDialog })));
 
 export default function WorkoutHistoryPage() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
@@ -32,10 +33,12 @@ export default function WorkoutHistoryPage() {
   const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'skipped'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'skipped' | 'missed'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'hyrox' | 'running'>('all');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'duration'>('date-desc');
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
+  const [sessionToLink, setSessionToLink] = useState<WorkoutSession | null>(null);
+  const [isLinkerOpen, setIsLinkerOpen] = useState(false);
 
   const toggleExpanded = (sessionId: string) => {
     setExpandedSessions(prev => {
@@ -116,6 +119,8 @@ export default function WorkoutHistoryPage() {
       filtered = filtered.filter((session) => session.finishedAt && !session.skipped);
     } else if (statusFilter === 'skipped') {
       filtered = filtered.filter((session) => session.skipped);
+    } else if (statusFilter === 'missed') {
+      filtered = filtered.filter((session) => !session.finishedAt && !session.skipped);
     }
 
     // Type filter
@@ -146,11 +151,14 @@ export default function WorkoutHistoryPage() {
     const completed = sessions.filter((s) => s.finishedAt && !s.skipped);
     const totalDuration = completed.reduce((sum, s) => sum + (Number(s.duration) || 0), 0);
     const avgDuration = completed.length > 0 ? totalDuration / completed.length : 0;
+    const missed = sessions.filter((s) => !s.finishedAt && !s.skipped);
 
     return {
       total: sessions.length,
       completed: completed.length,
       skipped: sessions.filter((s) => s.skipped).length,
+      missed: missed.length,
+      completionRate: sessions.length > 0 ? Math.round((completed.length / sessions.length) * 100) : 0,
       avgDuration: Math.round(avgDuration),
     };
   }, [sessions]);
@@ -186,6 +194,7 @@ export default function WorkoutHistoryPage() {
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Workout History</h1>
@@ -193,7 +202,7 @@ export default function WorkoutHistoryPage() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Sessions</CardTitle>
@@ -209,10 +218,27 @@ export default function WorkoutHistoryPage() {
             <CheckCircle2 className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.completed}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}% completion rate
-            </p>
+            <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
+            <p className="text-xs text-muted-foreground">{stats.completionRate}% completion rate</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Missed</CardTitle>
+            <XCircle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-500">{stats.missed}</div>
+            <p className="text-xs text-muted-foreground">started, not finished</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Skipped</CardTitle>
+            <XCircle className="h-4 w-4 text-orange-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-500">{stats.skipped}</div>
           </CardContent>
         </Card>
         <Card>
@@ -223,15 +249,6 @@ export default function WorkoutHistoryPage() {
           <CardContent>
             <div className="text-2xl font-bold">{stats.avgDuration}</div>
             <p className="text-xs text-muted-foreground">minutes per workout</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Skipped</CardTitle>
-            <XCircle className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.skipped}</div>
           </CardContent>
         </Card>
       </div>
@@ -269,6 +286,7 @@ export default function WorkoutHistoryPage() {
                   <SelectItem value="all">All</SelectItem>
                   <SelectItem value="completed">Completed</SelectItem>
                   <SelectItem value="skipped">Skipped</SelectItem>
+                  <SelectItem value="missed">Missed</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -342,11 +360,13 @@ export default function WorkoutHistoryPage() {
           <div className="space-y-3">
             {filteredAndSortedSessions.map((session) => {
               const isCompleted = session.finishedAt && !session.skipped;
+              const isMissed = !session.finishedAt && !session.skipped;
 
               return (
                 <Card key={session.id} className={cn('transition-all hover:shadow-md', {
                   'border-green-500/50': isCompleted,
                   'border-orange-500/50': session.skipped,
+                  'border-red-400/50': isMissed,
                 })}>
                   <CardContent className="p-6">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -376,8 +396,14 @@ export default function WorkoutHistoryPage() {
                                   Skipped
                                 </Badge>
                               )}
-                              {session.uploadedToStrava && (
-                                <Badge variant="outline" className="bg-purple-500/10 text-purple-700 border-purple-500/50">
+                              {isMissed && (
+                                <Badge variant="outline" className="bg-red-500/10 text-red-700 border-red-500/50">
+                                  Missed
+                                </Badge>
+                              )}
+                              {session.stravaId && (
+                                <Badge variant="outline" className="bg-orange-500/10 text-orange-700 border-orange-500/50">
+                                  <LinkIcon className="h-3 w-3 mr-1" />
                                   Strava
                                 </Badge>
                               )}
@@ -513,11 +539,25 @@ export default function WorkoutHistoryPage() {
                         )}
                       </div>
 
-                      <div className="flex md:flex-col gap-2 md:items-end">
+                      <div className="flex md:flex-col gap-2 md:items-end shrink-0">
                         {isCompleted && (
                           <Suspense fallback={<div className="h-10 w-10" />}>
                             <ShareWorkoutDialog session={session} />
                           </Suspense>
+                        )}
+                        {isCompleted && !session.stravaId && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => {
+                              setSessionToLink(session);
+                              setIsLinkerOpen(true);
+                            }}
+                          >
+                            <LinkIcon className="h-3.5 w-3.5 mr-1.5" />
+                            Link Strava
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -543,5 +583,31 @@ export default function WorkoutHistoryPage() {
         )}
       </div>
     </div>
+
+    {sessionToLink && (
+      <Suspense fallback={null}>
+        <LinkStravaActivityDialog
+          isOpen={isLinkerOpen}
+          setIsOpen={setIsLinkerOpen}
+          session={sessionToLink}
+          onLinkSuccess={async () => {
+            setIsLinkerOpen(false);
+            setSessionToLink(null);
+            // Refresh the session list so the Strava badge appears immediately
+            const { getAuthInstance } = await import('@/lib/firebase');
+            const auth = await getAuthInstance();
+            const user = auth.currentUser;
+            if (user) {
+              const { getPaginatedUserSessions } = await import('@/services/session-service-client');
+              const result = await getPaginatedUserSessions(user.uid, 20);
+              setSessions(result.sessions);
+              setLastDoc(result.lastDoc);
+              setHasMore(result.hasMore);
+            }
+          }}
+        />
+      </Suspense>
+    )}
+    </>
   );
 }

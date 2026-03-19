@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger';
 // This file contains functions for client-side components. NO 'use server' here.
 
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy, getDoc, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, getAuthInstance } from '@/lib/firebase';
 import type { WorkoutSession, Workout, RunningWorkout, Exercise, ProgramType } from '@/models/types';
 import type { StravaActivity } from './strava-service';
 
@@ -32,6 +32,7 @@ function fromFirestore(doc: any): WorkoutSession {
         duration: data.duration,
         extendedExercises: data.extendedExercises || [],
         skipped: data.skipped || false,
+        exerciseChecklist: data.exerciseChecklist || {},
         workoutDetails: data.workoutDetails,
         stravaId: data.stravaId,
         uploadedToStrava: data.uploadedToStrava,
@@ -237,60 +238,68 @@ export async function updateWorkoutSession(sessionId: string, data: Partial<Omit
  * If a session for that day doesn't exist, it creates one.
  */
 export async function linkStravaActivityToSession(sessionId: string, activity: StravaActivity): Promise<void> {
-    
-    let sessionRef;
-    let sessionData: WorkoutSession;
-
     const auth = await getAuthInstance();
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error("User not authenticated.");
 
-    const activityDate = new Date(activity.start_date_local);
-    activityDate.setHours(0,0,0,0);
+    let sessionRef;
+    let existingNotes = '';
 
-    // Check for an existing session on that date
-    const q = query(sessionsCollection, where('userId', '==', userId), where('workoutDate', '==', Timestamp.fromDate(activityDate)), limit(1));
-    const snapshot = await getDocs(q);
-
-    if (!snapshot.empty) {
-        sessionRef = snapshot.docs[0].ref;
-        sessionData = fromFirestore(snapshot.docs[0]);
+    if (sessionId) {
+        // Link directly to the known session doc — this is the correct path when the user
+        // picks a specific session (e.g. from Calendar or History).
+        sessionRef = doc(sessionsCollection, sessionId);
+        const snap = await getDoc(sessionRef);
+        if (!snap.exists()) throw new Error("Session not found.");
+        existingNotes = snap.data().notes || '';
     } else {
-        // If no session exists, create a new one based on the Strava activity
-        const newSessionData = {
-            userId,
-            programId: 'strava-linked',
-            workoutDate: Timestamp.fromDate(activityDate),
-            workoutTitle: activity.name,
-            programType: (activity.sport_type.toLowerCase().includes('run') ? 'running' : 'hyrox') as ProgramType, // Fix: Cast to ProgramType
-            startedAt: Timestamp.fromDate(new Date(activity.start_date)),
-        };
-        const docRef = await addDoc(sessionsCollection, newSessionData);
-        sessionRef = docRef;
-        // Fix: Ensure sessionData matches WorkoutSession type
-        sessionData = { 
-            id: docRef.id, 
-            userId: newSessionData.userId,
-            programId: newSessionData.programId,
-            workoutDate: activityDate,
-            workoutTitle: newSessionData.workoutTitle,
-            programType: newSessionData.programType,
-            startedAt: new Date(activity.start_date)
-        };
+        // Fallback: no session id provided — find or create one by activity date.
+        const activityDate = new Date(activity.start_date_local || activity.start_date);
+        activityDate.setHours(0, 0, 0, 0);
+
+        const q = query(
+            sessionsCollection,
+            where('userId', '==', userId),
+            where('workoutDate', '==', Timestamp.fromDate(activityDate)),
+            limit(1),
+        );
+        const snapshot = await getDocs(q);
+
+        if (!snapshot.empty) {
+            sessionRef = snapshot.docs[0].ref;
+            existingNotes = snapshot.docs[0].data().notes || '';
+        } else {
+            // No session exists — create one from the Strava activity.
+            const activityDate2 = new Date(activity.start_date_local || activity.start_date);
+            activityDate2.setHours(0, 0, 0, 0);
+            const newSessionData = {
+                userId,
+                programId: 'strava-linked',
+                workoutDate: Timestamp.fromDate(activityDate2),
+                workoutTitle: activity.name,
+                programType: (activity.sport_type.toLowerCase().includes('run') ? 'running' : 'hyrox') as ProgramType,
+                startedAt: Timestamp.fromDate(new Date(activity.start_date)),
+            };
+            const docRef = await addDoc(sessionsCollection, newSessionData);
+            sessionRef = docRef;
+        }
     }
 
     const updateData = {
         finishedAt: Timestamp.fromDate(new Date(activity.start_date)),
         stravaId: activity.id.toString(),
-        uploadedToStrava: false, // It's linked, not uploaded from our app
+        uploadedToStrava: false,
         stravaUploadedAt: Timestamp.now(),
-        notes: sessionData.notes ? `${sessionData.notes}\n\nCompleted via Strava: ${activity.name}.` : `Completed via Strava: ${activity.name}.`,
+        notes: existingNotes
+            ? `${existingNotes}\n\nLinked Strava activity: ${activity.name}.`
+            : `Linked Strava activity: ${activity.name}.`,
         stravaActivity: {
             distance: activity.distance,
             moving_time: activity.moving_time,
-            name: activity.name
+            name: activity.name,
         },
-        workoutTitle: activity.name, // Overwrite with Strava activity name
+        // Only update title if the session doesn't already have a custom title from the app
+        ...(sessionId ? {} : { workoutTitle: activity.name }),
         skipped: false,
     };
     await updateDoc(sessionRef, updateData);

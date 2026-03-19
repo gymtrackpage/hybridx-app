@@ -24,12 +24,42 @@ import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getOrCreateWorkoutSession, getAllUserSessions } from '@/services/session-service-client';
+import type { TrainingSummary } from '@/services/training-load-service';
+import { formatTrainingSummaryForAI } from '@/services/training-load-service';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
 }
+
+// Fetches Strava training summary via API (sets session cookie first)
+const fetchStravaTrainingSummary = async (): Promise<string | null> => {
+    try {
+        const auth = await getAuthInstance();
+        const currentUser = auth.currentUser;
+        if (!currentUser) return null;
+
+        const idToken = await currentUser.getIdToken(true);
+        await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+            credentials: 'include',
+        });
+
+        const res = await fetch('/api/strava/training-summary', {
+            credentials: 'include',
+            cache: 'no-cache',
+        });
+
+        if (!res.ok) return null;
+        const data: TrainingSummary = await res.json();
+        return formatTrainingSummaryForAI(data);
+    } catch {
+        return null;
+    }
+};
 
 // Helper function to fetch all necessary data on the client, using client-side SDK functions
 const getUserWorkoutData = async (userId: string) => {
@@ -40,6 +70,11 @@ const getUserWorkoutData = async (userId: string) => {
 
     const sessions = await getAllUserSessions(userId);
 
+    // Fetch Strava training summary if user has Strava connected
+    const stravaTrainingSummary = user.strava?.accessToken
+        ? await fetchStravaTrainingSummary()
+        : null;
+
     if (user.programId && user.startDate) {
         const program = await getProgramClient(user.programId);
         if(program) {
@@ -48,12 +83,12 @@ const getUserWorkoutData = async (userId: string) => {
             const { workout } = getWorkoutForDay(program, user.startDate, today);
             if (workout) {
                 const session = await getOrCreateWorkoutSession(userId, program.id, today, workout);
-                return { user, program, todaysWorkout: workout, todaysSession: session, allSessions: sessions };
+                return { user, program, todaysWorkout: workout, todaysSession: session, allSessions: sessions, stravaTrainingSummary };
             }
-            return { user, program, allSessions: sessions, todaysWorkout: null };
+            return { user, program, allSessions: sessions, todaysWorkout: null, stravaTrainingSummary };
         }
     }
-    return { user, allSessions: sessions };
+    return { user, allSessions: sessions, stravaTrainingSummary };
 };
 
 

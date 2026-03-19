@@ -2,13 +2,14 @@
 'use client';
 
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
-import { Flag, Loader2, CalendarDays, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon } from 'lucide-react';
+import { Flag, Loader2, CalendarDays, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon, CheckSquare, Square } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
 import { extendWorkout } from '@/ai/flows/extend-workout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -37,6 +38,7 @@ export default function ActiveWorkoutPage() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
+  const [exerciseChecklist, setExerciseChecklist] = useState<Record<string, boolean>>({});
   
   // Sync context state to local state
   useEffect(() => {
@@ -45,6 +47,7 @@ export default function ActiveWorkoutPage() {
           setSession(todaysSession);
           if (todaysSession) {
              setNotes(todaysSession.notes || '');
+             setExerciseChecklist(todaysSession.exerciseChecklist || {});
              if (!['one-off-ai', 'custom-workout'].includes(todaysSession.programId)) {
                   setExtendedExercises(todaysSession.extendedExercises || []);
              }
@@ -104,6 +107,18 @@ export default function ActiveWorkoutPage() {
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNotes(e.target.value);
     debouncedSaveNotes(e.target.value);
+  };
+
+  const debouncedSaveChecklist = useDebouncedCallback(async (checklist: Record<string, boolean>) => {
+    if (!session) return;
+    await updateWorkoutSession(session.id, { exerciseChecklist: checklist });
+  }, 800);
+
+  const handleToggleExercise = (key: string) => {
+    if (session?.finishedAt) return;
+    const updated = { ...exerciseChecklist, [key]: !exerciseChecklist[key] };
+    setExerciseChecklist(updated);
+    debouncedSaveChecklist(updated);
   };
 
   const handleExtendWorkout = async () => {
@@ -220,10 +235,20 @@ export default function ActiveWorkoutPage() {
   const week = Math.ceil(day / 7);
   const dayOfWeek = day % 7 === 0 ? 7 : day % 7;
 
-  
   const isRunning = isRunningWorkout(workout);
   const isOneOffWorkout = ['one-off-ai', 'custom-workout'].includes(session.programId);
   const canExtendWorkout = workout.programType === 'hyrox' || isOneOffWorkout;
+
+  // Progress calculation
+  const allExerciseKeys: string[] = isRunning
+    ? (workout as RunningWorkout).runs.map((_, i) => `run-${i}`)
+    : [
+        ...(workout as Workout).exercises.map((_, i) => `ex-${i}`),
+        ...extendedExercises.map((_, i) => `ext-${i}`),
+      ];
+  const checkedCount = allExerciseKeys.filter(k => exerciseChecklist[k]).length;
+  const totalCount = allExerciseKeys.length;
+  const progressPct = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
 
 
   return (
@@ -287,21 +312,45 @@ export default function ActiveWorkoutPage() {
                         Use the Timer
                     </Link>
                 </Button>
-                
+
+                {!session.finishedAt && totalCount > 0 && (
+                    <div className="space-y-1">
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                            <span>{checkedCount} / {totalCount} completed</span>
+                            <span>{progressPct}%</span>
+                        </div>
+                        <Progress value={progressPct} className="h-2" />
+                    </div>
+                )}
+
                 <div>
                     <h3 className="text-base font-semibold mb-3">{isRunning ? 'Runs:' : 'Exercises:'}</h3>
                     <div className="space-y-3">
                         {isRunning ? (
                              (workout as RunningWorkout).runs.map((run: PlannedRun, index) => {
-                                 const description = user?.unitSystem === 'imperial' 
+                                 const key = `run-${index}`;
+                                 const isDone = !!exerciseChecklist[key];
+                                 const description = user?.unitSystem === 'imperial'
                                     ? convertDistanceInText(run.description, 'imperial')
                                     : run.description;
 
                                  return (
-                                    <Card key={`${run.description}-${index}`}>
+                                    <Card key={`${run.description}-${index}`} className={isDone ? 'opacity-60' : ''}>
                                         <CardContent className="py-4 px-2 flex items-center gap-4">
+                                            {!session.finishedAt && (
+                                                <button
+                                                    onClick={() => handleToggleExercise(key)}
+                                                    className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                                                    aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
+                                                >
+                                                    {isDone
+                                                        ? <CheckSquare className="h-6 w-6 text-primary" />
+                                                        : <Square className="h-6 w-6" />
+                                                    }
+                                                </button>
+                                            )}
                                             <div className="flex-1">
-                                                <p className="font-semibold">{description}</p>
+                                                <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{description}</p>
                                                 {trainingPaces && (
                                                     <p className="text-sm text-muted-foreground">
                                                         Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
@@ -314,17 +363,28 @@ export default function ActiveWorkoutPage() {
                              })
                         ) : (
                              (workout as Workout).exercises.map((ex: Exercise, index) => {
+                                 const key = `ex-${index}`;
+                                 const isDone = !!exerciseChecklist[key];
                                  const details = user?.unitSystem ? convertTextWithUnits(ex.details, user.unitSystem) : ex.details;
                                  return (
-                                    <Card key={`${ex.name}-${index}`}>
+                                    <Card key={`${ex.name}-${index}`} className={isDone ? 'opacity-60' : ''}>
                                         <CardContent className="py-4 px-2 flex items-center gap-4">
+                                            {!session.finishedAt && (
+                                                <button
+                                                    onClick={() => handleToggleExercise(key)}
+                                                    className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                                                    aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
+                                                >
+                                                    {isDone
+                                                        ? <CheckSquare className="h-6 w-6 text-primary" />
+                                                        : <Square className="h-6 w-6" />
+                                                    }
+                                                </button>
+                                            )}
                                             <div className="flex-1">
-                                                <p className="font-semibold">{ex.name}</p>
+                                                <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{ex.name}</p>
                                                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">{details}</p>
-                                                
-                                                {/* Exercise History Component */}
                                                 {user && <ExerciseHistory userId={user.id} exerciseName={ex.name} />}
-                                                
                                             </div>
                                         </CardContent>
                                     </Card>
@@ -340,14 +400,27 @@ export default function ActiveWorkoutPage() {
                         )}
                         
                         {extendedExercises.map((item, index) => {
+                            const key = `ext-${index}`;
+                            const isDone = !!exerciseChecklist[key];
                             const details = user?.unitSystem ? convertTextWithUnits(item.details, user.unitSystem) : item.details;
                             return (
-                                <Card key={`${item.name}-${index}`} className="border-dashed border-primary/50">
+                                <Card key={`${item.name}-${index}`} className={`border-dashed border-primary/50 ${isDone ? 'opacity-60' : ''}`}>
                                     <CardContent className="py-4 px-2 flex items-center gap-4">
+                                        {!session.finishedAt && (
+                                            <button
+                                                onClick={() => handleToggleExercise(key)}
+                                                className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                                                aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
+                                            >
+                                                {isDone
+                                                    ? <CheckSquare className="h-6 w-6 text-primary" />
+                                                    : <Square className="h-6 w-6" />
+                                                }
+                                            </button>
+                                        )}
                                         <div className="flex-1">
-                                            <p className="font-semibold">{item.name}</p>
+                                            <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{item.name}</p>
                                             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{details}</p>
-                                            {/* History for extended exercises too */}
                                             {user && <ExerciseHistory userId={user.id} exerciseName={item.name} />}
                                         </div>
                                     </CardContent>

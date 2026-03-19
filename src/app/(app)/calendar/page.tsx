@@ -14,9 +14,9 @@ import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getAllUserSessions, getOrCreateWorkoutSession, updateWorkoutSession } from '@/services/session-service-client';
 import { swapWorkouts } from '@/services/session-service'; // Import the new server action
 import type { User, Program, Workout, WorkoutSession, RunningWorkout, Exercise } from '@/models/types';
-import { addDays, format, isSameDay, parseISO, isValid, isToday, startOfDay } from 'date-fns';
+import { addDays, format, isSameDay, parseISO, isValid, isToday, isPast, startOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { Link as LinkIcon, Activity, Clock, MapPin, Forward, Edit } from 'lucide-react';
+import { Link as LinkIcon, Activity, Clock, MapPin, Forward, Edit, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatTextWithBullets } from '@/utils/text-formatter';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,6 +31,7 @@ interface WorkoutEvent {
   workout?: Workout | RunningWorkout;
   session?: WorkoutSession;
   isCompleted: boolean;
+  isMissed: boolean;
   color: string;
   isRestDay: boolean;
 }
@@ -44,6 +45,7 @@ export default function CalendarPage() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notes, setNotes] = useState('');
+  const [isMarkingDone, setIsMarkingDone] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -115,8 +117,9 @@ export default function CalendarPage() {
     };
   }, []);
 
-    const getEventColor = (workout: Workout | RunningWorkout, isCompleted: boolean): string => {
-        if (isCompleted) return 'bg-green-500'; // Completed workouts are always green
+    const getEventColor = (workout: Workout | RunningWorkout, isCompleted: boolean, isMissed: boolean): string => {
+        if (isCompleted) return 'bg-green-500';
+        if (isMissed) return 'bg-red-400';
 
         if (workout.programType === 'running') {
             const primaryRunType = (workout as RunningWorkout).runs[0]?.type;
@@ -129,8 +132,8 @@ export default function CalendarPage() {
                 default: return 'bg-gray-400';
             }
         }
-        
-        return 'bg-purple-500'; // Default for HYROX/hybrid
+
+        return 'bg-purple-500';
     };
 
   const generateWorkoutEvents = (program: Program | null, startDate: Date | undefined, sessions: WorkoutSession[]) => {
@@ -180,14 +183,17 @@ export default function CalendarPage() {
 
         if (workout) {
             const isRestDay = workout.title.toLowerCase().includes('rest') || workout.title.toLowerCase().includes('recover');
-            const isCompleted = !!session?.finishedAt;
-            
+            const isCompleted = !!session?.finishedAt && !session?.skipped;
+            const isPastDate = isPast(currentDate) && !isToday(currentDate);
+            const isMissed = !isCompleted && !session?.skipped && isPastDate && !isRestDay;
+
             events.push({
                 date: currentDate,
                 workout: workout,
                 session: session,
                 isCompleted,
-                color: getEventColor(workout, isCompleted),
+                isMissed,
+                color: getEventColor(workout, isCompleted, isMissed),
                 isRestDay,
             });
 
@@ -202,12 +208,14 @@ export default function CalendarPage() {
         if (session.workoutDetails) {
             const isRestDay = session.workoutDetails.title.toLowerCase().includes('rest') || session.workoutDetails.title.toLowerCase().includes('recover');
             const eventDate = parseISO(`${dateKey}T12:00:00.000Z`);
+            const isCompleted = !!session.finishedAt && !session.skipped;
             events.push({
                 date: eventDate,
                 session: session,
                 workout: session.workoutDetails,
-                isCompleted: true,
-                color: 'bg-green-500',
+                isCompleted,
+                isMissed: false,
+                color: isCompleted ? 'bg-green-500' : 'bg-gray-400',
                 isRestDay,
             });
         }
@@ -327,6 +335,42 @@ export default function CalendarPage() {
     }
     setLoading(false);
   };
+
+  const handleMarkDone = async () => {
+    if (!selectedWorkout || !selectedDate || !firebaseUser) return;
+    setIsMarkingDone(true);
+    try {
+        const dayStart = startOfDay(selectedDate);
+        const programId = program?.id || 'manual';
+
+        // Ensure a session doc exists (creates one if not)
+        const session = await getOrCreateWorkoutSession(
+            firebaseUser.uid,
+            programId,
+            dayStart,
+            selectedWorkout,
+        );
+
+        // Mark it completed at noon on the selected day (preserves the date correctly)
+        const completedAt = new Date(selectedDate);
+        completedAt.setHours(12, 0, 0, 0);
+
+        await updateWorkoutSession(session.id, {
+            finishedAt: completedAt,
+            workoutTitle: selectedWorkout.title,
+            programType: selectedWorkout.programType,
+            skipped: false,
+        });
+
+        toast({ title: 'Marked as Completed', description: `${selectedWorkout.title} logged.` });
+        await fetchCalendarData(firebaseUser);
+    } catch (error) {
+        console.error('Failed to mark workout done:', error);
+        toast({ title: 'Error', description: 'Could not mark workout as completed.', variant: 'destructive' });
+    } finally {
+        setIsMarkingDone(false);
+    }
+  };
   
     const formatDuration = (seconds: number) => {
         if (!seconds) return '0m';
@@ -399,6 +443,12 @@ export default function CalendarPage() {
               />
             </Suspense>
           )}
+          <div className="flex flex-wrap justify-center gap-4 pt-2 pb-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-green-500 inline-block" /> Completed</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-400 inline-block" /> Missed</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-purple-500 inline-block" /> Planned (HYROX)</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-500 inline-block" /> Planned (Run)</span>
+          </div>
         </CardContent>
       </Card>
 
@@ -411,7 +461,7 @@ export default function CalendarPage() {
             <CardTitle>
               {completedSession?.stravaActivity?.name || selectedWorkout?.title || 'Workout Details'}
             </CardTitle>
-            {completedSession?.finishedAt ? (
+            {completedSession?.finishedAt && !completedSession?.skipped ? (
               <div className="space-y-2 mt-2">
                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                   Completed
@@ -419,6 +469,18 @@ export default function CalendarPage() {
                 <CardDescription>
                   {formatSessionDate(completedSession)}
                 </CardDescription>
+              </div>
+            ) : completedSession?.skipped ? (
+              <div className="mt-2">
+                <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 w-fit">
+                  Skipped
+                </Badge>
+              </div>
+            ) : selectedEvent?.isMissed ? (
+              <div className="mt-2">
+                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 w-fit">
+                  Missed
+                </Badge>
               </div>
             ) : (
                <div className="mt-2">
@@ -518,39 +580,92 @@ export default function CalendarPage() {
             )}
 
 
-             {selectedWorkout && !completedSession && !selectedEvent.isRestDay && (
-                <div className="pt-4 mt-4 border-t flex flex-col sm:flex-row gap-2">
-                    {!isToday(selectedDate) && program && (
-                        <Button
-                            variant="accent"
-                            className="w-full"
-                            onClick={handleDoToday}
-                        >
-                            <Forward className="mr-2 h-4 w-4" />
-                            Do This Workout Today
-                        </Button>
-                    )}
-                    <Button 
-                        variant="outline" 
+             {selectedWorkout && !selectedEvent.isRestDay && (
+                (() => {
+                    const isPastOrToday = isToday(selectedDate) || isPast(selectedDate);
+                    const isUnfinished = completedSession && !completedSession.finishedAt && !completedSession.skipped;
+                    const isNotDone = !completedSession || isUnfinished;
+                    const showMarkDone = isPastOrToday && isNotDone;
+                    const showDoToday = !isToday(selectedDate) && !completedSession && program;
+                    const showLinkStrava = !completedSession;
+
+                    if (!showMarkDone && !showDoToday && !showLinkStrava) return null;
+
+                    return (
+                        <div className="pt-4 mt-4 border-t flex flex-col gap-2">
+                            {showMarkDone && (
+                                <Button
+                                    variant="default"
+                                    className="w-full"
+                                    onClick={handleMarkDone}
+                                    disabled={isMarkingDone}
+                                >
+                                    {isMarkingDone
+                                        ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        : <CheckCircle className="mr-2 h-4 w-4" />
+                                    }
+                                    Mark as Completed
+                                </Button>
+                            )}
+                            <div className="flex flex-col sm:flex-row gap-2">
+                                {showDoToday && (
+                                    <Button
+                                        variant="accent"
+                                        className="w-full"
+                                        onClick={handleDoToday}
+                                    >
+                                        <Forward className="mr-2 h-4 w-4" />
+                                        Do This Workout Today
+                                    </Button>
+                                )}
+                                {showLinkStrava && (
+                                    <Button
+                                        variant="outline"
+                                        className="w-full"
+                                        onClick={() => {
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                            const tempSession: any = {
+                                                id: '',
+                                                userId: '',
+                                                programId: (selectedEvent as any)?.program?.id || '',
+                                                workoutDate: selectedDate,
+                                                workoutTitle: selectedWorkout.title,
+                                                programType: selectedWorkout.programType,
+                                                startedAt: new Date(),
+                                                completedItems: {},
+                                            };
+                                            setSessionToLink(tempSession as WorkoutSession);
+                                            setIsLinkerOpen(true);
+                                        }}
+                                    >
+                                        <LinkIcon className="mr-2 h-4 w-4" />
+                                        Link Strava Activity
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })()
+             )}
+
+             {/* Link button for COMPLETED sessions that don't yet have a Strava activity linked */}
+             {completedSession && !completedSession.stravaId && !completedSession.skipped && (
+                <div className="pt-4 mt-4 border-t">
+                    <Button
+                        variant="outline"
+                        size="sm"
                         className="w-full"
                         onClick={() => {
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const tempSession: any = {
-                                id: '',
-                                userId: '',
-                                programId: (selectedEvent as any)?.program?.id || '',
-                                workoutDate: selectedDate,
-                                workoutTitle: selectedWorkout.title,
-                                programType: selectedWorkout.programType,
-                                startedAt: new Date(),
-                                completedItems: {},
-                            };
-                            setSessionToLink(tempSession as WorkoutSession);
+                            setSessionToLink(completedSession);
                             setIsLinkerOpen(true);
-                        }}>
-                        <LinkIcon className="mr-2" />
-                        Link Strava Activity
+                        }}
+                    >
+                        <LinkIcon className="mr-2 h-4 w-4" />
+                        Link to Strava Activity
                     </Button>
+                    <p className="text-xs text-muted-foreground text-center mt-1.5">
+                        Merge this workout with a watch-recorded Strava activity
+                    </p>
                 </div>
              )}
 
