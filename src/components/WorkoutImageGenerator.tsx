@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useLayoutEffect } from 'react';
 import html2canvas from 'html2canvas';
 import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
@@ -22,15 +22,19 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [generating, setGenerating] = useState(false);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState<number | null>(null);
 
-  // Scale the preview to fit the available container width
-  useEffect(() => {
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setScale(entry.contentRect.width / 1080);
+  // Measure immediately before paint, then watch for resize
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (containerRef.current) {
+        const width = containerRef.current.offsetWidth;
+        if (width > 0) setScale(width / 1080);
       }
-    });
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, []);
@@ -99,14 +103,14 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
       <div
         ref={containerRef}
         className="w-full rounded-xl overflow-hidden border border-white/10"
-        style={{ height: `${1350 * scale}px` }}
+        style={{ height: scale ? `${1350 * scale}px` : '0px' }}
       >
-        {/* Scale wrapper — visually shrinks the 1080px card to fit */}
+        {/* Scale wrapper — visually shrinks the 1080px card to fit, hidden until scale is measured */}
         <div
           style={{
             width: '1080px',
             transformOrigin: 'top left',
-            transform: `scale(${scale})`,
+            transform: `scale(${scale ?? 0})`,
           }}
         >
           {/* ===== CARD — captured at full 1080×1350 by html2canvas ===== */}
