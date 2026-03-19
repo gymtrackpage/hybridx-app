@@ -24,19 +24,16 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
   const [generating, setGenerating] = useState(false);
   const [scale, setScale] = useState<number | null>(null);
 
-  // Measure immediately before paint, then watch for resize
+  // Base scale on viewport width — reliable even inside Dialogs/portals
   useLayoutEffect(() => {
-    const measure = () => {
-      if (containerRef.current) {
-        const width = containerRef.current.offsetWidth;
-        if (width > 0) setScale(width / 1080);
-      }
+    const update = () => {
+      // 32px accounts for dialog/page horizontal padding
+      const available = Math.min(window.innerWidth - 32, 1080);
+      setScale(available / 1080);
     };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    if (containerRef.current) observer.observe(containerRef.current);
-    return () => observer.disconnect();
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   }, []);
 
   const formatDistance = (m?: number) =>
@@ -101,7 +98,6 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
 
       {/* Outer container — measures available width and sets the correct height for the scaled card */}
       <div
-        ref={containerRef}
         className="w-full rounded-xl overflow-hidden border border-white/10"
         style={{ height: scale ? `${1350 * scale}px` : '0px' }}
       >
