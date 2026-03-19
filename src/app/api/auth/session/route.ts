@@ -132,10 +132,7 @@ export async function POST(req: NextRequest) {
         const errorMessage = error.message || 'An unexpected error occurred.';
         const errorCode = error.code || 'UNKNOWN_ERROR';
         
-        console.error('❌ Session cookie creation failed:', {
-            code: errorCode,
-            message: errorMessage,
-        });
+        console.error(`❌ Session cookie creation failed: code=${errorCode} message=${errorMessage}`);
 
         return NextResponse.json(
             { 
