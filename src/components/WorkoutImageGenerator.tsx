@@ -18,17 +18,115 @@ interface WorkoutImageGeneratorProps {
   };
 }
 
+// Extracted so the same JSX renders in both the preview and the hidden capture target
+function CardFace({ workout }: WorkoutImageGeneratorProps) {
+  const formatDistance = (m?: number) =>
+    m ? (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m} m`) : '—';
+
+  const date = new Date(workout.startTime).toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric',
+  });
+  const time = new Date(workout.startTime).toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  return (
+    <div
+      style={{
+        width: '1080px',
+        height: '1350px',
+        position: 'relative',
+        overflow: 'hidden',
+        backgroundColor: '#0A0A0A',
+        color: '#fff',
+        backgroundImage: `
+          linear-gradient(45deg, #111 25%, transparent 25%),
+          linear-gradient(-45deg, #111 25%, transparent 25%),
+          linear-gradient(45deg, transparent 75%, #111 75%),
+          linear-gradient(-45deg, transparent 75%, #111 75%)
+        `,
+        backgroundSize: '80px 80px',
+        backgroundPosition: '0 0, 0 40px, 40px -40px, -40px 0px',
+        fontFamily: 'var(--font-space-grotesk), sans-serif',
+      }}
+    >
+      {/* HEADER */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '56px', position: 'relative', zIndex: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+          <div style={{ width: '96px', height: '96px', backgroundColor: '#EAB308', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px' }}>
+            <img src="/icon-logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} crossOrigin="anonymous" />
+          </div>
+          <div>
+            <div style={{ fontSize: '36px', fontWeight: 900, letterSpacing: '-1px' }}>HYBRIDX.CLUB</div>
+            <div style={{ fontSize: '18px', color: '#FACC15', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '4px', marginTop: '4px' }}>Performance Hub</div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '28px', fontWeight: 700 }}>{date}</div>
+          <div style={{ fontSize: '18px', color: '#6B7280', fontWeight: 500 }}>{time}</div>
+        </div>
+      </div>
+
+      {/* BADGE */}
+      <div style={{ padding: '0 56px', marginTop: '16px', position: 'relative', zIndex: 10 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', backgroundColor: '#EAB308', color: '#000', padding: '8px 32px', borderRadius: '999px', fontSize: '22px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.5px' }}>
+          {workout.type}
+        </span>
+      </div>
+
+      {/* TITLE */}
+      <div style={{ padding: '0 56px', marginTop: '64px', position: 'relative', zIndex: 10 }}>
+        <h1 style={{ fontSize: '140px', lineHeight: 0.85, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-4px', color: '#fff', margin: 0 }}>
+          {workout.name}
+        </h1>
+      </div>
+
+      {/* NOTES */}
+      {workout.notes && (
+        <div style={{ padding: '0 56px', marginTop: '48px', position: 'relative', zIndex: 10 }}>
+          <div style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderLeft: '8px solid #EAB308', padding: '40px' }}>
+            <p style={{ fontSize: '36px', color: '#E5E7EB', fontWeight: 500, lineHeight: 1.5, fontStyle: 'italic', margin: 0 }}>
+              "{workout.notes}"
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* STATS */}
+      <div style={{ position: 'absolute', bottom: '128px', left: 0, width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderTop: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+        <div style={{ padding: '48px', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ fontSize: '20px', color: '#EAB308', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px' }}>Duration</div>
+          <div style={{ fontSize: '64px', fontWeight: 900, marginTop: '16px' }}>{workout.duration ?? '--:--'}</div>
+        </div>
+        <div style={{ padding: '48px', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ fontSize: '20px', color: '#EAB308', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px' }}>Distance</div>
+          <div style={{ fontSize: '64px', fontWeight: 900, marginTop: '16px', whiteSpace: 'nowrap' }}>{formatDistance(workout.distance)}</div>
+        </div>
+        <div style={{ padding: '48px' }}>
+          <div style={{ fontSize: '20px', color: '#EAB308', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px' }}>Calories</div>
+          <div style={{ fontSize: '64px', fontWeight: 900, marginTop: '16px' }}>{workout.calories ?? '0'}</div>
+        </div>
+      </div>
+
+      {/* FOOTER */}
+      <div style={{ position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#EAB308', color: '#000', padding: '32px 56px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box' }}>
+        <div style={{ fontSize: '36px', fontWeight: 900, letterSpacing: '-1px' }}>HYBRIDX.CLUB</div>
+        <div style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '3px', textTransform: 'uppercase' }}>Train Hybrid. Race Strong.</div>
+      </div>
+    </div>
+  );
+}
+
 export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const captureRef = useRef<HTMLDivElement>(null);
   const [generating, setGenerating] = useState(false);
   const [scale, setScale] = useState<number | null>(null);
 
-  // Base scale on viewport width — reliable even inside Dialogs/portals
+  // Use viewport width directly — reliable inside Dialogs/portals
   useLayoutEffect(() => {
     const update = () => {
-      // 32px accounts for dialog/page horizontal padding
-      const available = Math.min(window.innerWidth - 32, 1080);
+      // 64px accounts for dialog padding on both sides
+      const available = Math.min(window.innerWidth - 64, 1080);
       setScale(available / 1080);
     };
     update();
@@ -36,35 +134,21 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  const formatDistance = (m?: number) =>
-    m ? (m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${m} m`) : '—';
-
-  const date = new Date(workout.startTime).toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric'
-  });
-
-  const time = new Date(workout.startTime).toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit'
-  });
-
   const generate = async () => {
-    if (!cardRef.current) return;
+    if (!captureRef.current) return;
     setGenerating(true);
-
     try {
       await document.fonts.ready;
-      const images = Array.from(cardRef.current.getElementsByTagName('img'));
+      const images = Array.from(captureRef.current.getElementsByTagName('img'));
       await Promise.all(
         images.map(img => {
           if (img.complete) return Promise.resolve();
-          return new Promise((res) => {
-            img.onload = res;
-            img.onerror = res;
-          });
+          return new Promise((res) => { img.onload = res; img.onerror = res; });
         })
       );
 
-      const canvas = await html2canvas(cardRef.current, {
+      // Capture the hidden off-screen element — no transforms, full 1080×1350
+      const canvas = await html2canvas(captureRef.current, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
@@ -72,14 +156,6 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
         logging: false,
         width: 1080,
         height: 1350,
-        onclone: (clonedDoc) => {
-          const el = clonedDoc.getElementById('workout-card-capture');
-          if (el) {
-            el.style.fontFamily = "'Space Grotesk', sans-serif";
-            // Remove the preview scale transform so html2canvas captures at full resolution
-            el.style.transform = 'none';
-          }
-        }
       });
 
       const link = document.createElement('a');
@@ -94,138 +170,43 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 p-4 w-full">
-
-      {/* Outer container — measures available width and sets the correct height for the scaled card */}
+    <>
+      {/* Hidden full-size capture target — off screen, no transforms */}
       <div
-        className="w-full rounded-xl overflow-hidden border border-white/10"
-        style={{ height: scale ? `${1350 * scale}px` : '0px' }}
+        style={{ position: 'fixed', left: '-9999px', top: 0, pointerEvents: 'none', zIndex: -1 }}
+        aria-hidden="true"
       >
-        {/* Scale wrapper — visually shrinks the 1080px card to fit, hidden until scale is measured */}
-        <div
-          style={{
-            width: '1080px',
-            transformOrigin: 'top left',
-            transform: `scale(${scale ?? 0})`,
-          }}
-        >
-          {/* ===== CARD — captured at full 1080×1350 by html2canvas ===== */}
-          <div
-            ref={cardRef}
-            id="workout-card-capture"
-            className="relative text-white overflow-hidden bg-[#0A0A0A]"
-            style={{
-              width: '1080px',
-              height: '1350px',
-              backgroundImage: `
-                linear-gradient(45deg, #111 25%, transparent 25%),
-                linear-gradient(-45deg, #111 25%, transparent 25%),
-                linear-gradient(45deg, transparent 75%, #111 75%),
-                linear-gradient(-45deg, transparent 75%, #111 75%)
-              `,
-              backgroundSize: '80px 80px',
-              backgroundPosition: '0 0, 0 40px, 40px -40px, -40px 0px',
-              fontFamily: 'var(--font-space-grotesk), sans-serif'
-            }}
-          >
-            {/* HEADER */}
-            <div className="flex justify-between items-center p-14 relative z-10">
-              <div className="flex items-center gap-6">
-                <div className="w-24 h-24 bg-yellow-500 rounded-2xl flex items-center justify-center p-2">
-                  <img
-                    src="/icon-logo.png"
-                    alt="Logo"
-                    className="w-full h-full object-contain"
-                    crossOrigin="anonymous"
-                  />
-                </div>
-                <div>
-                  <div className="text-4xl font-black tracking-tighter">HYBRIDX.CLUB</div>
-                  <div className="text-xl text-yellow-400 font-bold uppercase tracking-widest mt-1">Performance Hub</div>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <div className="text-3xl font-bold">{date}</div>
-                <div className="text-xl text-gray-500 font-medium">{time}</div>
-              </div>
-            </div>
-
-            {/* BADGE */}
-            <div className="px-14 mt-4 relative z-10">
-              <span className="inline-flex items-center bg-yellow-500 text-black px-8 py-2 rounded-full text-2xl font-black uppercase tracking-tighter">
-                {workout.type}
-              </span>
-            </div>
-
-            {/* TITLE */}
-            <div className="px-14 mt-16 relative z-10">
-              <h1 className="text-[140px] leading-[0.85] font-black uppercase tracking-tighter text-white">
-                {workout.name}
-              </h1>
-            </div>
-
-            {/* NOTES */}
-            {workout.notes && (
-              <div className="px-14 mt-12 relative z-10">
-                <div className="bg-white/5 border-l-8 border-yellow-500 p-10 backdrop-blur-md">
-                  <p className="text-4xl text-gray-200 font-medium leading-relaxed italic">
-                    "{workout.notes}"
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* STATS */}
-            <div className="absolute bottom-32 left-0 w-full grid grid-cols-3 border-t border-white/10 bg-black/40 backdrop-blur-sm">
-              <div className="p-12 border-r border-white/10">
-                <div className="text-2xl text-yellow-500 font-bold uppercase tracking-widest">Duration</div>
-                <div className="text-7xl font-black mt-4">{workout.duration ?? '--:--'}</div>
-              </div>
-
-              <div className="p-12 border-r border-white/10">
-                <div className="text-2xl text-yellow-500 font-bold uppercase tracking-widest">Distance</div>
-                <div className="text-7xl font-black mt-4 whitespace-nowrap">{formatDistance(workout.distance)}</div>
-              </div>
-
-              <div className="p-12">
-                <div className="text-2xl text-yellow-500 font-bold uppercase tracking-widest">Calories</div>
-                <div className="text-7xl font-black mt-4">{workout.calories ?? '0'}</div>
-              </div>
-            </div>
-
-            {/* FOOTER */}
-            <div className="absolute bottom-0 w-full bg-yellow-500 text-black py-8 px-14 flex justify-between items-center">
-              <div className="text-4xl font-black tracking-tighter">
-                HYBRIDX.CLUB
-              </div>
-              <div className="text-2xl font-black tracking-widest uppercase">
-                Train Hybrid. Race Strong.
-              </div>
-            </div>
-          </div>
+        <div ref={captureRef}>
+          <CardFace workout={workout} />
         </div>
       </div>
 
-      {/* Download button — full width on mobile */}
-      <Button
-        onClick={generate}
-        disabled={generating}
-        size="lg"
-        className="w-full h-14 bg-yellow-500 text-black hover:bg-yellow-400 text-lg font-black rounded-2xl transition-all active:scale-95"
-      >
-        {generating ? (
-          <>
-            <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-            GENERATING IMAGE...
-          </>
-        ) : (
-          <>
-            <Download className="h-5 w-5 mr-2" />
-            DOWNLOAD WORKOUT CARD
-          </>
-        )}
-      </Button>
-    </div>
+      {/* Visible UI */}
+      <div className="flex flex-col items-center gap-4 p-4 w-full">
+
+        {/* Scaled preview — CSS transform only, doesn't affect html2canvas */}
+        <div
+          className="w-full rounded-xl overflow-hidden"
+          style={{ height: scale ? `${1350 * scale}px` : '0px' }}
+        >
+          <div style={{ width: '1080px', transformOrigin: 'top left', transform: `scale(${scale ?? 0})` }}>
+            <CardFace workout={workout} />
+          </div>
+        </div>
+
+        <Button
+          onClick={generate}
+          disabled={generating}
+          size="lg"
+          className="w-full h-14 bg-yellow-500 text-black hover:bg-yellow-400 text-lg font-black rounded-2xl transition-all active:scale-95"
+        >
+          {generating ? (
+            <><Loader2 className="h-5 w-5 mr-2 animate-spin" />GENERATING IMAGE...</>
+          ) : (
+            <><Download className="h-5 w-5 mr-2" />DOWNLOAD WORKOUT CARD</>
+          )}
+        </Button>
+      </div>
+    </>
   );
 }
