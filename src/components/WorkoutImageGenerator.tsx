@@ -125,8 +125,8 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
   // Use viewport width directly — reliable inside Dialogs/portals
   useLayoutEffect(() => {
     const update = () => {
-      // 64px accounts for dialog padding on both sides
-      const available = Math.min(window.innerWidth - 64, 1080);
+      // 48px = 8px dialog margin each side + 16px dialog padding each side
+      const available = Math.min(window.innerWidth - 48, 1080);
       setScale(available / 1080);
     };
     update();

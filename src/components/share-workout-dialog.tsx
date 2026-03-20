@@ -63,8 +63,8 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="w-[calc(100vw-16px)] max-w-4xl p-4 sm:p-6">
+        <DialogHeader className="px-0">
           <DialogTitle>Share Your Workout</DialogTitle>
           <DialogDescription>
             Download and share your achievement on social media
@@ -85,7 +85,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
           />
 
           {/* Share / Copy buttons */}
-          <div className="flex gap-2 px-6">
+          <div className="flex gap-2">
             <Button onClick={handleShare} variant="outline" className="flex-1">
               <Share2 className="h-4 w-4 mr-2" />
               Share
