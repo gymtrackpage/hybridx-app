@@ -26,22 +26,38 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [cardSummary, setCardSummary] = useState<string | null>(null);
+  const [calories, setCalories] = useState<number | undefined>(undefined);
+  const [formattedDuration, setFormattedDuration] = useState<string | undefined>(undefined);
   const { toast } = useToast();
+
+  const formatDuration = (seconds: number): string => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
 
   const handleOpenChange = async (open: boolean) => {
     setIsOpen(open);
     if (open && cardSummary === null) {
-      try {
-        const strava = session.stravaActivity;
-        const distanceKm = strava?.distance ? Math.round((strava.distance / 1000) * 100) / 100 : undefined;
-        const durationMinutes = strava?.moving_time
-          ? Math.round(strava.moving_time / 60)
-          : session.duration ? parseInt(session.duration, 10) : undefined;
-        const paceMinPerKm = distanceKm && durationMinutes
-          ? Math.round((durationMinutes / distanceKm) * 10) / 10
-          : undefined;
+      const strava = session.stravaActivity;
 
-        const summary = await generateCardSummary({
+      // Format duration from moving_time if available
+      const durationSeconds = strava?.moving_time;
+      const durationMinutes = durationSeconds
+        ? Math.round(durationSeconds / 60)
+        : session.duration ? parseInt(session.duration, 10) : undefined;
+
+      if (durationSeconds) setFormattedDuration(formatDuration(durationSeconds));
+      else if (session.duration) setFormattedDuration(session.duration);
+
+      const distanceKm = strava?.distance ? Math.round((strava.distance / 1000) * 100) / 100 : undefined;
+      const paceMinPerKm = distanceKm && durationMinutes
+        ? Math.round((durationMinutes / distanceKm) * 10) / 10
+        : undefined;
+
+      // Fetch calories from Strava detailed activity in parallel with AI summary
+      const [summaryResult, caloriesResult] = await Promise.allSettled([
+        generateCardSummary({
           workoutTitle: session.workoutTitle,
           workoutType: session.programType === 'running' ? 'running' : 'hyrox',
           distanceKm,
@@ -49,11 +65,21 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
           paceMinPerKm,
           stravaActivityName: strava?.name,
           userNotes: session.notes,
-        });
-        setCardSummary(summary);
-      } catch (err) {
-        logger.error('Failed to generate card summary:', err);
+        }),
+        session.stravaId
+          ? fetch(`/api/strava/activities/${session.stravaId}`).then(r => r.ok ? r.json() : null)
+          : Promise.resolve(null),
+      ]);
+
+      if (summaryResult.status === 'fulfilled') {
+        setCardSummary(summaryResult.value);
+      } else {
+        logger.error('Failed to generate card summary:', summaryResult.reason);
         setCardSummary(session.notes ?? null);
+      }
+
+      if (caloriesResult.status === 'fulfilled' && caloriesResult.value?.calories > 0) {
+        setCalories(caloriesResult.value.calories);
       }
     }
   };
@@ -111,7 +137,8 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
               type: session.programType === 'running' ? 'Running' : 'HYROX',
               startTime: session.workoutDate,
               distance: session.stravaActivity?.distance,
-              duration: session.duration,
+              duration: formattedDuration,
+              calories: calories,
               notes: cardSummary ?? undefined,
             }}
           />

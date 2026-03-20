@@ -92,21 +92,31 @@ function CardFace({ workout }: WorkoutImageGeneratorProps) {
         </div>
       )}
 
-      {/* STATS */}
-      <div style={{ position: 'absolute', bottom: '128px', left: 0, width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderTop: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(0,0,0,0.4)' }}>
-        <div style={{ padding: '48px', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ fontSize: '20px', color: '#EAB308', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px' }}>Duration</div>
-          <div style={{ fontSize: '64px', fontWeight: 900, marginTop: '16px' }}>{workout.duration ?? '--:--'}</div>
-        </div>
-        <div style={{ padding: '48px', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ fontSize: '20px', color: '#EAB308', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px' }}>Distance</div>
-          <div style={{ fontSize: '64px', fontWeight: 900, marginTop: '16px', whiteSpace: 'nowrap' }}>{formatDistance(workout.distance)}</div>
-        </div>
-        <div style={{ padding: '48px' }}>
-          <div style={{ fontSize: '20px', color: '#EAB308', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px' }}>Calories</div>
-          <div style={{ fontSize: '64px', fontWeight: 900, marginTop: '16px' }}>{workout.calories ?? '0'}</div>
-        </div>
-      </div>
+      {/* STATS — only render cells with real values */}
+      {(() => {
+        const stats = [
+          workout.duration ? { label: 'Duration', value: workout.duration } : null,
+          workout.distance ? { label: 'Distance', value: formatDistance(workout.distance) } : null,
+          workout.calories ? { label: 'Calories', value: `${workout.calories}` } : null,
+        ].filter(Boolean) as { label: string; value: string }[];
+
+        if (stats.length === 0) return null;
+
+        return (
+          <div style={{
+            position: 'absolute', bottom: '128px', left: 0, width: '100%',
+            display: 'grid', gridTemplateColumns: `repeat(${stats.length}, 1fr)`,
+            borderTop: '1px solid rgba(255,255,255,0.1)', backgroundColor: 'rgba(0,0,0,0.4)'
+          }}>
+            {stats.map((stat, i) => (
+              <div key={stat.label} style={{ padding: '48px', borderRight: i < stats.length - 1 ? '1px solid rgba(255,255,255,0.1)' : 'none' }}>
+                <div style={{ fontSize: '20px', color: '#EAB308', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '3px' }}>{stat.label}</div>
+                <div style={{ fontSize: '64px', fontWeight: 900, marginTop: '16px', whiteSpace: 'nowrap' }}>{stat.value}</div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* FOOTER */}
       <div style={{ position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#EAB308', color: '#000', padding: '32px 56px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box' }}>
