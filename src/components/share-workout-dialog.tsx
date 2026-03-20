@@ -15,6 +15,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import type { WorkoutSession } from '@/models/types';
 import { WorkoutImageGenerator } from '@/components/WorkoutImageGenerator';
+import { generateCardSummary } from '@/ai/flows/card-summary';
 
 interface ShareWorkoutDialogProps {
   session: WorkoutSession;
@@ -24,7 +25,38 @@ interface ShareWorkoutDialogProps {
 export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [cardSummary, setCardSummary] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const handleOpenChange = async (open: boolean) => {
+    setIsOpen(open);
+    if (open && cardSummary === null) {
+      try {
+        const strava = session.stravaActivity;
+        const distanceKm = strava?.distance ? Math.round((strava.distance / 1000) * 100) / 100 : undefined;
+        const durationMinutes = strava?.moving_time
+          ? Math.round(strava.moving_time / 60)
+          : session.duration ? parseInt(session.duration, 10) : undefined;
+        const paceMinPerKm = distanceKm && durationMinutes
+          ? Math.round((durationMinutes / distanceKm) * 10) / 10
+          : undefined;
+
+        const summary = await generateCardSummary({
+          workoutTitle: session.workoutTitle,
+          workoutType: session.programType === 'running' ? 'running' : 'hyrox',
+          distanceKm,
+          durationMinutes,
+          paceMinPerKm,
+          stravaActivityName: strava?.name,
+          userNotes: session.notes,
+        });
+        setCardSummary(summary);
+      } catch (err) {
+        logger.error('Failed to generate card summary:', err);
+        setCardSummary(session.notes ?? null);
+      }
+    }
+  };
 
   const handleCopyText = () => {
     const text = `Just crushed a ${session.workoutTitle} workout! 💪\nDuration: ${session.duration || 0} minutes\n\nGet your personalized HYROX training at HYBRIDX.CLUB`;
@@ -54,7 +86,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline" size="sm">
@@ -80,7 +112,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
               startTime: session.workoutDate,
               distance: session.stravaActivity?.distance,
               duration: session.duration,
-              notes: session.notes,
+              notes: cardSummary ?? undefined,
             }}
           />
 
