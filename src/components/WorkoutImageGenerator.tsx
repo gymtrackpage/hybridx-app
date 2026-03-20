@@ -122,12 +122,11 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
   const [generating, setGenerating] = useState(false);
   const [scale, setScale] = useState<number | null>(null);
 
-  // Use viewport width directly — reliable inside Dialogs/portals
+  // Cap preview at 420px wide — compact lightbox style, never fills the screen
   useLayoutEffect(() => {
     const update = () => {
-      // 48px = 8px dialog margin each side + 16px dialog padding each side
-      const available = Math.min(window.innerWidth - 48, 1080);
-      setScale(available / 1080);
+      const maxPreviewWidth = Math.min(window.innerWidth - 48, 420);
+      setScale(maxPreviewWidth / 1080);
     };
     update();
     window.addEventListener('resize', update);
@@ -182,12 +181,15 @@ export function WorkoutImageGenerator({ workout }: WorkoutImageGeneratorProps) {
       </div>
 
       {/* Visible UI */}
-      <div className="flex flex-col items-center gap-4 p-4 w-full">
+      <div className="flex flex-col items-center gap-3 w-full">
 
-        {/* Scaled preview — CSS transform only, doesn't affect html2canvas */}
+        {/* Scaled preview — compact lightbox style */}
         <div
-          className="w-full rounded-xl overflow-hidden"
-          style={{ height: scale ? `${1350 * scale}px` : '0px' }}
+          className="rounded-xl overflow-hidden"
+          style={{
+            width: scale ? `${1080 * scale}px` : '0px',
+            height: scale ? `${1350 * scale}px` : '0px',
+          }}
         >
           <div style={{ width: '1080px', transformOrigin: 'top left', transform: `scale(${scale ?? 0})` }}>
             <CardFace workout={workout} />

@@ -63,7 +63,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="w-[calc(100vw-16px)] max-w-4xl p-4 sm:p-6">
+      <DialogContent className="w-[calc(100vw-16px)] max-w-md p-4">
         <DialogHeader className="px-0">
           <DialogTitle>Share Your Workout</DialogTitle>
           <DialogDescription>
@@ -71,8 +71,8 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Workout Image Generator — handles preview + download */}
+        <div className="space-y-3">
+          {/* Workout Image Generator — preview + download */}
           <WorkoutImageGenerator
             workout={{
               name: session.workoutTitle,
@@ -84,15 +84,19 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
             }}
           />
 
-          {/* Share / Copy buttons */}
-          <div className="flex gap-2">
-            <Button onClick={handleShare} variant="outline" className="flex-1">
-              <Share2 className="h-4 w-4 mr-2" />
-              Share
-            </Button>
-            <Button onClick={handleCopyText} variant="outline">
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            </Button>
+          {/* Divider */}
+          <div className="border-t border-border pt-3">
+            <p className="text-xs text-muted-foreground mb-2">Or share via</p>
+            <div className="flex gap-2">
+              <Button onClick={handleShare} variant="outline" className="flex-1">
+                <Share2 className="h-4 w-4 mr-2" />
+                Share
+              </Button>
+              <Button onClick={handleCopyText} variant="outline" className="flex-1">
+                {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+                {copied ? 'Copied!' : 'Copy Text'}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
