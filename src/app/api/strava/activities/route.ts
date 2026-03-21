@@ -6,32 +6,20 @@ import { getAdminAuth } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 import { getValidStravaToken } from '@/lib/strava-token';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 export async function GET(req: NextRequest) {
-  console.log('=== ENHANCED DEBUG STRAVA ACTIVITIES API START ===');
-  
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('__session')?.value;
 
     if (!sessionCookie) {
-      const allCookies = cookieStore.getAll();
-      console.error('❌ No session cookie found in API route');
-      return NextResponse.json({ 
-        error: 'Authentication required: No session cookie found.',
-        debug: {
-          cookiesReceived: allCookies.length,
-          cookieNames: allCookies.map(c => c.name),
-          hasRawCookieHeader: !!req.headers.get('cookie'),
-          timestamp: new Date().toISOString()
-        }
-      }, { status: 401 });
+      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
     const adminAuth = getAdminAuth();
     const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
     const userId = decodedToken.uid;
-    console.log('✅ Session cookie verified for user:', userId);
 
     // 20 requests per minute per user
     const rl = checkRateLimit(`strava-activities:${userId}`, 60_000, 20);
@@ -53,17 +41,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Strava connection expired. Please reconnect your account.' }, { status: 401 });
     }
 
-    console.log(`🚀 Fetching activities from Strava API for user ${userId}...`);
+    const page = Math.max(1, parseInt(req.nextUrl.searchParams.get('page') ?? '1', 10));
     const activitiesResponse = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
       headers: { Authorization: `Bearer ${accessToken}` },
-      params: { per_page: 30, page: 1 },
+      params: { per_page: 30, page },
     });
 
     const activities = activitiesResponse.data;
-    console.log(`✅ Successfully fetched ${activities.length} activities from Strava for user ${userId}`);
-    await updateUserAdmin(userId, { lastStravaSync: new Date() });
+    if (page === 1) await updateUserAdmin(userId, { lastStravaSync: new Date() });
 
-    return NextResponse.json(activities);
+    return NextResponse.json({ activities, hasMore: activities.length === 30 });
 
   } catch (error: any) {
     let status = 500;
@@ -82,12 +69,7 @@ export async function GET(req: NextRequest) {
         message = 'Your session has expired. Please log in again.';
     }
 
-    console.error('❌ Final catch block in Strava activities API:', {
-      message: error.message,
-      code: error.code,
-      axios_response: error.response?.data
-    });
-    
-    return NextResponse.json({ error: message, debug: error.message }, { status });
+    logger.error('Strava activities fetch error:', { message: error.message, code: error.code });
+    return NextResponse.json({ error: message }, { status });
   }
 }

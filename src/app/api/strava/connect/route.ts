@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
     const redirectUri = `${appUrl}/api/strava/exchange`;
     const scope = 'read,activity:read_all,activity:write';
     
-    // CSRF protection
-    const state = btoa(JSON.stringify({ uid: decodedToken.uid }));
+    // CSRF protection — include expiry so replayed state tokens are rejected
+    const state = btoa(JSON.stringify({ uid: decodedToken.uid, exp: Date.now() + 10 * 60 * 1000 }));
     
     const authUrl = `https://www.strava.com/oauth/authorize?` +
       `client_id=${clientId}&` +

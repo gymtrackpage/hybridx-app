@@ -107,7 +107,7 @@ export function TodayStravaFeed({ onActivitiesLoaded }: TodayStravaFeedProps) {
         return;
       }
 
-      const all: StravaActivity[] = await res.json();
+      const { activities: all }: { activities: StravaActivity[] } = await res.json();
 
       // Filter to activities that started today in the user's local timezone
       const todays = Array.isArray(all)

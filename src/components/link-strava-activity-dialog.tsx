@@ -125,7 +125,7 @@ export function LinkStravaActivityDialog({
           throw new Error(err.error || 'Failed to fetch Strava activities');
         }
 
-        const fetched: StravaActivity[] = await response.json();
+        const { activities: fetched }: { activities: StravaActivity[] } = await response.json();
         // Sort by match score: same-day activities float to the top
         const sorted = [...fetched].sort((a, b) => matchScore(b, session) - matchScore(a, session));
         setActivities(sorted);

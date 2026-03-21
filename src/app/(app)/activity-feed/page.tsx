@@ -23,6 +23,9 @@ export default function ActivityFeedPage() {
     const [error, setError] = useState<string | null>(null);
     const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const { toast } = useToast();
 
     const isStravaConnected = user?.strava?.accessToken && user?.strava?.athleteId;
@@ -53,44 +56,33 @@ export default function ActivityFeedPage() {
         };
     }, []);
     
-    const fetchActivities = async (showSyncingIndicator = true) => {
+    const fetchActivities = async (showSyncingIndicator = true, pageToFetch = 1) => {
         if (!isStravaConnected) {
             setError('Strava account not connected. Please connect it in your profile.');
             setLoading(false);
             return;
         }
 
-        if (showSyncingIndicator) {
-            setSyncing(true);
-        }
+        if (showSyncingIndicator) setSyncing(true);
         setError(null);
-        
+
         try {
             const auth = await getAuthInstance();
             const currentUser = auth.currentUser;
-            
-            if (!currentUser) {
-                throw new Error('User not authenticated');
-            }
+            if (!currentUser) throw new Error('User not authenticated');
 
             const idToken = await currentUser.getIdToken(true);
-            
-            // Set session cookie — must succeed before the Strava call
             const sessionRes = await fetch('/api/auth/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ idToken }),
                 credentials: 'include'
             });
+            if (!sessionRes.ok) throw new Error('Failed to establish session. Please sign out and back in.');
 
-            if (!sessionRes.ok) {
-                throw new Error('Failed to establish session. Please sign out and back in.');
-            }
-
-            const response = await fetch('/api/strava/activities', {
+            const response = await fetch(`/api/strava/activities?page=${pageToFetch}`, {
                 method: 'GET',
                 credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
                 cache: 'no-cache'
             });
 
@@ -99,23 +91,24 @@ export default function ActivityFeedPage() {
                 throw new Error(errorData.error || `Failed to fetch activities: ${response.statusText}`);
             }
 
-            const fetchedActivities = await response.json();
-            setActivities(fetchedActivities);
+            const { activities: fetched, hasMore: more } = await response.json();
+            setActivities(prev => pageToFetch === 1 ? fetched : [...prev, ...fetched]);
+            setHasMore(more);
+            setPage(pageToFetch);
 
         } catch (err: any) {
-            console.error("❌ Error in fetchActivities:", err);
             setError(err.message || 'Failed to fetch activities.');
-            toast({
-                title: 'Error',
-                description: err.message || 'Failed to load Strava activities',
-                variant: 'destructive'
-            });
+            toast({ title: 'Error', description: err.message || 'Failed to load Strava activities', variant: 'destructive' });
         } finally {
-             if (showSyncingIndicator) {
-                setSyncing(false);
-            }
+            if (showSyncingIndicator) setSyncing(false);
             setLoading(false);
+            setLoadingMore(false);
         }
+    };
+
+    const handleLoadMore = async () => {
+        setLoadingMore(true);
+        await fetchActivities(false, page + 1);
     };
 
     // Effect to fetch activities once user is loaded
@@ -242,7 +235,8 @@ export default function ActivityFeedPage() {
                             <p>No recent activities found.</p>
                         </div>
                     ) : (
-                         <ul className="space-y-2">
+                        <>
+                        <ul className="space-y-2">
                             {Array.isArray(activities) && activities.map((activity) => (
                                 <li key={activity.id}>
                                     <button
@@ -284,6 +278,15 @@ export default function ActivityFeedPage() {
                                 </li>
                             ))}
                         </ul>
+                        {hasMore && (
+                            <div className="pt-4 text-center">
+                                <Button variant="outline" onClick={handleLoadMore} disabled={loadingMore}>
+                                    {loadingMore ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                    {loadingMore ? 'Loading...' : 'Load More'}
+                                </Button>
+                            </div>
+                        )}
+                        </>
                     )}
                 </CardContent>
             </Card>

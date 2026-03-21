@@ -32,6 +32,7 @@ import { useNotificationPermission } from '@/hooks/use-notification-permission';
 import { StatsWidget } from '@/components/stats-widget';
 import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/contexts/user-context';
+import { logger } from '@/lib/logger';
 import { isRunningWorkout } from '@/lib/type-guards';
 import { AndroidBetaBanner } from '@/components/android-beta-banner';
 import { RacePrepDialog } from '@/components/race-prep-dialog';
@@ -107,7 +108,7 @@ export default function DashboardPage() {
     }).then(result => {
       setSummary(result.summary);
     }).catch(aiError => {
-      console.error("Failed to generate AI dashboard summary:", aiError);
+      logger.error("Failed to generate AI dashboard summary:", aiError);
       setSummary("Here's your plan for today. Let's get it done.");
     }).finally(() => {
       setSummaryLoading(false);
@@ -136,7 +137,7 @@ export default function DashboardPage() {
       }).then(result => {
         setWorkoutSummaryText(result.summary);
       }).catch(aiError => {
-        console.error("Failed to generate AI workout summary:", aiError);
+        logger.error("Failed to generate AI workout summary:", aiError);
         setWorkoutSummaryText(todaysWorkout.workout!.title);
       }).finally(() => {
         setWorkoutSummaryLoading(false);
@@ -157,7 +158,7 @@ export default function DashboardPage() {
         workoutTitle: todaysWorkout.workout.title,
         exercises: exercisesForNotification,
       }, user.notificationTime).catch(error => {
-        console.error('Error scheduling notification:', error);
+        logger.error('Error scheduling notification:', error);
       });
     }
   }, [isGranted, todaysWorkout, user]);
@@ -215,7 +216,7 @@ export default function DashboardPage() {
         router.push('/workout/active');
 
     } catch (error) {
-        console.error("Failed to generate AI workout:", error);
+        logger.error("Failed to generate AI workout:", error);
         toast({ title: 'Error', description: 'Could not generate a workout. Please try again.', variant: 'destructive' });
         setIsGeneratingWorkout(false);
     }
@@ -241,7 +242,7 @@ export default function DashboardPage() {
           await refreshData();
           toast({ title: 'Workout Completed!', description: 'Nice work. Keep the streak alive!' });
       } catch (error) {
-          console.error('Failed to mark workout done:', error);
+          logger.error('Failed to mark workout done:', error);
           toast({ title: 'Error', description: 'Could not mark workout as done.', variant: 'destructive' });
       } finally {
           setIsMarkingDone(false);
