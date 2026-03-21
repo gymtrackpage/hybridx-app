@@ -1,7 +1,7 @@
 // src/app/(app)/dashboard/page.tsx
 'use client';
 
-import { useEffect, useState, useRef, lazy, Suspense } from 'react';
+import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import { BarChart, Target, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History, Calendar, Bell, CheckSquare } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval, isFuture } from 'date-fns';
@@ -35,6 +35,7 @@ import { useUser } from '@/contexts/user-context';
 import { isRunningWorkout } from '@/lib/type-guards';
 import { AndroidBetaBanner } from '@/components/android-beta-banner';
 import { RacePrepDialog } from '@/components/race-prep-dialog';
+import type { StravaLoadError } from '@/components/today-strava-feed';
 
 // Lazy load heavy AI-powered components
 // const WeeklyAnalysisDialog = lazy(() => import('@/components/weekly-analysis-dialog').then(mod => ({ default: mod.WeeklyAnalysisDialog })));
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const [todayStravaSummary, setTodayStravaSummary] = useState<string | null>(null);
   // True once TodayStravaFeed has resolved (success OR no Strava connection) — gates the AI summary
   const [todayStravaLoaded, setTodayStravaLoaded] = useState(false);
+  const [stravaLoadError, setStravaLoadError] = useState<StravaLoadError | null>(null);
   // Prevent the dashboard summary from firing more than once per mount
   const summaryFiredRef = useRef(false);
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
@@ -100,7 +102,8 @@ export default function DashboardPage() {
       programName: program.name,
       daysCompleted: todaysWorkout.day > 0 ? todaysWorkout.day : 0,
       weeklyConsistency: `${progressData[3]?.workouts || 0} workouts completed in the last week.`,
-      todayStravaActivity: todayStravaSummary ?? undefined,
+      // Only pass Strava activity when it loaded successfully (not when errored)
+      todayStravaActivity: stravaLoadError ? undefined : (todayStravaSummary ?? undefined),
     }).then(result => {
       setSummary(result.summary);
     }).catch(aiError => {
@@ -109,7 +112,7 @@ export default function DashboardPage() {
     }).finally(() => {
       setSummaryLoading(false);
     });
-  }, [user, program, todaysWorkout, progressData, todayStravaLoaded]); // todayStravaSummary intentionally excluded — read via closure after todayStravaLoaded is true
+  }, [user, program, todaysWorkout, progressData, todayStravaLoaded, stravaLoadError]); // todayStravaSummary intentionally excluded — read via closure after todayStravaLoaded is true
 
   // Effect for AI Workout Summary — staggered 1s after mount to avoid concurrent Gemini calls
   useEffect(() => {
@@ -244,6 +247,13 @@ export default function DashboardPage() {
           setIsMarkingDone(false);
       }
   };
+
+  // Stable callback — prevents TodayStravaFeed from re-fetching on every parent render
+  const handleStravaActivitiesLoaded = useCallback((s: string | null, error?: StravaLoadError) => {
+    setTodayStravaSummary(s);
+    setStravaLoadError(error ?? null);
+    setTodayStravaLoaded(true);
+  }, []);
 
   const programStartsInFuture = user?.startDate && isFuture(user.startDate);
   const showGenerateWorkoutButton = !program || programStartsInFuture || !todaysWorkout?.workout;
@@ -567,7 +577,28 @@ export default function DashboardPage() {
               </Suspense>
             )}
 
-            {!isStravaConnected && (
+            {stravaLoadError === 'reconnect_required' && (
+              <Card className="bg-red-50 border-red-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-red-800">
+                    <LinkIcon className="h-5 w-5" />
+                    Strava Disconnected
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-red-700">
+                    Your Strava connection has expired. Reconnect to resume activity syncing and personalised insights.
+                  </p>
+                </CardContent>
+                <CardFooter>
+                  <Button asChild variant="outline" className="w-full border-red-300 text-red-800 hover:bg-red-100 hover:text-red-900">
+                    <Link href="/profile">Reconnect Strava</Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+            {!isStravaConnected && !stravaLoadError && (
               <Card className="bg-orange-50 border-orange-200">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-orange-800">
@@ -641,10 +672,7 @@ export default function DashboardPage() {
                 <Skeleton className="h-16 flex-1 rounded-xl" />
               </div>
             }>
-              <TodayStravaFeed onActivitiesLoaded={(s) => {
-                setTodayStravaSummary(s);
-                setTodayStravaLoaded(true);
-              }} />
+              <TodayStravaFeed onActivitiesLoaded={handleStravaActivitiesLoaded} />
             </Suspense>
           </div>
         )}

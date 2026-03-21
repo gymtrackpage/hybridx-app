@@ -23,9 +23,12 @@ import {
 } from 'lucide-react';
 import { isToday } from 'date-fns';
 
+export type StravaLoadError = 'reconnect_required' | 'fetch_error';
+
 interface TodayStravaFeedProps {
-  /** Called once today's activities are known; passes a readable summary string (or null if none). */
-  onActivitiesLoaded?: (summary: string | null) => void;
+  /** Called once today's activities are known; passes a readable summary string (or null if none).
+   *  `error` is set when loading failed — 'reconnect_required' means the token expired/revoked. */
+  onActivitiesLoaded?: (summary: string | null, error?: StravaLoadError) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -99,7 +102,8 @@ export function TodayStravaFeed({ onActivitiesLoaded }: TodayStravaFeedProps) {
       });
 
       if (!res.ok) {
-        onActivitiesLoaded?.(null);
+        const errorType: StravaLoadError = res.status === 401 ? 'reconnect_required' : 'fetch_error';
+        onActivitiesLoaded?.(null, errorType);
         return;
       }
 
@@ -116,7 +120,7 @@ export function TodayStravaFeed({ onActivitiesLoaded }: TodayStravaFeedProps) {
       setTodayActivities(todays);
       onActivitiesLoaded?.(todays.length > 0 ? buildAISummary(todays) : null);
     } catch {
-      onActivitiesLoaded?.(null);
+      onActivitiesLoaded?.(null, 'fetch_error');
     } finally {
       setLoading(false);
     }

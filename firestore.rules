@@ -3,17 +3,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Improved admin check with error handling
     function isAdmin() {
-      return request.auth != null && 
+      return request.auth != null &&
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
     }
 
+    // Fields the client is never allowed to write directly.
+    // These must only be set via Admin SDK (server-side).
+    function isWritingProtectedUserField() {
+      let protected = ['isAdmin', 'subscriptionStatus', 'subscriptionTier',
+                       'stripeCustomerId', 'stripeSubscriptionId', 'trialEndsAt'];
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(protected);
+    }
+
     match /users/{userId} {
-      allow read, update: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null;
-      
+      // Users can only read and update their own document,
+      // and must not touch protected server-managed fields.
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && !isWritingProtectedUserField();
+
+      // On create, the document path must match the authenticated user's UID.
+      allow create: if request.auth != null && request.auth.uid == userId;
+
       // Allow access to subcollections like personalPrograms
       match /personalPrograms/{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
@@ -26,17 +40,23 @@ service cloud.firestore {
     }
 
     match /workoutSessions/{sessionId} {
-      // For read operations, we check the existing resource on the server
+      // For read operations, check userId on the existing document
       allow get, list: if request.auth != null && resource.data.userId == request.auth.uid;
-      
-      // For write operations, we check the incoming resource from the client
+
+      // For write operations, check userId on the incoming document
       allow create, update, delete: if request.auth != null && request.resource.data.userId == request.auth.uid;
     }
-    
+
     match /notifications/{notificationId} {
-        allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-        // Allow creating notifications (e.g. from client side logic, though usually backend does this)
-        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+
+      // Client may create notifications addressed to itself
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+
+      // Client may mark its own notifications as read (update only the `read` field)
+      allow update: if request.auth != null
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
     }
   }
 }

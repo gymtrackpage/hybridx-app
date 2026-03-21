@@ -1,9 +1,14 @@
 // src/app/api/debug/create-session-and-check/route.ts
+// DEBUG ENDPOINT - Never accessible in production.
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/services/user-service';
 import { getAdminAuth } from '@/lib/firebase-admin';
 
 export async function POST(request: NextRequest) {
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+    }
+
     console.log('=== CREATE SESSION AND CHECK ADMIN ===');
 
     try {

@@ -1,7 +1,7 @@
 // src/contexts/user-context.tsx
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
@@ -37,10 +37,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const [streakData, setStreakData] = useState<StreakData>({ currentStreak: 0, longestStreak: 0, totalWorkouts: 0, thisWeekWorkouts: 0, thisMonthWorkouts: 0 });
     const [trainingPaces, setTrainingPaces] = useState<Record<string, number> | null>(null);
     const [loading, setLoading] = useState(true);
+    // Prevent concurrent refreshes (e.g. rapid re-mounts or multiple callers)
+    const isRefreshingRef = useRef(false);
 
-    const refreshData = async () => {
+    const refreshData = useCallback(async () => {
+        if (isRefreshingRef.current) return;
+        isRefreshingRef.current = true;
+
         const auth = await getAuthInstance();
-        if (!auth.currentUser) return;
+        if (!auth.currentUser) {
+            isRefreshingRef.current = false;
+            return;
+        }
 
         setLoading(true);
 
@@ -142,8 +150,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             logger.error("Error fetching user data:", error);
         } finally {
             setLoading(false);
+            isRefreshingRef.current = false;
         }
-    };
+    }, []); // stable — only uses setters (stable) and module-level functions
 
     useEffect(() => {
         const initialize = async () => {

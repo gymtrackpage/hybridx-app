@@ -1,10 +1,10 @@
 // src/app/api/strava/activities/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getUser, updateUserAdmin } from '@/services/user-service';
+import { updateUserAdmin } from '@/services/user-service';
 import axios from 'axios';
-import type { StravaTokens } from '@/models/types';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
+import { getValidStravaToken } from '@/lib/strava-token';
 
 export async function GET(req: NextRequest) {
   console.log('=== ENHANCED DEBUG STRAVA ACTIVITIES API START ===');
@@ -32,47 +32,15 @@ export async function GET(req: NextRequest) {
     const userId = decodedToken.uid;
     console.log('✅ Session cookie verified for user:', userId);
 
-    const user = await getUser(userId);
-    if (!user) {
-        console.error(`❌ User data not found in Firestore for UID: ${userId}`);
-        return NextResponse.json({ error: 'User data not found.' }, { status: 404 });
-    }
-    
-    const stravaTokens = user?.strava;
-    if (!stravaTokens?.accessToken || !stravaTokens.refreshToken) {
-      console.error('❌ No Strava tokens found for user:', userId);
-      return NextResponse.json({ error: 'Strava account not connected. Please connect it in your profile.' }, { status: 400 });
-    }
-
-    let accessToken = stravaTokens.accessToken;
-    const now = new Date();
-    
-    if (stravaTokens.expiresAt instanceof Date && stravaTokens.expiresAt.getTime() < now.getTime() + 300000) { // 5 min buffer
-      console.log(`🔄 Strava token for user ${userId} is expiring soon, refreshing...`);
-      try {
-        const refreshResponse = await axios.post('https://www.strava.com/oauth/token', {
-          client_id: process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID,
-          client_secret: process.env.STRAVA_CLIENT_SECRET,
-          grant_type: 'refresh_token',
-          refresh_token: stravaTokens.refreshToken,
-        });
-
-        const newTokens: StravaTokens = {
-          ...stravaTokens,
-          accessToken: refreshResponse.data.access_token,
-          refreshToken: refreshResponse.data.refresh_token,
-          expiresAt: new Date(refreshResponse.data.expires_at * 1000),
-        };
-
-        await updateUserAdmin(userId, { strava: newTokens });
-        accessToken = newTokens.accessToken;
-        console.log(`✅ Strava token for user ${userId} refreshed successfully`);
-      } catch (refreshError: any) {
-        console.error(`❌ Strava token refresh failed for user ${userId}:`, refreshError.response?.data || refreshError.message);
-        return NextResponse.json({ error: 'Strava connection expired. Please reconnect your account.' }, { status: 401 });
+    let accessToken: string;
+    try {
+      accessToken = await getValidStravaToken(userId);
+    } catch (tokenErr: any) {
+      if (tokenErr.code === 'STRAVA_NOT_CONNECTED') {
+        return NextResponse.json({ error: 'Strava account not connected. Please connect it in your profile.' }, { status: 400 });
       }
-    } else {
-      console.log(`✅ Strava token for user ${userId} is still valid.`);
+      // STRAVA_REFRESH_FAILED — token expired/revoked, user must reconnect
+      return NextResponse.json({ error: 'Strava connection expired. Please reconnect your account.' }, { status: 401 });
     }
 
     console.log(`🚀 Fetching activities from Strava API for user ${userId}...`);

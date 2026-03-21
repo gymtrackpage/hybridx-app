@@ -1,8 +1,26 @@
 // src/app/api/debug/firestore-indexes/route.ts
+// DEBUG ENDPOINT - Never accessible in production.
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
+import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+    }
+
+    // Require authentication — exposes user document field names and email values.
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('__session')?.value;
+    if (!sessionCookie) {
+        return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    try {
+        await getAdminAuth().verifySessionCookie(sessionCookie, true);
+    } catch {
+        return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    }
+
     console.log('=== DEBUG FIRESTORE INDEXES ===');
 
     const results: any = {

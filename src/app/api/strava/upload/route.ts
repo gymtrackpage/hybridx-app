@@ -2,21 +2,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { cookies } from 'next/headers';
-import { getUser, updateUserAdmin } from '@/services/user-service';
+import { getValidStravaToken } from '@/lib/strava-token';
 import { getAdminDb } from '@/lib/firebase-admin';
 import axios from 'axios';
-import type { StravaTokens, WorkoutSession, ProgramType, Workout, RunningWorkout } from '@/models/types';
+import type { WorkoutSession, ProgramType, Workout, RunningWorkout } from '@/models/types';
 import { generateStravaDescription } from '@/ai/flows/strava-description';
 
 
-// Helper function to safely convert Firestore timestamp to Date
-function toDate(timestamp: any): Date {
-  if (!timestamp) return new Date();
+// Helper function to safely convert Firestore timestamp to Date.
+// Returns null (and logs a warning) for missing or unrecognisable values so
+// callers can surface a proper error rather than silently using the wrong date.
+function toDate(timestamp: any): Date | null {
+  if (!timestamp) return null;
   if (timestamp instanceof Date) return timestamp;
-  if (typeof timestamp.toDate === 'function') return timestamp.toDate();
-  if (typeof timestamp === 'string') return new Date(timestamp);
+  if (typeof timestamp.toDate === 'function') return timestamp.toDate() as Date;
+  if (typeof timestamp === 'string') {
+    const d = new Date(timestamp);
+    if (!isNaN(d.getTime())) return d;
+    console.warn('toDate: invalid timestamp string', timestamp);
+    return null;
+  }
   if (typeof timestamp === 'number') return new Date(timestamp);
-  return new Date();
+  console.warn('toDate: unrecognised timestamp format', typeof timestamp, timestamp);
+  return null;
 }
 
 // Map your app's activity types to Strava activity types
@@ -27,38 +35,6 @@ function mapActivityTypeToStrava(programType: ProgramType): string {
     return 'WeightTraining';
 }
 
-async function getValidAccessToken(userId: string): Promise<string> {
-    const user = await getUser(userId);
-    const stravaTokens = user?.strava;
-
-    if (!stravaTokens?.accessToken) {
-        throw new Error('Strava not connected');
-    }
-
-    const now = new Date();
-    const expiresAt = toDate(stravaTokens.expiresAt);
-    
-    if (expiresAt.getTime() - now.getTime() < 300000) { // 5 min buffer
-        console.log('Token expiring soon, refreshing...');
-        const refreshResponse = await axios.post('https://www.strava.com/oauth/token', {
-            client_id: process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID,
-            client_secret: process.env.STRAVA_CLIENT_SECRET,
-            grant_type: 'refresh_token',
-            refresh_token: stravaTokens.refreshToken,
-        });
-
-        const newTokens: StravaTokens = {
-            ...stravaTokens,
-            accessToken: refreshResponse.data.access_token,
-            refreshToken: refreshResponse.data.refresh_token,
-            expiresAt: new Date(refreshResponse.data.expires_at * 1000),
-        };
-
-        await updateUserAdmin(userId, { strava: newTokens });
-        return newTokens.accessToken;
-    }
-    return stravaTokens.accessToken;
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -82,10 +58,15 @@ export async function POST(req: NextRequest) {
     const userId = decodedToken.uid;
     console.log('Authenticated user:', userId);
 
-    const accessToken = await getValidAccessToken(userId).catch(err => {
-        console.error('Token validation failed:', err.message);
-        throw err;
-    });
+    let accessToken: string;
+    try {
+      accessToken = await getValidStravaToken(userId);
+    } catch (tokenErr: any) {
+      if (tokenErr.code === 'STRAVA_NOT_CONNECTED') {
+        return NextResponse.json({ error: 'Strava account not connected.' }, { status: 400 });
+      }
+      return NextResponse.json({ error: 'Strava connection expired. Please reconnect your account.' }, { status: 401 });
+    }
 
     // Fetch workout session from your database
     const adminDb = getAdminDb();
@@ -131,12 +112,18 @@ export async function POST(req: NextRequest) {
     }
 
 
+    const startDate = toDate(session.startedAt);
+    if (!startDate) {
+      console.error('Invalid or missing startedAt timestamp for session:', sessionId);
+      return NextResponse.json({ error: 'Workout session has an invalid start time and cannot be uploaded.' }, { status: 400 });
+    }
+
     // Create the activity on Strava
     const estimatedDuration = 3600; // Strava requires a time, default to 1 hour
     const stravaActivityPayload = {
       name: session.workoutTitle,
       type: mapActivityTypeToStrava(session.programType),
-      start_date_local: toDate(session.startedAt).toISOString(),
+      start_date_local: startDate.toISOString(),
       elapsed_time: estimatedDuration,
       description: aiDescription,
       trainer: true,

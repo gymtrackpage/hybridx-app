@@ -1,11 +1,15 @@
 // src/app/api/debug/set-admin/route.ts
-// IMPORTANT: This is a debug endpoint - remove or secure in production!
+// DEBUG ENDPOINT - Never accessible in production.
 import { NextRequest, NextResponse } from 'next/server';
-import { updateUserAdmin } from '@/services/user-service';
+import { updateUserAdmin, getUser } from '@/services/user-service';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+    }
+
     console.log('=== DEBUG SET ADMIN ===');
 
     try {
@@ -16,18 +20,24 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'userId is required' }, { status: 400 });
         }
 
-        // Optional: Add some basic authentication
+        // Require an authenticated admin session — no silent bypass.
         const cookieStore = await cookies();
         const sessionCookie = cookieStore.get('__session')?.value;
-
-        if (sessionCookie) {
-            try {
-                const decodedToken = await getAdminAuth().verifySessionCookie(sessionCookie, true);
-                console.log('✅ Request authenticated for user:', decodedToken.uid);
-            } catch (authError) {
-                console.log('⚠️ Authentication failed, but proceeding for debug purposes');
-            }
+        if (!sessionCookie) {
+            return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
         }
+        let callerUid: string;
+        try {
+            const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
+            callerUid = decoded.uid;
+        } catch {
+            return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+        }
+        const caller = await getUser(callerUid);
+        if (!caller?.isAdmin) {
+            return NextResponse.json({ error: 'Admin privileges required' }, { status: 403 });
+        }
+        console.log('✅ Request authenticated for admin:', callerUid);
 
         // Update the user's admin status
         await updateUserAdmin(userId, { isAdmin: makeAdmin !== false });

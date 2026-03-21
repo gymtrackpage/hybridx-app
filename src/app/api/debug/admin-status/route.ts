@@ -1,10 +1,15 @@
 // src/app/api/debug/admin-status/route.ts
+// DEBUG ENDPOINT - Never accessible in production.
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/services/user-service';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+    }
+
     console.log('=== DEBUG ADMIN STATUS ===');
 
     try {
