@@ -75,13 +75,17 @@ export default function ActivityFeedPage() {
 
             const idToken = await currentUser.getIdToken(true);
             
-            // Set session cookie before making the API call
-            await fetch('/api/auth/session', {
+            // Set session cookie — must succeed before the Strava call
+            const sessionRes = await fetch('/api/auth/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ idToken }),
                 credentials: 'include'
             });
+
+            if (!sessionRes.ok) {
+                throw new Error('Failed to establish session. Please sign out and back in.');
+            }
 
             const response = await fetch('/api/strava/activities', {
                 method: 'GET',

@@ -131,21 +131,23 @@ export const dailyEmailCampaigns = functions.pubsub
     for (const doc of usersReEngage.docs) {
         const u = doc.data();
         if (u.email) {
-            // Check for activity
-            const sessions = await db.collection("workoutSessions")
-                .where("userId", "==", doc.id)
-                .limit(1)
-                .get();
-            
-            if (sessions.empty) {
-                // Since your re-engagement email uses {{name}}, we must replace it.
-                // The generated-templates file has the raw string with {{name}}.
-                let html = EMAIL_TEMPLATES.reEngagement;
-                if (html) {
-                    html = html.replace("{{name}}", u.firstName || "Athlete");
-                    await sendEmail(u.email, "We miss you at HybridX!", html);
-                    sentCounts.reEngage++;
+            try {
+                const sessions = await db.collection("workoutSessions")
+                    .where("userId", "==", doc.id)
+                    .limit(1)
+                    .get();
+
+                if (sessions.empty) {
+                    let html = EMAIL_TEMPLATES.reEngagement;
+                    if (html) {
+                        html = html.replace("{{name}}", u.firstName || "Athlete");
+                        await sendEmail(u.email, "We miss you at HybridX!", html);
+                        sentCounts.reEngage++;
+                    }
                 }
+            } catch (err) {
+                console.error(`Failed to check sessions for re-engagement user ${doc.id}:`, err);
+                // Continue processing other users rather than aborting the whole campaign
             }
         }
     }

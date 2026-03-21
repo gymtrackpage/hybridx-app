@@ -40,7 +40,12 @@ export async function GET(req: NextRequest) {
         const decodedToken = await getAdminAuth().verifySessionCookie(sessionCookie, true);
         const userId = decodedToken.uid;
         
-        const decodedState = JSON.parse(atob(state));
+        let decodedState: { uid?: string };
+        try {
+            decodedState = JSON.parse(atob(state));
+        } catch {
+            throw new Error('Invalid state parameter.');
+        }
         if (decodedState.uid !== userId) {
             throw new Error('State mismatch (CSRF protection). Potential security issue.');
         }

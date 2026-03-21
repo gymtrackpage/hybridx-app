@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { cookies } from 'next/headers';
 import { getValidStravaToken } from '@/lib/strava-token';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { getAdminDb } from '@/lib/firebase-admin';
 import axios from 'axios';
 import type { WorkoutSession, ProgramType, Workout, RunningWorkout } from '@/models/types';
@@ -57,6 +58,15 @@ export async function POST(req: NextRequest) {
     const decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
     const userId = decodedToken.uid;
     console.log('Authenticated user:', userId);
+
+    // 5 uploads per minute per user
+    const rl = checkRateLimit(`strava-upload:${userId}`, 60_000, 5);
+    if (!rl.allowed) {
+        return NextResponse.json({ error: 'Too many upload requests. Please wait before trying again.' }, {
+            status: 429,
+            headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
+        });
+    }
 
     let accessToken: string;
     try {

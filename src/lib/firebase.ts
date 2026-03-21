@@ -1,7 +1,12 @@
 
 // src/lib/firebase.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 import {
   getAuth,
   browserLocalPersistence,
@@ -25,7 +30,22 @@ const firebaseConfig = {
 
 // Initialize Firebase app
 const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
+
+// Enable IndexedDB offline persistence on the client; fall back to in-memory on the server.
+// initializeFirestore must be called before any getFirestore call on the same app instance.
+let db = (() => {
+  if (typeof window !== 'undefined') {
+    try {
+      return initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      });
+    } catch {
+      // Already initialized (e.g. hot-reload) — reuse existing instance
+      return getFirestore(app);
+    }
+  }
+  return getFirestore(app);
+})();
 
 // Singleton promise to ensure auth is only initialized once
 let authInstancePromise: Promise<Auth> | null = null;

@@ -5,6 +5,7 @@ import axios from 'axios';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 import { getValidStravaToken } from '@/lib/strava-token';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
   console.log('=== ENHANCED DEBUG STRAVA ACTIVITIES API START ===');
@@ -31,6 +32,15 @@ export async function GET(req: NextRequest) {
     const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
     const userId = decodedToken.uid;
     console.log('✅ Session cookie verified for user:', userId);
+
+    // 20 requests per minute per user
+    const rl = checkRateLimit(`strava-activities:${userId}`, 60_000, 20);
+    if (!rl.allowed) {
+        return NextResponse.json({ error: 'Too many requests. Please wait before syncing again.' }, {
+            status: 429,
+            headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
+        });
+    }
 
     let accessToken: string;
     try {

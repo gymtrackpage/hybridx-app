@@ -3,10 +3,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/services/user-service';
 import { getAdminAuth } from '@/lib/firebase-admin';
+import { cookies } from 'next/headers';
 
 export async function POST(request: NextRequest) {
     if (process.env.NODE_ENV === 'production') {
         return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+    }
+
+    // Require an existing valid session — the idToken must belong to the caller.
+    const cookieStore = await cookies();
+    const existingSession = cookieStore.get('__session')?.value;
+    if (!existingSession) {
+        return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    let callerUid: string;
+    try {
+        const decoded = await getAdminAuth().verifySessionCookie(existingSession, true);
+        callerUid = decoded.uid;
+    } catch {
+        return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
     console.log('=== CREATE SESSION AND CHECK ADMIN ===');
@@ -21,8 +36,11 @@ export async function POST(request: NextRequest) {
 
         const adminAuth = getAdminAuth();
 
-        // Verify the ID token
+        // Verify the ID token and ensure it belongs to the authenticated caller
         const decodedToken = await adminAuth.verifyIdToken(idToken, true);
+        if (decodedToken.uid !== callerUid) {
+            return NextResponse.json({ error: 'Token does not match authenticated user' }, { status: 403 });
+        }
         console.log('✅ ID token verified for user:', decodedToken.uid);
 
         // Create session cookie

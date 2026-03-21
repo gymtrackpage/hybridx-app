@@ -1,7 +1,7 @@
 'use client';
 import { logger } from '@/lib/logger';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Share2, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +26,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [cardSummary, setCardSummary] = useState<string | null>(null);
+  const [summaryFailed, setSummaryFailed] = useState(false);
   const [calories, setCalories] = useState<number | undefined>(undefined);
   const [formattedDuration, setFormattedDuration] = useState<string | undefined>(undefined);
   const { toast } = useToast();
@@ -36,7 +37,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
 
-  const handleOpenChange = async (open: boolean) => {
+  const handleOpenChange = useCallback(async (open: boolean) => {
     setIsOpen(open);
     if (open && cardSummary === null) {
       const strava = session.stravaActivity;
@@ -73,16 +74,18 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
 
       if (summaryResult.status === 'fulfilled') {
         setCardSummary(summaryResult.value);
+        setSummaryFailed(false);
       } else {
         logger.error('Failed to generate card summary:', summaryResult.reason);
         setCardSummary(session.notes ?? null);
+        setSummaryFailed(true);
       }
 
       if (caloriesResult.status === 'fulfilled' && caloriesResult.value?.calories > 0) {
         setCalories(caloriesResult.value.calories);
       }
     }
-  };
+  }, [session, cardSummary]);
 
   const handleCopyText = () => {
     const text = `Just crushed a ${session.workoutTitle} workout! 💪\nDuration: ${session.duration || 0} minutes\n\nGet your personalized HYROX training at HYBRIDX.CLUB`;
@@ -130,6 +133,11 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
         </DialogHeader>
 
         <div className="space-y-3">
+          {summaryFailed && (
+            <p className="text-xs text-muted-foreground text-center">
+              AI summary unavailable — using your notes instead.
+            </p>
+          )}
           {/* Workout Image Generator — preview + download */}
           <WorkoutImageGenerator
             workout={{

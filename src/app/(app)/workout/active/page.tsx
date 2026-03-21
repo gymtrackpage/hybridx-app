@@ -1,8 +1,8 @@
 // src/app/(app)/workout/active/page.tsx
 'use client';
 
-import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
-import { Flag, Loader2, CalendarDays, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon, CheckSquare, Square } from 'lucide-react';
+import { useEffect, useState, useMemo, lazy, Suspense, useCallback } from 'react';
+import { Flag, Loader2, CalendarDays, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon, CheckSquare, Square, WifiOff } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { workoutSummary } from '@/ai/flows/workout-summary';
@@ -39,7 +39,20 @@ export default function ActiveWorkoutPage() {
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   const [exerciseChecklist, setExerciseChecklist] = useState<Record<string, boolean>>({});
-  
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // Sync context state to local state
   useEffect(() => {
       if (!loading) {
@@ -83,6 +96,8 @@ export default function ActiveWorkoutPage() {
       setSummaryText(summaryResult.summary);
     } catch (error) {
       console.error("Failed to generate AI workout summary:", error);
+      // Fall back to the workout title so "⏳ Enhancing..." never gets stuck on screen
+      setSummaryText(workoutInfo?.workout?.title ?? '');
     } finally {
       setSummaryLoading(false);
     }
@@ -254,6 +269,12 @@ export default function ActiveWorkoutPage() {
   return (
     <>
     <div className="space-y-6 max-w-2xl mx-auto">
+        {!isOnline && (
+          <div className="flex items-center gap-2 rounded-md border border-yellow-400 bg-yellow-50 px-4 py-2 text-sm text-yellow-800">
+            <WifiOff className="h-4 w-4 shrink-0" />
+            <span>You&apos;re offline — your progress is saved locally and will sync when reconnected.</span>
+          </div>
+        )}
         <Card className="bg-accent/20 border-accent">
             <CardHeader>
                 <div className="flex-1">

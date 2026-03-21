@@ -2,7 +2,7 @@
 import { logger } from '@/lib/logger';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import {
   Dialog,
@@ -23,34 +23,117 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
 import type { Program, Workout, RunningWorkout } from '@/models/types';
 import { createProgram, updateProgram } from '@/services/program-service-client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from './ui/scroll-area';
 
+// ─── Schemas ────────────────────────────────────────────────────────────────
+
 const exerciseSchema = z.object({
   name: z.string().min(1, 'Exercise name is required.'),
   details: z.string().min(1, 'Exercise details are required.'),
 });
 
-// TODO: Add support for RunningWorkout fields in the form (runs array)
-// Currently this form assumes all workouts are 'hyrox' type (Workout interface)
+const runSchema = z.object({
+  type: z.enum(['easy', 'tempo', 'intervals', 'long', 'recovery']),
+  description: z.string().min(1, 'Run description is required.'),
+  distance: z.coerce.number().min(0.1, 'Distance must be greater than 0.'),
+  paceZone: z.enum(['recovery', 'easy', 'marathon', 'threshold', 'interval', 'repetition']),
+  effortLevel: z.coerce.number().min(1).max(10),
+});
+
+// A single workout row; exercises XOR runs are required depending on programType.
+// Using superRefine instead of discriminatedUnion for react-hook-form compatibility.
 const workoutSchema = z.object({
   day: z.coerce.number().min(1, 'Day must be a positive number.'),
   title: z.string().min(1, 'Workout title is required.'),
-  programType: z.literal('hyrox').default('hyrox'),
-  exercises: z.array(exerciseSchema).min(1, 'At least one exercise is required.'),
+  programType: z.enum(['hyrox', 'running']),
+  exercises: z.array(exerciseSchema).default([]),
+  runs: z.array(runSchema).default([]),
+}).superRefine((data, ctx) => {
+  if (data.programType === 'hyrox' && data.exercises.length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['exercises'], message: 'At least one exercise is required.' });
+  }
+  if (data.programType === 'running' && data.runs.length === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['runs'], message: 'At least one run segment is required.' });
+  }
 });
 
 const programSchema = z.object({
   name: z.string().min(1, 'Program name is required.'),
   description: z.string().min(1, 'Program description is required.'),
-  programType: z.literal('hyrox').default('hyrox'),
+  programType: z.enum(['hyrox', 'running']),
   workouts: z.array(workoutSchema).min(1, 'At least one workout is required.'),
 });
 
 type ProgramFormData = z.infer<typeof programSchema>;
+
+// ─── Default values ──────────────────────────────────────────────────────────
+
+const defaultHyroxWorkout = (day: number) => ({
+  day,
+  title: '',
+  programType: 'hyrox' as const,
+  exercises: [{ name: '', details: '' }],
+  runs: [],
+});
+
+const defaultRunningWorkout = (day: number) => ({
+  day,
+  title: '',
+  programType: 'running' as const,
+  exercises: [],
+  runs: [{ type: 'easy' as const, description: '', distance: 5, paceZone: 'easy' as const, effortLevel: 6 }],
+});
+
+function buildDefaultValues(program: Program | null): Partial<ProgramFormData> {
+  if (!program) {
+    return {
+      name: '',
+      description: '',
+      programType: 'hyrox',
+      workouts: [defaultHyroxWorkout(1)],
+    };
+  }
+
+  const programType = program.programType ?? 'hyrox';
+  return {
+    name: program.name,
+    description: program.description,
+    programType,
+    workouts: program.workouts.map(w => {
+      if (w.programType === 'running') {
+        const rw = w as RunningWorkout;
+        return {
+          day: rw.day,
+          title: rw.title,
+          programType: 'running' as const,
+          exercises: [],
+          runs: rw.runs.map(r => ({
+            type: r.type,
+            description: r.description,
+            distance: r.distance,
+            paceZone: r.paceZone,
+            effortLevel: r.effortLevel,
+          })),
+        };
+      }
+      const hw = w as Workout;
+      return {
+        day: hw.day,
+        title: hw.title,
+        programType: 'hyrox' as const,
+        exercises: hw.exercises ?? [],
+        runs: [],
+      };
+    }),
+  };
+}
+
+// ─── Props ───────────────────────────────────────────────────────────────────
 
 interface ProgramFormProps {
   isOpen: boolean;
@@ -59,60 +142,54 @@ interface ProgramFormProps {
   onSuccess: () => void;
 }
 
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFormProps) {
   const { toast } = useToast();
-  
-  // Transform existing program data to match the form schema if needed
-  // Specifically handling the discriminated union for workouts
-  const defaultValues: Partial<ProgramFormData> = program
-    ? {
-        name: program.name,
-        description: program.description,
-        // Ensure programType is 'hyrox' for now as the form doesn't support running programs yet
-        programType: 'hyrox', 
-        workouts: program.workouts.map(w => {
-            if (w.programType === 'running') {
-                // Fallback or placeholder for running workouts if we open an existing running program
-                // Ideally, the form should be updated to handle running workouts too
-                return {
-                    day: w.day,
-                    title: w.title,
-                    programType: 'hyrox',
-                    exercises: [{ name: 'Running Workout', details: 'Please update details' }]
-                };
-            }
-            return {
-                day: w.day,
-                title: w.title,
-                programType: 'hyrox',
-                exercises: (w as Workout).exercises || []
-            };
-        }),
-      }
-    : {
-        name: '',
-        description: '',
-        programType: 'hyrox',
-        workouts: [{ day: 1, title: '', programType: 'hyrox', exercises: [{ name: '', details: '' }] }],
-      };
 
   const form = useForm<ProgramFormData>({
     resolver: zodResolver(programSchema),
-    defaultValues: defaultValues,
+    defaultValues: buildDefaultValues(program),
   });
-  
-  const { fields: workoutFields, append: appendWorkout, remove: removeWorkout } = useFieldArray({
+
+  const { fields: workoutFields, append: appendWorkout, remove: removeWorkout, replace: replaceWorkouts } = useFieldArray({
     control: form.control,
     name: 'workouts',
   });
 
+  // Watch the top-level programType so we can react to changes
+  const programType = useWatch({ control: form.control, name: 'programType' });
+
+  const handleProgramTypeChange = (value: 'hyrox' | 'running') => {
+    form.setValue('programType', value);
+    // Reset all workouts to match the new type — mixed-type programs aren't supported
+    replaceWorkouts([value === 'hyrox' ? defaultHyroxWorkout(1) : defaultRunningWorkout(1)]);
+  };
+
   const onSubmit = async (data: ProgramFormData) => {
     try {
-      // Cast the data to satisfy the Program type requirement
-      // The form currently only produces hyrox workouts which match the Workout interface
+      // Shape data to match the Program model
       const programData: any = {
-          ...data,
-          programType: 'hyrox' as const, // Enforce program type
+        name: data.name,
+        description: data.description,
+        programType: data.programType,
+        workouts: data.workouts.map(w => {
+          if (w.programType === 'running') {
+            return {
+              day: w.day,
+              title: w.title,
+              programType: 'running',
+              exercises: [],
+              runs: w.runs,
+            };
+          }
+          return {
+            day: w.day,
+            title: w.title,
+            programType: 'hyrox',
+            exercises: w.exercises,
+          };
+        }),
       };
 
       if (program) {
@@ -126,11 +203,7 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
       form.reset();
     } catch (error) {
       logger.error('Failed to save program:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to save the program.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to save the program.', variant: 'destructive' });
     }
   };
 
@@ -147,6 +220,8 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <ScrollArea className="h-[60vh] pr-6">
               <div className="space-y-4">
+
+                {/* Program name */}
                 <FormField
                   control={form.control}
                   name="name"
@@ -160,6 +235,8 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
                     </FormItem>
                   )}
                 />
+
+                {/* Program description */}
                 <FormField
                   control={form.control}
                   name="description"
@@ -173,65 +250,102 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
                     </FormItem>
                   )}
                 />
-                
+
+                {/* Program type — changing this resets all workouts */}
+                <FormField
+                  control={form.control}
+                  name="programType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Program Type</FormLabel>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => handleProgramTypeChange(v as 'hyrox' | 'running')}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="hyrox">HYROX / Strength</SelectItem>
+                          <SelectItem value="running">Running</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <h3 className="text-lg font-semibold pt-4">Workouts</h3>
-                
+
                 {workoutFields.map((workout, workoutIndex) => (
                   <div key={workout.id} className="space-y-3 rounded-md border p-4">
                     <div className="flex items-center justify-between">
-                       <h4 className="font-medium">Workout {workoutIndex + 1}</h4>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => removeWorkout(workoutIndex)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      <h4 className="font-medium">Workout {workoutIndex + 1}</h4>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        onClick={() => removeWorkout(workoutIndex)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
+                      <FormField
                         control={form.control}
                         name={`workouts.${workoutIndex}.day`}
                         render={({ field }) => (
-                            <FormItem>
+                          <FormItem>
                             <FormLabel>Day</FormLabel>
                             <FormControl>
-                                <Input type="number" {...field} />
+                              <Input type="number" {...field} />
                             </FormControl>
                             <FormMessage />
-                            </FormItem>
+                          </FormItem>
                         )}
-                        />
-                        <FormField
+                      />
+                      <FormField
                         control={form.control}
                         name={`workouts.${workoutIndex}.title`}
                         render={({ field }) => (
-                            <FormItem>
+                          <FormItem>
                             <FormLabel>Title</FormLabel>
                             <FormControl>
-                                <Input placeholder="e.g., Full Body Strength" {...field} />
+                              <Input placeholder="e.g., Full Body Strength" {...field} />
                             </FormControl>
                             <FormMessage />
-                            </FormItem>
+                          </FormItem>
                         )}
-                        />
+                      />
                     </div>
 
-                    <ExerciseArray workoutIndex={workoutIndex} control={form.control} />
+                    {programType === 'running' ? (
+                      <RunArray workoutIndex={workoutIndex} control={form.control} />
+                    ) : (
+                      <ExerciseArray workoutIndex={workoutIndex} control={form.control} />
+                    )}
                   </div>
                 ))}
 
-                 <Button
+                <Button
                   type="button"
                   variant="outline"
-                  onClick={() => appendWorkout({ day: workoutFields.length + 1, title: '', programType: 'hyrox', exercises: [{ name: '', details: '' }] })}
+                  onClick={() => appendWorkout(
+                    programType === 'running'
+                      ? defaultRunningWorkout(workoutFields.length + 1)
+                      : defaultHyroxWorkout(workoutFields.length + 1)
+                  )}
                 >
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Add Workout
                 </Button>
+
               </div>
             </ScrollArea>
+
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>
                 Cancel
@@ -248,64 +362,156 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
   );
 }
 
+// ─── Sub-components ──────────────────────────────────────────────────────────
 
 function ExerciseArray({ workoutIndex, control }: { workoutIndex: number; control: any }) {
-    const { fields, append, remove } = useFieldArray({
-      control,
-      name: `workouts.${workoutIndex}.exercises`,
-    });
-  
-    return (
-      <div className="space-y-2 pl-4 border-l">
-        <h5 className="font-medium text-sm">Exercises</h5>
-        {fields.map((field, index) => (
-          <div key={field.id} className="flex items-end gap-2">
-            <FormField
-              control={control}
-              name={`workouts.${workoutIndex}.exercises.${index}.name`}
-              render={({ field }) => (
-                <FormItem className="flex-1">
-                  <FormLabel className="text-xs">Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Back Squat" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={control}
-              name={`workouts.${workoutIndex}.exercises.${index}.details`}
-              render={({ field }) => (
-                <FormItem className="flex-1">
-                  <FormLabel className="text-xs">Details</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., 5x5 reps" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="mb-2"
-              onClick={() => remove(index)}
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `workouts.${workoutIndex}.exercises`,
+  });
+
+  return (
+    <div className="space-y-2 pl-4 border-l">
+      <h5 className="font-medium text-sm">Exercises</h5>
+      {fields.map((field, index) => (
+        <div key={field.id} className="flex items-end gap-2">
+          <FormField
+            control={control}
+            name={`workouts.${workoutIndex}.exercises.${index}.name`}
+            render={({ field }) => (
+              <FormItem className="flex-1">
+                <FormLabel className="text-xs">Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g., Back Squat" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`workouts.${workoutIndex}.exercises.${index}.details`}
+            render={({ field }) => (
+              <FormItem className="flex-1">
+                <FormLabel className="text-xs">Details</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g., 5x5 reps" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Button type="button" variant="ghost" size="icon" className="mb-2" onClick={() => remove(index)}>
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      ))}
+      <Button type="button" size="sm" variant="outline" onClick={() => append({ name: '', details: '' })}>
+        <PlusCircle className="mr-2 h-4 w-4" />
+        Add Exercise
+      </Button>
+    </div>
+  );
+}
+
+function RunArray({ workoutIndex, control }: { workoutIndex: number; control: any }) {
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `workouts.${workoutIndex}.runs`,
+  });
+
+  return (
+    <div className="space-y-3 pl-4 border-l">
+      <h5 className="font-medium text-sm">Run Segments</h5>
+      {fields.map((field, index) => (
+        <div key={field.id} className="grid grid-cols-1 md:grid-cols-2 gap-2 relative">
+          <FormField
+            control={control}
+            name={`workouts.${workoutIndex}.runs.${index}.type`}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Type</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    {(['easy', 'tempo', 'intervals', 'long', 'recovery'] as const).map(t => (
+                      <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`workouts.${workoutIndex}.runs.${index}.paceZone`}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Pace Zone</FormLabel>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                  <SelectContent>
+                    {(['recovery', 'easy', 'marathon', 'threshold', 'interval', 'repetition'] as const).map(z => (
+                      <SelectItem key={z} value={z} className="capitalize">{z}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`workouts.${workoutIndex}.runs.${index}.distance`}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Distance (km)</FormLabel>
+                <FormControl><Input type="number" step="0.1" min="0.1" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`workouts.${workoutIndex}.runs.${index}.effortLevel`}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs">Effort (1–10)</FormLabel>
+                <FormControl><Input type="number" min="1" max="10" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name={`workouts.${workoutIndex}.runs.${index}.description`}
+            render={({ field }) => (
+              <FormItem className="md:col-span-2">
+                <FormLabel className="text-xs">Description</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g., 3x1km at threshold with 90s rest" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="md:col-span-2 flex justify-end">
+            <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
+              <Trash2 className="h-4 w-4 text-destructive mr-1" /> Remove
             </Button>
           </div>
-        ))}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => append({ name: '', details: '' })}
-        >
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Exercise
-        </Button>
-      </div>
-    );
-  }
+        </div>
+      ))}
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => append({ type: 'easy', description: '', distance: 5, paceZone: 'easy', effortLevel: 6 })}
+      >
+        <PlusCircle className="mr-2 h-4 w-4" />
+        Add Run Segment
+      </Button>
+    </div>
+  );
+}

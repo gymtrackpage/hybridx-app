@@ -1,6 +1,7 @@
 // src/app/api/auth/session/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth } from '@/lib/firebase-admin';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(req: NextRequest) {
     console.log('=== SESSION COOKIE VERIFICATION START ===');
@@ -73,8 +74,18 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+    // 10 session-creation attempts per minute per IP
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const rl = checkRateLimit(`session:${ip}`, 60_000, 10);
+    if (!rl.allowed) {
+        return NextResponse.json({ error: 'Too many requests. Please wait before trying again.' }, {
+            status: 429,
+            headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
+        });
+    }
+
     console.log('=== SESSION COOKIE ROUTE START ===');
-    
+
     try {
         const body = await req.json();
         const { idToken } = body;
