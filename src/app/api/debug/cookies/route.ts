@@ -25,10 +25,9 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
         }
         const allCookies = cookieStore.getAll();
-        const sessionCookie = cookieStore.get('__session');
 
         console.log('🍪 All cookies:', allCookies);
-        console.log('🎯 Session cookie:', sessionCookie);
+        console.log('🎯 Session cookie exists:', !!sessionCookie);
 
         return NextResponse.json({
             success: true,
@@ -38,10 +37,10 @@ export async function GET(request: NextRequest) {
                 hasValue: !!c.value,
                 valueLength: c.value?.length || 0
             })),
-            sessionCookie: sessionCookie ? {
+            sessionCookie: {
                 exists: true,
-                valueLength: sessionCookie.value?.length || 0
-            } : { exists: false },
+                valueLength: sessionCookie.length
+            },
             headers: {
                 cookie: request.headers.get('cookie'),
                 userAgent: request.headers.get('user-agent'),
