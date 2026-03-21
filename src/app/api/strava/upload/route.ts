@@ -8,6 +8,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import axios from 'axios';
 import type { WorkoutSession, ProgramType, Workout, RunningWorkout } from '@/models/types';
 import { generateStravaDescription } from '@/ai/flows/strava-description';
+import { logger } from '@/lib/logger';
 
 
 // Helper function to safely convert Firestore timestamp to Date.
@@ -20,11 +21,11 @@ function toDate(timestamp: any): Date | null {
   if (typeof timestamp === 'string') {
     const d = new Date(timestamp);
     if (!isNaN(d.getTime())) return d;
-    console.warn('toDate: invalid timestamp string', timestamp);
+    logger.warn('toDate: invalid timestamp string', timestamp);
     return null;
   }
   if (typeof timestamp === 'number') return new Date(timestamp);
-  console.warn('toDate: unrecognised timestamp format', typeof timestamp, timestamp);
+  logger.warn('toDate: unrecognised timestamp format', typeof timestamp, timestamp);
   return null;
 }
 
@@ -39,8 +40,6 @@ function mapActivityTypeToStrava(programType: ProgramType): string {
 
 export async function POST(req: NextRequest) {
   try {
-    console.log('=== STRAVA UPLOAD API START ===');
-    
     const { sessionId } = await req.json();
     
     if (!sessionId) {
@@ -57,7 +56,6 @@ export async function POST(req: NextRequest) {
 
     const decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
     const userId = decodedToken.uid;
-    console.log('Authenticated user:', userId);
 
     // 5 uploads per minute per user
     const rl = checkRateLimit(`strava-upload:${userId}`, 60_000, 5);
@@ -114,9 +112,8 @@ export async function POST(req: NextRequest) {
                 userNotes: session.notes,
             });
             aiDescription = descriptionResult.description;
-            console.log('Generated AI description for Strava:', aiDescription);
         } catch (aiError) {
-            console.error('Failed to generate AI description, using fallback:', aiError);
+            logger.error('Failed to generate AI description, using fallback:', aiError);
             // Fallback to the original description if AI fails
         }
     }
@@ -124,30 +121,33 @@ export async function POST(req: NextRequest) {
 
     const startDate = toDate(session.startedAt);
     if (!startDate) {
-      console.error('Invalid or missing startedAt timestamp for session:', sessionId);
+      logger.error('Invalid or missing startedAt timestamp for session:', sessionId);
       return NextResponse.json({ error: 'Workout session has an invalid start time and cannot be uploaded.' }, { status: 400 });
     }
 
-    // Create the activity on Strava
-    const estimatedDuration = 3600; // Strava requires a time, default to 1 hour
+    // Calculate elapsed time from session timestamps; fall back to 1 hour if unavailable
+    const endDate = toDate(session.finishedAt);
+    const elapsedTime = startDate && endDate
+      ? Math.max(60, Math.round((endDate.getTime() - startDate.getTime()) / 1000))
+      : 3600;
+
     const stravaActivityPayload = {
       name: session.workoutTitle,
       type: mapActivityTypeToStrava(session.programType),
       start_date_local: startDate.toISOString(),
-      elapsed_time: estimatedDuration,
+      elapsed_time: elapsedTime,
       description: aiDescription,
       trainer: true,
       commute: false
     };
 
-    console.log('Uploading activity to Strava:', stravaActivityPayload);
+    logger.log('Uploading activity to Strava:', stravaActivityPayload);
     const stravaResponse = await axios.post(
       'https://www.strava.com/api/v3/activities',
       stravaActivityPayload,
       { headers: { 'Authorization': `Bearer ${accessToken}` } }
     );
     const stravaActivityId = stravaResponse.data.id;
-    console.log('Successfully created Strava activity:', stravaActivityId);
     
     // Update session doc with Strava ID
     await sessionDoc.ref.update({
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('Strava upload error:', {
+    logger.error('Strava upload error:', {
       message: error.message,
       response: error.response?.data,
       status: error.response?.status

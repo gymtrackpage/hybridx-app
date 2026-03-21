@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { Separator } from '@/components/ui/separator';
 import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
 import { useUser } from '@/contexts/user-context';
+import { useToast } from '@/hooks/use-toast';
 import { isRunningWorkout } from '@/lib/type-guards';
 import { ExerciseHistory } from '@/components/exercise-history';
 import { convertDistanceInText, convertTextWithUnits } from '@/lib/unit-conversion';
@@ -29,6 +30,7 @@ const WorkoutCompleteModal = lazy(() => import('@/components/workout-complete-mo
 
 export default function ActiveWorkoutPage() {
   const { user, todaysWorkout, todaysSession, trainingPaces, loading, refreshData } = useUser();
+  const { toast } = useToast();
   const [session, setSession] = useState<WorkoutSession | null>(null);
   const [workoutInfo, setWorkoutInfo] = useState<{ day: number; workout: Workout | RunningWorkout | null } | null>(null);
   const [extendedExercises, setExtendedExercises] = useState<Exercise[]>([]);
@@ -89,7 +91,7 @@ export default function ActiveWorkoutPage() {
       });
 
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('AI summary timeout')), 10000)
+        setTimeout(() => reject(new Error('AI summary timeout')), 15000)
       );
 
       const summaryResult = await Promise.race([summaryPromise, timeoutPromise]) as any;
@@ -162,6 +164,7 @@ export default function ActiveWorkoutPage() {
 
     } catch (error) {
         console.error("Failed to extend workout:", error);
+        toast({ title: 'Could not extend workout', description: 'AI extension failed. Please try again.', variant: 'destructive' });
     } finally {
         setIsExtending(false);
     }
