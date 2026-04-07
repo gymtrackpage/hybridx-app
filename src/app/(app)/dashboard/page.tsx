@@ -200,7 +200,12 @@ rachael.sweeting@yahoo.co.uk — fires ONCE after all data including Strava is r
       userName: user.firstName,
       programName: program.name,
       daysCompleted: todaysWorkout.day > 0 ? todaysWorkout.day : 0,
-      weeklyConsistency: `${progressData[3]?.workouts || 0} workouts completed in the last week.`,
+      weeklyConsistency: [
+        `3 weeks ago: ${progressData[0]?.workouts ?? 0} workouts`,
+        `2 weeks ago: ${progressData[1]?.workouts ?? 0} workouts`,
+        `last week: ${progressData[2]?.workouts ?? 0} workouts`,
+        `this week so far: ${progressData[3]?.workouts ?? 0} workouts`,
+      ].join(', '),
       // Only pass Strava activity when it loaded successfully (not when errored)
       todayStravaActivity: stravaLoadError ? undefined : (todayStravaSummary ?? undefined),
     }).then(result => {

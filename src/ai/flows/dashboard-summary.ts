@@ -4,7 +4,7 @@
 /**
  * @fileOverview AI-driven summary for the user dashboard.
  *
- * - dashboardSummary - A function that generates a short, positive summary of the user's progress.
+ * - dashboardSummary - A function that generates a short coach-style summary of the user's progress.
  * - DashboardSummaryInput - The input type for the dashboardSummary function.
  * - DashboardSummaryOutput - The return type for the dashboardSummary function.
  */
@@ -22,7 +22,7 @@ const DashboardSummaryInputSchema = z.object({
 export type DashboardSummaryInput = z.infer<typeof DashboardSummaryInputSchema>;
 
 const DashboardSummaryOutputSchema = z.object({
-  summary: z.string().describe('A single, short, encouraging sentence combining a progress summary and a positive affirmation.'),
+  summary: z.string().describe('1-2 sentences in the voice of a real sports coach — honest and direct, complimentary when earned, but straightforward when consistency is slipping.'),
 });
 export type DashboardSummaryOutput = z.infer<typeof DashboardSummaryOutputSchema>;
 
@@ -34,20 +34,24 @@ const prompt = ai.definePrompt({
   name: 'dashboardSummaryPrompt',
   input: {schema: DashboardSummaryInputSchema},
   output: {schema: DashboardSummaryOutputSchema},
-  prompt: `You are an AI coach for an athlete named {{{userName}}}.
+  prompt: `You are a straight-talking sports coach giving {{{userName}}} a quick daily check-in on their dashboard. You care about results and you're honest — you give credit where it's due, but you don't sugarcoat things when the numbers aren't there.
 
-  Based on the following progress data, create a single, encouraging sentence that summarizes their progress and gives them a positive affirmation for the day. Keep it concise and impactful.
+Write 1–2 short sentences. Sound like a real human coach, not a motivational poster. No hollow phrases like "amazing", "fantastic", "you're crushing it", or "keep up the great work". Use the athlete's first name naturally if it fits.
 
-  Data:
-  - Program: {{{programName}}}
-  - Total Days Completed: {{{daysCompleted}}}
-  - Recent Consistency: {{{weeklyConsistency}}}
-  {{#if todayStravaActivity}}- Already completed today on Strava: {{{todayStravaActivity}}}{{/if}}
+Athlete data:
+- Program: {{{programName}}}
+- Total sessions completed: {{{daysCompleted}}}
+- Recent training (last 4 weeks): {{{weeklyConsistency}}}
+{{#if todayStravaActivity}}- Already trained today: {{{todayStravaActivity}}}{{/if}}
 
-  {{#if todayStravaActivity}}Since they have already trained today, acknowledge what they have done specifically and encourage them to keep the momentum or recover well. Reference the actual activity.{{else}}If they haven't trained yet today, motivate them to get their session in.{{/if}}
+Coaching tone guidelines — pick the one that fits the data:
+- Strong, consistent week (3+ sessions, stable or improving trend): genuine but brief acknowledgement, one forward-looking nudge.
+- Slight dip this week but solid prior weeks: note the drop matter-of-factly, redirect focus to today.
+- Low output for 2+ weeks in a row (1–2 sessions/week): be direct — name the pattern, ask or imply they need to get back on track. Don't pretend it's fine.
+- Very few or zero sessions recently: honest check-in, don't dress it up — "the last couple of weeks have been quiet" type tone.
+- Already trained today: acknowledge the specific activity concisely, no gushing. If consistency has been patchy, you can still note that one session doesn't erase the trend.
 
-  Example (no activity today): "Your consistency on the {{{programName}}} program is paying off — keep that momentum going today!"
-  Example (activity done): "Fantastic effort on that run this morning, {{{userName}}} — your body is building fitness with every session!"`,
+Never use exclamation marks unless the situation genuinely earns it. Keep the total response under 40 words.`,
 });
 
 const dashboardSummaryFlow = ai.defineFlow(
