@@ -26,6 +26,7 @@ import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getOrCreateWorkoutSession, getAllUserSessions } from '@/services/session-service-client';
 import type { TrainingSummary } from '@/services/training-load-service';
 import { formatTrainingSummaryForAI } from '@/services/training-load-service';
+import { getUserJournalEntries } from '@/services/journal-service-client';
 
 interface Message {
   id: string;
@@ -68,7 +69,10 @@ const getUserWorkoutData = async (userId: string) => {
         return { user: null };
     }
 
-    const sessions = await getAllUserSessions(userId);
+    const [sessions, recentJournalEntries] = await Promise.all([
+        getAllUserSessions(userId),
+        getUserJournalEntries(userId, 10),
+    ]);
 
     // Fetch Strava training summary if user has Strava connected
     const stravaTrainingSummary = user.strava?.accessToken
@@ -83,12 +87,12 @@ const getUserWorkoutData = async (userId: string) => {
             const { workout } = getWorkoutForDay(program, user.startDate, today);
             if (workout) {
                 const session = await getOrCreateWorkoutSession(userId, program.id, today, workout);
-                return { user, program, todaysWorkout: workout, todaysSession: session, allSessions: sessions, stravaTrainingSummary };
+                return { user, program, todaysWorkout: workout, todaysSession: session, allSessions: sessions, stravaTrainingSummary, recentJournalEntries };
             }
-            return { user, program, allSessions: sessions, todaysWorkout: null, stravaTrainingSummary };
+            return { user, program, allSessions: sessions, todaysWorkout: null, stravaTrainingSummary, recentJournalEntries };
         }
     }
-    return { user, allSessions: sessions, stravaTrainingSummary };
+    return { user, allSessions: sessions, stravaTrainingSummary, recentJournalEntries };
 };
 
 
