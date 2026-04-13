@@ -34,6 +34,7 @@ function fromFirestore(doc: any): WorkoutSession {
         skipped: data.skipped || false,
         exerciseChecklist: data.exerciseChecklist || {},
         workoutDetails: data.workoutDetails,
+        timerRecord: data.timerRecord,
         stravaId: data.stravaId,
         uploadedToStrava: data.uploadedToStrava,
         stravaUploadedAt: data.stravaUploadedAt ? data.stravaUploadedAt.toDate() : undefined,
@@ -69,10 +70,9 @@ export async function getPaginatedUserSessions(
         sessionsCollection,
         where('userId', '==', userId),
         orderBy('workoutDate', 'desc'),
-        limit(pageSize + 1) // Fetch one extra to check if there are more
+        limit(pageSize + 1)
     );
 
-    // If we have a cursor, start after it
     if (lastDoc) {
         q = query(
             sessionsCollection,
@@ -85,14 +85,8 @@ export async function getPaginatedUserSessions(
 
     const snapshot = await getDocs(q);
     const docs = snapshot.docs;
-
-    // Check if there are more results
     const hasMore = docs.length > pageSize;
-
-    // Get only the requested page size
     const sessions = docs.slice(0, pageSize).map(fromFirestore);
-
-    // Store the last document for next page
     const newLastDoc = sessions.length > 0 ? docs[pageSize - 1] : null;
 
     return {
@@ -104,7 +98,7 @@ export async function getPaginatedUserSessions(
 
 export async function getTodaysOneOffSession(userId: string, workoutDate: Date): Promise<WorkoutSession | null> {
      const q = query(
-        sessionsCollection, 
+        sessionsCollection,
         where('userId', '==', userId),
         where('programId', 'in', ['one-off-ai', 'custom-workout']),
         where('workoutDate', '==', Timestamp.fromDate(workoutDate)),
@@ -122,7 +116,6 @@ export async function getTodaysProgramSession(userId: string, workoutDate: Date)
         sessionsCollection,
         where('userId', '==', userId),
         where('workoutDate', '==', Timestamp.fromDate(workoutDate)),
-        // Exclude one-off sessions from this specific query
         where('programId', 'not-in', ['one-off-ai', 'custom-workout']),
         limit(1)
     );
@@ -151,16 +144,15 @@ export async function createCustomWorkoutSession(userId: string, title: string, 
         day: 0,
         exercises: [{ name: 'Custom Activity', details: description }],
     };
-    
-    // For custom workouts, we always overwrite any existing session for today
+
     await getOrCreateWorkoutSession(userId, 'custom-workout', today, workout, true, duration);
 }
 
 
 export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout | RunningWorkout, overwrite: boolean = false, duration?: string): Promise<any> {
     const q = query(
-        sessionsCollection, 
-        where('userId', '==', userId), 
+        sessionsCollection,
+        where('userId', '==', userId),
         where('workoutDate', '==', Timestamp.fromDate(workoutDate)),
         limit(1)
     );
@@ -168,10 +160,9 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
     const snapshot = await getDocs(q);
 
     if (!snapshot.empty && !overwrite) {
-        // If a session exists and we are not overwriting, return it, unless it's a one-off/custom session and a program session is being created
         const existingSession = fromFirestore(snapshot.docs[0]);
         if (['one-off-ai', 'custom-workout'].includes(existingSession.programId) && !['one-off-ai', 'custom-workout'].includes(programId)) {
-             // We are creating a program session, it should take precedence
+             // Program session takes precedence
         } else {
             return existingSession;
         }
@@ -204,7 +195,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
     }
 
     const docRef = await addDoc(sessionsCollection, newSessionData);
-    
+
     return {
         id: docRef.id,
         userId,
@@ -246,14 +237,11 @@ export async function linkStravaActivityToSession(sessionId: string, activity: S
     let existingNotes = '';
 
     if (sessionId) {
-        // Link directly to the known session doc — this is the correct path when the user
-        // picks a specific session (e.g. from Calendar or History).
         sessionRef = doc(sessionsCollection, sessionId);
         const snap = await getDoc(sessionRef);
         if (!snap.exists()) throw new Error("Session not found.");
         existingNotes = snap.data().notes || '';
     } else {
-        // Fallback: no session id provided — find or create one by activity date.
         const activityDate = new Date(activity.start_date_local || activity.start_date);
         activityDate.setHours(0, 0, 0, 0);
 
@@ -269,7 +257,6 @@ export async function linkStravaActivityToSession(sessionId: string, activity: S
             sessionRef = snapshot.docs[0].ref;
             existingNotes = snapshot.docs[0].data().notes || '';
         } else {
-            // No session exists — create one from the Strava activity.
             const activityDate2 = new Date(activity.start_date_local || activity.start_date);
             activityDate2.setHours(0, 0, 0, 0);
             const newSessionData = {
@@ -298,7 +285,6 @@ export async function linkStravaActivityToSession(sessionId: string, activity: S
             moving_time: activity.moving_time,
             name: activity.name,
         },
-        // Only update title if the session doesn't already have a custom title from the app
         ...(sessionId ? {} : { workoutTitle: activity.name }),
         skipped: false,
     };
