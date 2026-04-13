@@ -73,16 +73,8 @@ export async function POST(request: Request) {
             if (w.workout) {
                 const workout = w.workout;
 
-                // Ensure RunningWorkout has exercises array (even if empty) for schema compatibility
-                // IMPORTANT: Keep the original workout.day (cycle day), do NOT overwrite with w.day (absolute day)
-                if (workout.programType === 'running' && !('exercises' in workout)) {
-                    upcomingWorkouts.push({
-                        ...(workout as any),
-                        exercises: [],
-                    });
-                } else {
-                    upcomingWorkouts.push(workout);
-                }
+                // WorkoutDay always has both exercises and runs arrays; push directly
+                upcomingWorkouts.push(workout);
             }
         }
 

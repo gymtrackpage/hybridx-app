@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Calendar, Dumbbell, Clock } from 'lucide-react';
 import { getProgramClient } from '@/services/program-service-client';
-import type { Program, Workout, RunningWorkout } from '@/models/types';
+import type { Program, WorkoutDay } from '@/models/types';
+import { hasRuns, hasExercises } from '@/lib/type-guards';
 
 interface ProgramPreviewDialogProps {
   programId: string;
@@ -51,7 +52,7 @@ export function ProgramPreviewDialog({ programId, programName }: ProgramPreviewD
     }
     acc[weekNum].push(workout);
     return acc;
-  }, {} as Record<number, (Workout | RunningWorkout)[]>) || {};
+  }, {} as Record<number, WorkoutDay[]>) || {};
 
   // Sort weeks and workouts
   const sortedWeeks = Object.keys(workoutsByWeek).map(Number).sort((a, b) => a - b);
@@ -100,27 +101,26 @@ export function ProgramPreviewDialog({ programId, programName }: ProgramPreviewD
                         <div className="font-semibold mb-1 flex justify-between">
                             <span>Day {workout.day}</span>
                             <span className="text-xs text-muted-foreground uppercase tracking-wider">
-                                {workout.programType === 'running' ? 'Running' : 'Strength/Hyrox'}
+                                {hasRuns(workout) && hasExercises(workout) ? 'Hybrid' : hasRuns(workout) ? 'Running' : 'Strength/Hyrox'}
                             </span>
                         </div>
                         <p className="font-medium text-primary mb-2">{workout.title}</p>
-                        
+
                         {/* Preview of content */}
                         <div className="text-xs text-muted-foreground space-y-1">
-                            {workout.programType === 'hyrox' && (workout as Workout).exercises?.slice(0, 3).map((ex, idx) => (
-                                <div key={idx} className="flex items-start gap-1">
-                                    <span className="mt-0.5">•</span>
-                                    <span>{ex.name}</span>
-                                </div>
-                            ))}
-                            {workout.programType === 'running' && (workout as RunningWorkout).runs?.map((run, idx) => (
+                            {hasRuns(workout) && workout.runs.map((run, idx) => (
                                 <div key={idx} className="flex items-start gap-1">
                                      <span className="mt-0.5">•</span>
                                      <span>{run.distance}km {run.type}</span>
                                 </div>
                             ))}
-
-                            {((workout as Workout).exercises?.length > 3) && (
+                            {hasExercises(workout) && workout.exercises.slice(0, 3).map((ex, idx) => (
+                                <div key={idx} className="flex items-start gap-1">
+                                    <span className="mt-0.5">•</span>
+                                    <span>{ex.name}</span>
+                                </div>
+                            ))}
+                            {(workout.exercises?.length > 3) && (
                                 <p className="pt-1 opacity-70">...and more</p>
                             )}
                         </div>

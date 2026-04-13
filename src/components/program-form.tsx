@@ -25,7 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
-import type { Program, Workout, RunningWorkout } from '@/models/types';
+import type { Program } from '@/models/types';
 import { createProgram, updateProgram } from '@/services/program-service-client';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from './ui/scroll-area';
@@ -65,7 +65,7 @@ const workoutSchema = z.object({
 const programSchema = z.object({
   name: z.string().min(1, 'Program name is required.'),
   description: z.string().min(1, 'Program description is required.'),
-  programType: z.enum(['hyrox', 'running']),
+  programType: z.enum(['hyrox', 'running', 'hybrid']),
   workouts: z.array(workoutSchema).min(1, 'At least one workout is required.'),
 });
 
@@ -105,29 +105,20 @@ function buildDefaultValues(program: Program | null): Partial<ProgramFormData> {
     description: program.description,
     programType,
     workouts: program.workouts.map(w => {
-      if (w.programType === 'running') {
-        const rw = w as RunningWorkout;
-        return {
-          day: rw.day,
-          title: rw.title,
-          programType: 'running' as const,
-          exercises: [],
-          runs: rw.runs.map(r => ({
-            type: r.type,
-            description: r.description,
-            distance: r.distance,
-            paceZone: r.paceZone,
-            effortLevel: r.effortLevel,
-          })),
-        };
-      }
-      const hw = w as Workout;
+      // Infer per-workout form type from content: if it has runs (and no exercises) → 'running', else 'hyrox'
+      const formType: 'hyrox' | 'running' = (w.runs?.length ?? 0) > 0 && !(w.exercises?.length ?? 0) ? 'running' : 'hyrox';
       return {
-        day: hw.day,
-        title: hw.title,
-        programType: 'hyrox' as const,
-        exercises: hw.exercises ?? [],
-        runs: [],
+        day: w.day,
+        title: w.title,
+        programType: formType,
+        exercises: w.exercises ?? [],
+        runs: (w.runs ?? []).map(r => ({
+          type: r.type,
+          description: r.description,
+          distance: r.distance,
+          paceZone: r.paceZone,
+          effortLevel: r.effortLevel,
+        })),
       };
     }),
   };
@@ -160,36 +151,24 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
   // Watch the top-level programType so we can react to changes
   const programType = useWatch({ control: form.control, name: 'programType' });
 
-  const handleProgramTypeChange = (value: 'hyrox' | 'running') => {
+  const handleProgramTypeChange = (value: 'hyrox' | 'running' | 'hybrid') => {
     form.setValue('programType', value);
-    // Reset all workouts to match the new type — mixed-type programs aren't supported
-    replaceWorkouts([value === 'hyrox' ? defaultHyroxWorkout(1) : defaultRunningWorkout(1)]);
+    // Reset all workouts to a sensible default for the chosen program type
+    replaceWorkouts([value === 'running' ? defaultRunningWorkout(1) : defaultHyroxWorkout(1)]);
   };
 
   const onSubmit = async (data: ProgramFormData) => {
     try {
-      // Shape data to match the Program model
       const programData: any = {
         name: data.name,
         description: data.description,
         programType: data.programType,
-        workouts: data.workouts.map(w => {
-          if (w.programType === 'running') {
-            return {
-              day: w.day,
-              title: w.title,
-              programType: 'running',
-              exercises: [],
-              runs: w.runs,
-            };
-          }
-          return {
-            day: w.day,
-            title: w.title,
-            programType: 'hyrox',
-            exercises: w.exercises,
-          };
-        }),
+        workouts: data.workouts.map(w => ({
+          day: w.day,
+          title: w.title,
+          exercises: w.exercises ?? [],
+          runs: w.runs ?? [],
+        })),
       };
 
       if (program) {
@@ -270,6 +249,7 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
                         <SelectContent>
                           <SelectItem value="hyrox">HYROX / Strength</SelectItem>
                           <SelectItem value="running">Running</SelectItem>
+                          <SelectItem value="hybrid">Hybrid (Run + Strength)</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

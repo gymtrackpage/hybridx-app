@@ -11,12 +11,13 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 import { auth } from '@/lib/firebase';
-import type { Program, User, RunningProgram, PaceZone, RunningWorkout, Workout } from '@/models/types';
+import type { Program, User, PaceZone, WorkoutDay } from '@/models/types';
 import { getProgramClient } from '@/services/program-service-client';
 import { getUserClient, updateUser } from '@/services/user-service-client';
 import { useToast } from '@/hooks/use-toast';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import { adjustTrainingPlan } from '@/ai/flows/adjust-training-plan';
+import { hasRuns, hasExercises } from '@/lib/type-guards';
 
 
 import { Button } from '@/components/ui/button';
@@ -233,7 +234,14 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                                 padding: 0;
                                 list-style-position: inside;
                             `;
-                            workout.exercises.forEach(exercise => {
+                            // Render run segments first, then exercises
+                            (workout.runs ?? []).forEach(run => {
+                                const item = document.createElement('li');
+                                item.innerHTML = `<strong style="color: #2563eb;">${run.type}:</strong> ${run.distance}km`;
+                                item.style.cssText = `font-size: 8px; line-height: 1.3; margin-bottom: 2px; color: #52525b;`;
+                                exerciseList.appendChild(item);
+                            });
+                            (workout.exercises ?? []).forEach(exercise => {
                                 const exerciseItem = document.createElement('li');
                                 exerciseItem.innerHTML = `<strong style="color: #18181b;">${exercise.name}:</strong> ${exercise.details}`;
                                 exerciseItem.style.cssText = `
@@ -299,33 +307,15 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
     try {
         const updateData: Partial<User> = { programId, startDate, customProgram: null };
         const nonRestWorkouts = program.workouts.filter(w => !w.title.toLowerCase().includes('rest'));
-        
+
         // Check if adjustment is needed
         if (user.frequency !== '5+' && nonRestWorkouts.length > parseInt(user.frequency, 10)) {
             toast({ title: 'Adjusting your plan...', description: 'Our AI coach is tailoring this program to fit your schedule.' });
-            
-            // Only adjust Hyrox programs for now as the AI flow expects Exercise[] structure
-            // For running programs, we might need a different AI flow or adjust `adjustTrainingPlan`
-            const hyroxWorkouts = program.workouts.filter(w => w.programType === 'hyrox') as Workout[];
-
-            // If the program is mixed or purely running, we might want to skip or handle differently.
-            // Assuming for now we only adjust if we have hyrox workouts to adjust.
-            if (hyroxWorkouts.length > 0) {
-                const result = await adjustTrainingPlan({
-                    currentWorkouts: hyroxWorkouts, 
-                    targetDays: user.frequency as '3' | '4',
-                });
-                // Need to satisfy type compatibility here. customProgram expects (Workout | RunningWorkout)[]
-                // adjustTrainingPlan returns what matches Workout structure (mostly)
-                // We ensure result.adjustedWorkouts has programType: 'hyrox'
-                
-                const adjustedWithTypes = result.adjustedWorkouts.map(w => ({
-                    ...w,
-                    programType: 'hyrox' as const
-                }));
-
-                updateData.customProgram = adjustedWithTypes;
-            }
+            const result = await adjustTrainingPlan({
+                currentWorkouts: program.workouts,
+                targetDays: user.frequency as '3' | '4',
+            });
+            updateData.customProgram = result.adjustedWorkouts as unknown as WorkoutDay[];
         }
 
         await updateUser(user.id, updateData);
@@ -361,7 +351,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
     return null; // Should be redirected by useEffect
   }
   
-  const isRunningProgram = program.programType === 'running';
+  const programNeedsRunningPaces = program.programType === 'running' || program.programType === 'hybrid';
 
   return (
     <>
@@ -390,7 +380,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
               <CardDescription>{program.description}</CardDescription>
           </CardHeader>
           <CardContent>
-            {isRunningProgram && !trainingPaces && (
+            {programNeedsRunningPaces && !trainingPaces && (
                  <div className="mb-4 p-4 border border-yellow-400 bg-yellow-50 rounded-md text-yellow-800 flex items-start gap-3">
                     <AlertTriangle className="h-5 w-5 mt-0.5" />
                     <div>
@@ -403,32 +393,43 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                 </div>
             )}
               <Accordion type="single" collapsible className="w-full">
-                  {program.workouts.map((workout) => (
+                  {program.workouts.map((workout: WorkoutDay) => (
                       <AccordionItem value={`day-${workout.day}`} key={workout.day}>
                           <AccordionTrigger>Day {workout.day}: {workout.title}</AccordionTrigger>
-                          <AccordionContent>
-                            {isRunningProgram ? (
-                                <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                                    {(workout as RunningWorkout).runs.map((run, index) => {
-                                        const pace = trainingPaces ? formatPace(trainingPaces[run.paceZone]) : 'N/A';
-                                        return (
-                                             <li key={index}>
-                                                <span className="font-medium text-foreground">{run.description}</span>
-                                                <p className="text-sm">
-                                                    Target Pace: <span className="font-semibold text-primary">{pace}</span> / km
-                                                </p>
-                                             </li>
-                                        )
-                                    })}
-                                </ul>
-                            ) : (
-                               <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                                  {(workout as Workout).exercises.map((exercise, index) => (
-                                      <li key={index}>
-                                          <span className="font-medium text-foreground">{exercise.name}:</span> {exercise.details}
-                                      </li>
-                                  ))}
-                              </ul>
+                          <AccordionContent className="space-y-4">
+                            {/* Run segments */}
+                            {hasRuns(workout) && (
+                                <div>
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Running</p>
+                                    <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                                        {workout.runs.map((run, index) => {
+                                            const pace = trainingPaces ? formatPace(trainingPaces[run.paceZone]) : 'N/A';
+                                            return (
+                                                <li key={index}>
+                                                    <span className="font-medium text-foreground">{run.description}</span>
+                                                    <p className="text-sm">
+                                                        Target Pace: <span className="font-semibold text-primary">{pace}</span> / km
+                                                    </p>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+                            )}
+                            {/* Strength / gym exercises */}
+                            {hasExercises(workout) && (
+                                <div>
+                                    {hasRuns(workout) && (
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Exercises</p>
+                                    )}
+                                    <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                                        {workout.exercises.map((exercise, index) => (
+                                            <li key={index}>
+                                                <span className="font-medium text-foreground">{exercise.name}:</span> {exercise.details}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             )}
                           </AccordionContent>
                       </AccordionItem>

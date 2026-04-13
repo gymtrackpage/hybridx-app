@@ -3,7 +3,7 @@
 
 import { Timestamp } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
-import type { WorkoutSession, Workout, RunningWorkout } from '@/models/types';
+import type { WorkoutSession, WorkoutDay, ProgramType } from '@/models/types';
 import { z } from 'zod';
 
 function fromFirestore(doc: any): WorkoutSession {
@@ -29,7 +29,15 @@ function fromFirestore(doc: any): WorkoutSession {
 }
 
 // SERVER-SIDE function using Admin SDK
-export async function getOrCreateWorkoutSessionAdmin(userId: string, programId: string, workoutDate: Date, workout: Workout): Promise<WorkoutSession> {
+function deriveSessionProgramType(workout: WorkoutDay): ProgramType {
+    const hasR = (workout.runs?.length ?? 0) > 0;
+    const hasE = (workout.exercises?.length ?? 0) > 0;
+    if (hasR && hasE) return 'hybrid';
+    if (hasR) return 'running';
+    return 'hyrox';
+}
+
+export async function getOrCreateWorkoutSessionAdmin(userId: string, programId: string, workoutDate: Date, workout: WorkoutDay): Promise<WorkoutSession> {
     const adminDb = getAdminDb();
     const sessionsCollectionAdmin = adminDb.collection('workoutSessions');
     const q = sessionsCollectionAdmin
@@ -51,19 +59,19 @@ export async function getOrCreateWorkoutSessionAdmin(userId: string, programId: 
         finishedAt: null,
         notes: '',
         workoutTitle: workout.title,
-        programType: workout.programType,
+        programType: deriveSessionProgramType(workout),
         workoutDetails: workout, // Store the full workout details
     };
 
     const docRef = await sessionsCollectionAdmin.add(newSessionData);
-    
+
     return {
         id: docRef.id,
         userId,
         programId,
         workoutDate,
         workoutTitle: workout.title,
-        programType: workout.programType,
+        programType: deriveSessionProgramType(workout),
         startedAt: new Date(),
         notes: '',
         workoutDetails: workout,
@@ -129,17 +137,13 @@ export async function swapWorkouts(input: SwapWorkoutsInput): Promise<void> {
 }
   
   // Helper to create session data for batch operations
-function createSessionData(userId: string, programId: string, date: Date, workout: Workout | RunningWorkout, isNew: boolean = true) {
-    const items = workout.programType === 'running'
-        ? (workout as RunningWorkout).runs
-        : (workout as Workout).exercises;
-    
+function createSessionData(userId: string, programId: string, date: Date, workout: WorkoutDay, isNew: boolean = true) {
     const data: any = {
       userId,
       programId,
       workoutDate: Timestamp.fromDate(date),
       workoutTitle: workout.title,
-      programType: workout.programType,
+      programType: deriveSessionProgramType(workout),
       finishedAt: null,
       notes: '',
       workoutDetails: workout, // <-- CRITICAL FIX: Ensure full workout object is saved

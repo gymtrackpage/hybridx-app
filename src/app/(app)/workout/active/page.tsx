@@ -14,14 +14,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
-import type { Workout, RunningWorkout, Exercise, PlannedRun } from '@/models/types';
+import type { WorkoutDay, Exercise, PlannedRun } from '@/models/types';
 import { formatPace } from '@/lib/pace-utils';
 import Link from 'next/link';
 import { Separator } from '@/components/ui/separator';
 import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
 import { useUser } from '@/contexts/user-context';
 import { useToast } from '@/hooks/use-toast';
-import { isRunningWorkout } from '@/lib/type-guards';
+import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { ExerciseHistory } from '@/components/exercise-history';
 import { convertDistanceInText, convertTextWithUnits } from '@/lib/unit-conversion';
 
@@ -32,7 +32,7 @@ export default function ActiveWorkoutPage() {
   const { user, todaysWorkout, todaysSession, trainingPaces, loading, refreshData } = useUser();
   const { toast } = useToast();
   const [session, setSession] = useState<WorkoutSession | null>(null);
-  const [workoutInfo, setWorkoutInfo] = useState<{ day: number; workout: Workout | RunningWorkout | null } | null>(null);
+  const [workoutInfo, setWorkoutInfo] = useState<{ day: number; workout: WorkoutDay | null } | null>(null);
   const [extendedExercises, setExtendedExercises] = useState<Exercise[]>([]);
   const [isExtending, setIsExtending] = useState(false);
   const [notes, setNotes] = useState('');
@@ -78,11 +78,9 @@ export default function ActiveWorkoutPage() {
 
     try {
       let exercisesForSummary = '';
-      if (isRunningWorkout(workoutInfo.workout)) {
-          exercisesForSummary = (workoutInfo.workout as RunningWorkout).runs.map(r => r.type).join(', ');
-      } else {
-          exercisesForSummary = [...(workoutInfo.workout as Workout).exercises, ...extendedExercises].map(e => e.name).join(', ');
-      }
+      const runParts = (workoutInfo.workout.runs ?? []).map(r => r.type);
+      const exParts = [...(workoutInfo.workout.exercises ?? []), ...extendedExercises].map(e => e.name);
+      exercisesForSummary = [...runParts, ...exParts].join(', ');
 
       const summaryPromise = workoutSummary({
         userName: user.firstName,
@@ -143,14 +141,10 @@ export default function ActiveWorkoutPage() {
 
     setIsExtending(true);
     try {
-        let originalExercises: Exercise[] = [];
-        if (!isRunningWorkout(workoutInfo.workout)) {
-            originalExercises = (workoutInfo.workout as Workout).exercises || [];
-        }
-
+        const originalExercises: Exercise[] = workoutInfo.workout.exercises ?? [];
         const result = await extendWorkout({
             workoutTitle: workoutInfo.workout.title,
-            workoutType: workoutInfo.workout.programType,
+            workoutType: 'hyrox',
             exercises: JSON.stringify([...originalExercises, ...extendedExercises]),
         });
 
@@ -179,14 +173,12 @@ export default function ActiveWorkoutPage() {
           finishedAt,
           notes,
           workoutTitle: workoutInfo.workout.title,
-          programType: workoutInfo.workout.programType
       };
       setSession(updatedSessionData);
       await updateWorkoutSession(session.id, {
           finishedAt,
           notes,
           workoutTitle: workoutInfo.workout.title,
-          programType: workoutInfo.workout.programType
       });
       setIsCompleteModalOpen(true);
       refreshData();
@@ -202,7 +194,6 @@ export default function ActiveWorkoutPage() {
           finishedAt,
           notes: skipNotes,
           workoutTitle: workoutInfo.workout.title,
-          programType: workoutInfo.workout.programType,
           skipped: true
       };
       setSession(updatedSessionData);
@@ -210,7 +201,6 @@ export default function ActiveWorkoutPage() {
           finishedAt,
           notes: skipNotes,
           workoutTitle: workoutInfo.workout.title,
-          programType: workoutInfo.workout.programType,
           skipped: true
       });
       setIsCompleteModalOpen(true);
@@ -253,17 +243,18 @@ export default function ActiveWorkoutPage() {
   const week = Math.ceil(day / 7);
   const dayOfWeek = day % 7 === 0 ? 7 : day % 7;
 
-  const isRunning = isRunningWorkout(workout);
+  const workoutHasRuns = hasRuns(workout);
+  const workoutHasExercises = hasExercises(workout);
   const isOneOffWorkout = ['one-off-ai', 'custom-workout'].includes(session.programId);
-  const canExtendWorkout = workout.programType === 'hyrox' || isOneOffWorkout;
+  // Workout extension only applies to sessions with exercises (or one-off AI workouts)
+  const canExtendWorkout = workoutHasExercises || isOneOffWorkout;
 
-  // Progress calculation
-  const allExerciseKeys: string[] = isRunning
-    ? (workout as RunningWorkout).runs.map((_, i) => `run-${i}`)
-    : [
-        ...(workout as Workout).exercises.map((_, i) => `ex-${i}`),
-        ...extendedExercises.map((_, i) => `ext-${i}`),
-      ];
+  // Progress calculation — includes all run segments, exercises, and any AI extensions
+  const allExerciseKeys: string[] = [
+    ...(workout.runs ?? []).map((_, i) => `run-${i}`),
+    ...(workout.exercises ?? []).map((_, i) => `ex-${i}`),
+    ...extendedExercises.map((_, i) => `ext-${i}`),
+  ];
   const checkedCount = allExerciseKeys.filter(k => exerciseChecklist[k]).length;
   const totalCount = allExerciseKeys.length;
   const progressPct = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
@@ -317,7 +308,7 @@ export default function ActiveWorkoutPage() {
                     )}
                 </div>
                 
-                {isRunning && !trainingPaces && (
+                {workoutHasRuns && !trainingPaces && (
                     <div className="p-4 border border-yellow-400 bg-yellow-50 rounded-md text-yellow-800 flex items-start gap-3">
                         <AlertTriangle className="h-5 w-5 mt-0.5" />
                         <div>
@@ -348,72 +339,85 @@ export default function ActiveWorkoutPage() {
                 )}
 
                 <div>
-                    <h3 className="text-base font-semibold mb-3">{isRunning ? 'Runs:' : 'Exercises:'}</h3>
                     <div className="space-y-3">
-                        {isRunning ? (
-                             (workout as RunningWorkout).runs.map((run: PlannedRun, index) => {
-                                 const key = `run-${index}`;
-                                 const isDone = !!exerciseChecklist[key];
-                                 const description = user?.unitSystem === 'imperial'
-                                    ? convertDistanceInText(run.description, 'imperial')
-                                    : run.description;
-
-                                 return (
-                                    <Card key={`${run.description}-${index}`} className={isDone ? 'opacity-60' : ''}>
-                                        <CardContent className="py-4 px-2 flex items-center gap-4">
-                                            {!session.finishedAt && (
-                                                <button
-                                                    onClick={() => handleToggleExercise(key)}
-                                                    className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                                                    aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
-                                                >
-                                                    {isDone
-                                                        ? <CheckSquare className="h-6 w-6 text-primary" />
-                                                        : <Square className="h-6 w-6" />
-                                                    }
-                                                </button>
-                                            )}
-                                            <div className="flex-1">
-                                                <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{description}</p>
-                                                {trainingPaces && (
-                                                    <p className="text-sm text-muted-foreground">
-                                                        Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
-                                                    </p>
+                        {/* ── Run segments ─────────────────────────────── */}
+                        {workoutHasRuns && (
+                            <>
+                                <h3 className="text-base font-semibold mb-3">Running:</h3>
+                                {(workout.runs ?? []).map((run: PlannedRun, index) => {
+                                    const key = `run-${index}`;
+                                    const isDone = !!exerciseChecklist[key];
+                                    const description = user?.unitSystem === 'imperial'
+                                        ? convertDistanceInText(run.description, 'imperial')
+                                        : run.description;
+                                    return (
+                                        <Card key={`${run.description}-${index}`} className={isDone ? 'opacity-60' : ''}>
+                                            <CardContent className="py-4 px-2 flex items-center gap-4">
+                                                {!session.finishedAt && (
+                                                    <button
+                                                        onClick={() => handleToggleExercise(key)}
+                                                        className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                                                        aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
+                                                    >
+                                                        {isDone
+                                                            ? <CheckSquare className="h-6 w-6 text-primary" />
+                                                            : <Square className="h-6 w-6" />
+                                                        }
+                                                    </button>
                                                 )}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                 );
-                             })
-                        ) : (
-                             (workout as Workout).exercises.map((ex: Exercise, index) => {
-                                 const key = `ex-${index}`;
-                                 const isDone = !!exerciseChecklist[key];
-                                 const details = user?.unitSystem ? convertTextWithUnits(ex.details, user.unitSystem) : ex.details;
-                                 return (
-                                    <Card key={`${ex.name}-${index}`} className={isDone ? 'opacity-60' : ''}>
-                                        <CardContent className="py-4 px-2 flex items-center gap-4">
-                                            {!session.finishedAt && (
-                                                <button
-                                                    onClick={() => handleToggleExercise(key)}
-                                                    className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
-                                                    aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
-                                                >
-                                                    {isDone
-                                                        ? <CheckSquare className="h-6 w-6 text-primary" />
-                                                        : <Square className="h-6 w-6" />
-                                                    }
-                                                </button>
-                                            )}
-                                            <div className="flex-1">
-                                                <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{ex.name}</p>
-                                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{details}</p>
-                                                {user && <ExerciseHistory userId={user.id} exerciseName={ex.name} />}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                 );
-                            })
+                                                <div className="flex-1">
+                                                    <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{description}</p>
+                                                    {trainingPaces && (
+                                                        <p className="text-sm text-muted-foreground">
+                                                            Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </>
+                        )}
+
+                        {/* ── Divider for hybrid days ───────────────────── */}
+                        {workoutHasRuns && workoutHasExercises && (
+                            <Separator className="my-4" />
+                        )}
+
+                        {/* ── Strength / gym exercises ──────────────────── */}
+                        {workoutHasExercises && (
+                            <>
+                                <h3 className="text-base font-semibold mb-3">Exercises:</h3>
+                                {(workout.exercises ?? []).map((ex: Exercise, index) => {
+                                    const key = `ex-${index}`;
+                                    const isDone = !!exerciseChecklist[key];
+                                    const details = user?.unitSystem ? convertTextWithUnits(ex.details, user.unitSystem) : ex.details;
+                                    return (
+                                        <Card key={`${ex.name}-${index}`} className={isDone ? 'opacity-60' : ''}>
+                                            <CardContent className="py-4 px-2 flex items-center gap-4">
+                                                {!session.finishedAt && (
+                                                    <button
+                                                        onClick={() => handleToggleExercise(key)}
+                                                        className="shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                                                        aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}
+                                                    >
+                                                        {isDone
+                                                            ? <CheckSquare className="h-6 w-6 text-primary" />
+                                                            : <Square className="h-6 w-6" />
+                                                        }
+                                                    </button>
+                                                )}
+                                                <div className="flex-1">
+                                                    <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{ex.name}</p>
+                                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{details}</p>
+                                                    {user && <ExerciseHistory userId={user.id} exerciseName={ex.name} />}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </>
                         )}
                         
                         {extendedExercises.length > 0 && (

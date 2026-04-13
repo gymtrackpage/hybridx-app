@@ -1,5 +1,6 @@
 // src/components/program-calendar-view.tsx
 import type { Program } from '@/models/types';
+import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { Logo } from '@/components/icons';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
@@ -122,8 +123,13 @@ export function ProgramCalendarView({ program }: ProgramCalendarViewProps) {
                         <div className="flex-grow space-y-2">
                           <h3 className="text-sm font-semibold text-primary">{workout.title}</h3>
                           <ul className="space-y-1.5 text-xs text-muted-foreground">
-                            {workout.exercises.map((exercise, i) => (
-                              <li key={i}>
+                            {hasRuns(workout) && workout.runs.map((run, i) => (
+                              <li key={`run-${i}`}>
+                                <strong className="text-foreground/90">{run.type}:</strong> {run.distance}km — {run.description}
+                              </li>
+                            ))}
+                            {hasExercises(workout) && workout.exercises.map((exercise, i) => (
+                              <li key={`ex-${i}`}>
                                 <strong className="text-foreground/90">{exercise.name}:</strong> {exercise.details}
                               </li>
                             ))}

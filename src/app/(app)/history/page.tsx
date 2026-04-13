@@ -20,7 +20,8 @@ import { cn } from '@/lib/utils';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import Link from 'next/link';
 import { formatExerciseDetails } from '@/utils/text-formatter';
-import type { Workout, RunningWorkout, Exercise, PlannedRun } from '@/models/types';
+import type { Exercise, PlannedRun } from '@/models/types';
+import { hasRuns, hasExercises } from '@/lib/type-guards';
 
 // Lazy load heavy dialogs
 const ShareWorkoutDialog = lazy(() => import('@/components/share-workout-dialog').then(mod => ({ default: mod.ShareWorkoutDialog })));
@@ -476,10 +477,9 @@ export default function WorkoutHistoryPage() {
 
                               {expandedSessions.has(session.id) && (
                                 <div className="mt-3 space-y-3">
-                                  {session.workoutDetails.programType === 'running' ? (
-                                    // Running workout details
+                                  {hasRuns(session.workoutDetails) && (
                                     <div className="space-y-2">
-                                      {(session.workoutDetails as RunningWorkout).runs.map((run: PlannedRun, idx: number) => (
+                                      {session.workoutDetails.runs.map((run: PlannedRun, idx: number) => (
                                         <div key={idx} className="bg-muted/30 rounded-lg p-3">
                                           <div className="flex items-start gap-2">
                                             <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary mt-0.5">
@@ -496,10 +496,10 @@ export default function WorkoutHistoryPage() {
                                         </div>
                                       ))}
                                     </div>
-                                  ) : (
-                                    // HYROX/strength workout details
+                                  )}
+                                  {hasExercises(session.workoutDetails) && (
                                     <div className="space-y-2">
-                                      {(session.workoutDetails as Workout).exercises.map((exercise: Exercise, idx: number) => {
+                                      {session.workoutDetails.exercises.map((exercise: Exercise, idx: number) => {
                                         const formattedDetails = formatExerciseDetails(exercise.details);
                                         return (
                                           <div key={idx} className="bg-muted/30 rounded-lg p-3">

@@ -22,6 +22,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import type { Program } from '@/models/types';
+import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from './ui/scroll-area';
 
@@ -75,8 +76,13 @@ export function ProgramScheduleDialog({
                         <AccordionTrigger>Day {workout.day}: {workout.title}</AccordionTrigger>
                         <AccordionContent>
                             <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                                {workout.exercises.map((exercise, index) => (
-                                    <li key={index}>
+                                {hasRuns(workout) && workout.runs.map((run, index) => (
+                                    <li key={`run-${index}`}>
+                                        <span className="font-medium text-foreground">{run.type} {run.distance}km:</span> {run.description}
+                                    </li>
+                                ))}
+                                {hasExercises(workout) && workout.exercises.map((exercise, index) => (
+                                    <li key={`ex-${index}`}>
                                         <span className="font-medium text-foreground">{exercise.name}:</span> {exercise.details}
                                     </li>
                                 ))}

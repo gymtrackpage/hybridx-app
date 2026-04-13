@@ -6,7 +6,8 @@ import { getValidStravaToken } from '@/lib/strava-token';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getAdminDb } from '@/lib/firebase-admin';
 import axios from 'axios';
-import type { WorkoutSession, ProgramType, Workout, RunningWorkout } from '@/models/types';
+import type { WorkoutSession, ProgramType } from '@/models/types';
+import { hasRuns } from '@/lib/type-guards';
 import { generateStravaDescription } from '@/ai/flows/strava-description';
 import { logger } from '@/lib/logger';
 
@@ -101,13 +102,13 @@ export async function POST(req: NextRequest) {
     let aiDescription = `Workout from HYBRIDX.CLUB.\n\nNotes:\n${session.notes || 'No notes.'}`;
     if (session.workoutDetails) {
         try {
-            const exercises = session.programType === 'running' 
-                ? (session.workoutDetails as RunningWorkout).runs 
-                : (session.workoutDetails as Workout).exercises;
+            const exercises = hasRuns(session.workoutDetails)
+                ? session.workoutDetails!.runs
+                : session.workoutDetails!.exercises;
             
             const descriptionResult = await generateStravaDescription({
                 workoutTitle: session.workoutTitle,
-                workoutType: session.programType,
+                workoutType: session.programType === 'running' ? 'running' : 'hyrox',
                 exercises: JSON.stringify(exercises),
                 userNotes: session.notes,
             });

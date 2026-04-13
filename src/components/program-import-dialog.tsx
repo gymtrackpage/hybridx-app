@@ -120,7 +120,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
           if (workoutsMap.has(day)) {
               workoutsMap.get(day)!.exercises.push(exercise);
           } else {
-              workoutsMap.set(day, { day, title: workoutTitle, exercises: [exercise], programType: 'hyrox' });
+              workoutsMap.set(day, { day, title: workoutTitle, exercises: [exercise], runs: [] });
           }
       });
       
@@ -160,13 +160,11 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
           if (workoutsMap.has(day)) {
               workoutsMap.get(day)!.runs.push(plannedRun);
           } else {
-              workoutsMap.set(day, { 
-                  day, 
-                  title: workoutTitle, 
-                  runs: [plannedRun], 
+              workoutsMap.set(day, {
+                  day,
+                  title: workoutTitle,
+                  runs: [plannedRun],
                   exercises: [],
-                  programType: 'running',
-                  targetRace: targetRace as RunningProgram['targetRace'],
               });
           }
       });

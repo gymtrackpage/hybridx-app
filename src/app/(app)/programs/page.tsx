@@ -87,8 +87,13 @@ export default function ProgramsPage() {
       }
   }
   
-  const renderProgramCards = (programType: 'hyrox' | 'running' | undefined) => {
-    const filteredPrograms = programs.filter(p => (p.programType || 'hyrox') === programType);
+  const renderProgramCards = (programType: 'hyrox' | 'running') => {
+    const filteredPrograms = programs.filter(p => {
+      const type = p.programType || 'hyrox';
+      if (programType === 'running') return type === 'running';
+      // 'hyrox' tab shows both hyrox and hybrid programs
+      return type === 'hyrox' || type === 'hybrid';
+    });
 
     if (filteredPrograms.length === 0) {
         return <p className="text-muted-foreground col-span-full text-center py-8">No {programType} programs available yet.</p>

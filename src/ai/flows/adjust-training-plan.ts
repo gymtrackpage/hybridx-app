@@ -3,24 +3,17 @@
 /**
  * @fileOverview AI-driven training plan adjuster.
  *
- * - adjustTrainingPlan - A function that condenses a standard 5-day training plan to a 3 or 4-day plan.
+ * - adjustTrainingPlan - Condenses a training plan to a 3 or 4-day plan.
  * - AdjustTrainingPlanInput - The input type for the adjustTrainingPlan function.
  * - AdjustTrainingPlanOutput - The return type for the adjustTrainingPlan function.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { ExerciseSchema } from '@/ai/schemas';
-
-const WorkoutSchema = z.object({
-  day: z.number(),
-  title: z.string(),
-  programType: z.enum(['hyrox', 'running']),
-  exercises: z.array(ExerciseSchema),
-});
+import { WorkoutDaySchema } from '@/ai/schemas';
 
 const AdjustTrainingPlanInputSchema = z.object({
-  currentWorkouts: z.array(WorkoutSchema).describe('The original array of workout objects for a 5-day week.'),
+  currentWorkouts: z.array(WorkoutDaySchema).describe('The original array of workout objects for a 5-day week.'),
   targetDays: z.enum(['3', '4']).describe('The target number of training days per week.'),
 });
 export type AdjustTrainingPlanInput = z.infer<typeof AdjustTrainingPlanInputSchema>;
@@ -32,7 +25,7 @@ const AdjustTrainingPlanPromptInputSchema = z.object({
 });
 
 const AdjustTrainingPlanOutputSchema = z.object({
-  adjustedWorkouts: z.array(WorkoutSchema).describe('The new, condensed array of workout objects for the target number of days.'),
+  adjustedWorkouts: z.array(WorkoutDaySchema).describe('The new, condensed array of workout objects for the target number of days.'),
 });
 export type AdjustTrainingPlanOutput = z.infer<typeof AdjustTrainingPlanOutputSchema>;
 
@@ -44,36 +37,33 @@ const prompt = ai.definePrompt({
   name: 'adjustTrainingPlanPrompt',
   input: {schema: AdjustTrainingPlanPromptInputSchema},
   output: {schema: AdjustTrainingPlanOutputSchema},
-  prompt: `You are an expert strength and conditioning coach. Your task is to intelligently condense a 5-day training plan into a {{{targetDays}}}-day plan.
+  prompt: `You are an expert strength and conditioning coach. Your task is to intelligently condense a training plan into a {{{targetDays}}}-day plan.
+
+  Each workout has an "exercises" array (strength/gym work) and a "runs" array (running segments). Both can be populated on the same day for hybrid sessions. Empty arrays mean no work of that type is scheduled.
 
   **CRITICAL INSTRUCTIONS:**
-  1.  **Analyze the 5-day Plan:** Review the original workouts to understand the weekly structure, intensity, and goals (e.g., strength days, conditioning days, recovery).
+  1.  **Analyze the Plan:** Review the original workouts to understand the weekly structure, intensity, and goals (strength days, run days, hybrid sessions, recovery).
 
   2.  **Prioritize & Combine:**
       *   Identify the most critical workouts that must be kept.
-      *   Combine complementary sessions. For example, merge a shorter strength session with a metcon, or combine accessory work into a main lift day.
-      *   Lower priority workouts (e.g., secondary recovery sessions, light accessory work) can be dropped if necessary.
-      *   Ensure the combined days are challenging but manageable, not excessively long or conflicting (e.g., don't pair a heavy leg day with intense running).
+      *   Combine complementary sessions when reducing days — for example, a short run can be added after a strength session to create a hybrid day.
+      *   Lower priority workouts (secondary recovery sessions, light accessory work) can be dropped if necessary.
+      *   Avoid pairing heavy leg strength with intense interval running on the same day.
 
   3.  **Smart Weekly Distribution:**
       *   The final output MUST contain exactly {{{targetDays}}} workout objects.
-      *   Distribute workouts intelligently throughout the 7-day week with proper recovery placement.
-      *   **DO NOT cluster all workouts at the end of the week** - spread them out!
-      *   **Place rest days strategically** - especially after heavy strength sessions or high-intensity workouts.
-      *   Follow these guidelines for day numbering:
-          - For 3-day plans: Use Day 1, Day 3, Day 5 or Day 2, Day 4, Day 6 (alternating pattern with rest in between)
-          - For 4-day plans: Use Day 1, Day 2, Day 4, Day 5 or Day 1, Day 3, Day 4, Day 6 (with rest after heavy sessions)
-      *   Example good patterns:
-          - 3-day: [Strength Day 1] → [Rest Day 2] → [Conditioning Day 3] → [Rest Day 4] → [Long Run Day 5] → [Rest Days 6-7]
-          - 4-day: [Lower Body Day 1] → [Upper Body Day 2] → [Rest Day 3] → [Conditioning Day 4] → [Endurance Day 5] → [Rest Days 6-7]
-      *   **Key principle:** Heavy lower body or full body strength sessions should typically have a rest day or light conditioning after them.
+      *   Spread workouts intelligently throughout the 7-day week with proper recovery placement.
+      *   **DO NOT cluster all workouts at the end of the week.**
+      *   Place rest days strategically, especially after heavy or hybrid sessions.
+      *   For 3-day plans: use days 1, 3, 5 (or similar alternating pattern).
+      *   For 4-day plans: use days 1, 2, 4, 5 (or 1, 3, 4, 6) with rest after heavy sessions.
 
-  4.  **Maintain Integrity:** The goal is to retain the original program's effectiveness, just in a more condensed format with intelligent recovery placement.
+  4.  **Maintain Integrity:** Retain the program's core effectiveness in a condensed format.
 
-  **Original 5-Day Plan:**
+  **Original Plan:**
   {{{workoutsJSON}}}
 
-  Generate the adjusted {{{targetDays}}}-day workout plan with smart weekly distribution.`,
+  Generate the adjusted {{{targetDays}}}-day workout plan. Each workout must have both an "exercises" array and a "runs" array (either or both can be empty).`,
 });
 
 const adjustTrainingPlanFlow = ai.defineFlow(
@@ -83,14 +73,8 @@ const adjustTrainingPlanFlow = ai.defineFlow(
     outputSchema: AdjustTrainingPlanOutputSchema,
   },
   async input => {
-    // Stringify the workouts array before passing it to the prompt.
     const workoutsJSON = JSON.stringify(input.currentWorkouts);
-
-    const {output} = await prompt({
-      workoutsJSON,
-      targetDays: input.targetDays,
-    });
-    
+    const {output} = await prompt({ workoutsJSON, targetDays: input.targetDays });
     return output!;
   }
 );

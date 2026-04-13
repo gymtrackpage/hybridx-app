@@ -48,7 +48,7 @@ export interface User {
   strava?: StravaTokens;
   lastStravaSync?: Date;
   // AI-adjusted program for the user
-  customProgram?: (Workout | RunningWorkout)[] | null;
+  customProgram?: WorkoutDay[] | null;
   // Subscription fields
   isAdmin?: boolean;
   subscriptionStatus?: SubscriptionStatus;
@@ -62,38 +62,9 @@ export interface User {
   notificationTime?: { hour: number; minute: number };
 }
 
-export type ProgramType = 'hyrox' | 'running';
+export type ProgramType = 'hyrox' | 'running' | 'hybrid';
 
-export interface Program {
-  id: string;
-  name: string;
-  description: string;
-  programType: ProgramType;
-  workouts: (Workout | RunningWorkout)[];
-}
-
-export interface RunningProgram extends Omit<Program, 'workouts'> {
-  programType: 'running';
-  targetRace?: 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon';
-  workouts: RunningWorkout[];
-}
-
-
-export interface Workout {
-  day: number;
-  title: string;
-  exercises: Exercise[];
-  programType: 'hyrox'; // Explicitly hyrox for this type
-}
-
-export interface RunningWorkout {
-  day: number;
-  title: string;
-  runs: PlannedRun[];
-  programType: 'running'; // Explicitly running for this type
-  targetRace?: 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon';
-  exercises: []; // To satisfy base type if needed, but should be empty
-}
+export type TargetRace = 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon' | 'hyrox' | 'ultra';
 
 export type PaceZone = 'recovery' | 'easy' | 'marathon' | 'threshold' | 'interval' | 'repetition';
 
@@ -107,11 +78,42 @@ export interface PlannedRun {
   noIntervals?: number;
 }
 
-
 export interface Exercise {
   name: string;
   details: string;
 }
+
+/**
+ * A single day in a training program.
+ * Both `exercises` and `runs` can be populated simultaneously to support
+ * hybrid sessions (e.g. compromised running, gym + run days).
+ * Either array may be empty — use the hasExercises / hasRuns helpers
+ * from type-guards.ts to check for content rather than inspecting programType.
+ */
+export interface WorkoutDay {
+  day: number;
+  title: string;
+  exercises: Exercise[];  // [] when no strength/gym work scheduled
+  runs: PlannedRun[];     // [] when no running scheduled
+}
+
+export interface Program {
+  id: string;
+  name: string;
+  description: string;
+  programType: ProgramType;
+  workouts: WorkoutDay[];
+  targetRace?: TargetRace;
+}
+
+// ─── Legacy aliases kept for backwards compatibility ─────────────────────────
+// These let existing imports continue to resolve while the codebase is migrated.
+/** @deprecated Use WorkoutDay instead */
+export type Workout = WorkoutDay;
+/** @deprecated Use WorkoutDay instead */
+export type RunningWorkout = WorkoutDay;
+/** @deprecated Use Program instead */
+export type RunningProgram = Program;
 
 export interface WorkoutSession {
     id: string;
@@ -128,7 +130,7 @@ export interface WorkoutSession {
     skipped?: boolean; // Flag to indicate if workout was skipped
 
     // Details of the workout that was performed, for sessions not linked to a program
-    workoutDetails?: Workout | RunningWorkout;
+    workoutDetails?: WorkoutDay;
 
     // Per-exercise checklist for ticking off exercises during a workout
     exerciseChecklist?: Record<string, boolean>;

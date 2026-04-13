@@ -1,5 +1,5 @@
 // src/lib/workout-utils.ts
-import type { Program, Workout, RunningWorkout, Exercise } from '@/models/types';
+import type { Program, WorkoutDay, Exercise } from '@/models/types';
 import { differenceInDays, subDays, isSameDay } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
@@ -16,7 +16,7 @@ export function getWorkoutForDay(
     program: Pick<Program, 'workouts'>, 
     startDate: Date, 
     targetDate: Date
-): { day: number; workout: Workout | RunningWorkout | null; } {
+): { day: number; workout: WorkoutDay | null; } {
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const target = new Date(targetDate);
@@ -73,10 +73,7 @@ export async function getLastPerformedExercise(userId: string, exerciseName: str
                 ...(data.extendedExercises || [])
             ];
             
-            // Also check runs if it's a running workout, though structure is different
-             if (data.programType === 'running' && data.workoutDetails?.runs) {
-                // Logic for runs if needed, skipping for now based on requirement "4 sets @ 60kg" implies strength
-            }
+            // runs are already covered by workoutDetails.exercises check above for unified WorkoutDay type
 
             const found = exercises.find((e: any) => e.name === exerciseName);
             

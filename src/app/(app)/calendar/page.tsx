@@ -13,7 +13,8 @@ import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getAllUserSessions, getOrCreateWorkoutSession, updateWorkoutSession } from '@/services/session-service-client';
 import { swapWorkouts } from '@/services/session-service'; // Import the new server action
-import type { User, Program, Workout, WorkoutSession, RunningWorkout, Exercise } from '@/models/types';
+import type { User, Program, WorkoutDay, WorkoutSession } from '@/models/types';
+import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { addDays, format, isSameDay, parseISO, isValid, isToday, isPast, startOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Link as LinkIcon, Activity, Clock, MapPin, Forward, Edit, CheckCircle, Loader2 } from 'lucide-react';
@@ -28,7 +29,7 @@ const LinkStravaActivityDialog = lazy(() => import('@/components/link-strava-act
 
 interface WorkoutEvent {
   date: Date;
-  workout?: Workout | RunningWorkout;
+  workout?: WorkoutDay;
   session?: WorkoutSession;
   isCompleted: boolean;
   isMissed: boolean;
@@ -117,12 +118,13 @@ export default function CalendarPage() {
     };
   }, []);
 
-    const getEventColor = (workout: Workout | RunningWorkout, isCompleted: boolean, isMissed: boolean): string => {
+    const getEventColor = (workout: WorkoutDay, isCompleted: boolean, isMissed: boolean): string => {
         if (isCompleted) return 'bg-green-500';
         if (isMissed) return 'bg-red-400';
 
-        if (workout.programType === 'running') {
-            const primaryRunType = (workout as RunningWorkout).runs[0]?.type;
+        // Colour by primary run type when the session has running
+        if (hasRuns(workout)) {
+            const primaryRunType = workout.runs[0]?.type;
             switch (primaryRunType) {
                 case 'intervals': return 'bg-red-500';
                 case 'tempo': return 'bg-orange-500';
@@ -280,11 +282,15 @@ export default function CalendarPage() {
 
   const getCompletedExercises = (session: WorkoutSession): { name: string, details: string }[] => {
     if (session.workoutDetails) {
-        const items = session.workoutDetails.programType === 'running' ? session.workoutDetails.runs : session.workoutDetails.exercises;
-        return items.map((item: any) => ({
-            name: item.name || item.description,
-            details: item.details || 'Completed'
+        const runs = (session.workoutDetails.runs ?? []).map((r: any) => ({
+            name: r.description || r.type,
+            details: `${r.distance}km – ${r.type}`,
         }));
+        const exercises = (session.workoutDetails.exercises ?? []).map((e: any) => ({
+            name: e.name,
+            details: e.details || 'Completed',
+        }));
+        return [...runs, ...exercises];
     }
     
     // Type assertion needed here because completedItems is not in the WorkoutSession interface anymore
@@ -358,7 +364,6 @@ export default function CalendarPage() {
         await updateWorkoutSession(session.id, {
             finishedAt: completedAt,
             workoutTitle: selectedWorkout.title,
-            programType: selectedWorkout.programType,
             skipped: false,
         });
 
@@ -525,26 +530,24 @@ export default function CalendarPage() {
               <div>
                 <h4 className="font-semibold mb-2">Planned Workout</h4>
                 <div className="space-y-4">
-                  {selectedWorkout.programType === 'running'
-                    ? (selectedWorkout as RunningWorkout).runs.map((run, index) => (
+                  {hasRuns(selectedWorkout) && (selectedWorkout.runs ?? []).map((run, index) => (
+                      <div key={index} className="space-y-1">
+                        <p className="font-medium text-foreground">{run.description}</p>
+                      </div>
+                  ))}
+                  {hasExercises(selectedWorkout) && (selectedWorkout.exercises ?? []).map((exercise, index) => {
+                      const formattedDetails = formatTextWithBullets(exercise.details);
+                      return (
                         <div key={index} className="space-y-1">
-                          <p className="font-medium text-foreground">{run.description}</p>
+                          <p className="font-medium text-foreground">{exercise.name}</p>
+                          {formattedDetails.map((line, lineIndex) => (
+                            <p key={lineIndex} className="text-sm text-muted-foreground whitespace-pre-wrap ml-4">
+                              {line}
+                            </p>
+                          ))}
                         </div>
-                      ))
-                    : (selectedWorkout as Workout).exercises.map((exercise, index) => {
-                        const formattedDetails = formatTextWithBullets(exercise.details);
-                        return (
-                          <div key={index} className="space-y-1">
-                            <p className="font-medium text-foreground">{exercise.name}</p>
-                            {formattedDetails.map((line, lineIndex) => (
-                              <p key={lineIndex} className="text-sm text-muted-foreground whitespace-pre-wrap ml-4">
-                                {line}
-                              </p>
-                            ))}
-                          </div>
-                        );
-                      })
-                  }
+                      );
+                  })}
                 </div>
               </div>
             ) : null}
@@ -630,7 +633,6 @@ export default function CalendarPage() {
                                                 programId: (selectedEvent as any)?.program?.id || '',
                                                 workoutDate: selectedDate,
                                                 workoutTitle: selectedWorkout.title,
-                                                programType: selectedWorkout.programType,
                                                 startedAt: new Date(),
                                                 completedItems: {},
                                             };

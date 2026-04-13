@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import type { WorkoutSession } from '@/models/types';
+import { hasRuns } from '@/lib/type-guards';
 import { WorkoutImageGenerator } from '@/components/WorkoutImageGenerator';
 import { generateCardSummary } from '@/ai/flows/card-summary';
 
@@ -60,7 +61,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
       const [summaryResult, caloriesResult] = await Promise.allSettled([
         generateCardSummary({
           workoutTitle: session.workoutTitle,
-          workoutType: session.programType === 'running' ? 'running' : 'hyrox',
+          workoutType: (session.workoutDetails ? hasRuns(session.workoutDetails) : session.programType === 'running') ? 'running' : 'hyrox',
           distanceKm,
           durationMinutes,
           paceMinPerKm,
@@ -142,7 +143,7 @@ export function ShareWorkoutDialog({ session, trigger }: ShareWorkoutDialogProps
           <WorkoutImageGenerator
             workout={{
               name: session.workoutTitle,
-              type: session.programType === 'running' ? 'Running' : 'HYROX',
+              type: (session.workoutDetails ? hasRuns(session.workoutDetails) : session.programType === 'running') ? 'Running' : 'HYROX',
               startTime: session.workoutDate,
               distance: session.stravaActivity?.distance,
               duration: formattedDuration,

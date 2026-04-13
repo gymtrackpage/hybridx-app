@@ -30,7 +30,8 @@ import { cn } from '@/lib/utils';
 import { calculateTrainingPhases, type RacePlan } from '@/services/race-scheduler';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import type { Workout, RunningWorkout } from '@/models/types';
+import type { WorkoutDay } from '@/models/types';
+import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { updateUser } from '@/services/user-service-client';
 import { savePersonalProgram } from '@/services/program-service-client'; // IMPORTED
 import { useUser } from '@/contexts/user-context';
@@ -61,7 +62,7 @@ export function RacePrepDialog() {
   const [adjustComments, setAdjustComments] = useState('');
   
   const [planPreview, setPlanPreview] = useState<RacePlan | null>(null);
-  const [generatedWorkouts, setGeneratedWorkouts] = useState<(Workout | RunningWorkout)[]>([]);
+  const [generatedWorkouts, setGeneratedWorkouts] = useState<WorkoutDay[]>([]);
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -321,13 +322,12 @@ export function RacePrepDialog() {
                               <div className="flex justify-between items-start mb-1">
                                   <span className="font-bold text-sm">Day {workout.day}</span>
                                   <span className="text-xs uppercase tracking-wider text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                                      {workout.programType === 'running' ? 'Run' : 'Strength'}
+                                      {hasRuns(workout) && hasExercises(workout) ? 'Hybrid' : hasRuns(workout) ? 'Run' : 'Strength'}
                                   </span>
                               </div>
                               <p className="font-medium">{workout.title}</p>
                               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                  {workout.programType === 'hyrox' && (workout as Workout).exercises?.[0]?.name}
-                                  {workout.programType === 'running' && (workout as RunningWorkout).runs?.[0]?.description}
+                                  {hasRuns(workout) ? workout.runs[0]?.description : workout.exercises?.[0]?.name}
                               </p>
                           </div>
                       ))}

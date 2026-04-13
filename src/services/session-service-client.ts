@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger';
 
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy, getDoc, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db, getAuthInstance } from '@/lib/firebase';
-import type { WorkoutSession, Workout, RunningWorkout, Exercise, ProgramType } from '@/models/types';
+import type { WorkoutSession, WorkoutDay, Exercise, ProgramType } from '@/models/types';
 import type { StravaActivity } from './strava-service';
 
 // Re-export WorkoutSession type for convenience
@@ -145,11 +145,11 @@ export async function createCustomWorkoutSession(userId: string, title: string, 
     );
     const snapshot = await getDocs(q);
 
-    const workout: Workout = {
+    const workout: WorkoutDay = {
         title,
-        programType: 'hyrox',
         day: 0,
         exercises: [{ name: 'Custom Activity', details: description }],
+        runs: [],
     };
     
     // For custom workouts, we always overwrite any existing session for today
@@ -157,7 +157,15 @@ export async function createCustomWorkoutSession(userId: string, title: string, 
 }
 
 
-export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: Workout | RunningWorkout, overwrite: boolean = false, duration?: string): Promise<any> {
+function deriveSessionProgramType(workout: WorkoutDay): ProgramType {
+    const hasR = (workout.runs?.length ?? 0) > 0;
+    const hasE = (workout.exercises?.length ?? 0) > 0;
+    if (hasR && hasE) return 'hybrid';
+    if (hasR) return 'running';
+    return 'hyrox';
+}
+
+export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: WorkoutDay, overwrite: boolean = false, duration?: string): Promise<any> {
     const q = query(
         sessionsCollection, 
         where('userId', '==', userId), 
@@ -186,12 +194,12 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         programId,
         workoutDate: Timestamp.fromDate(workoutDate),
         workoutTitle: workout.title,
-        programType: workout.programType || 'hyrox',
+        programType: deriveSessionProgramType(workout),
         startedAt: Timestamp.now(),
         finishedAt: null,
         notes: '',
         duration: duration || null,
-        extendedExercises: ['one-off-ai', 'custom-workout'].includes(programId) ? (workout as Workout).exercises : [],
+        extendedExercises: ['one-off-ai', 'custom-workout'].includes(programId) ? workout.exercises : [],
         workoutDetails: workout,
         skipped: false,
     };
@@ -211,7 +219,7 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         programId,
         workoutDate,
         workoutTitle: workout.title,
-        programType: workout.programType || 'hyrox',
+        programType: deriveSessionProgramType(workout),
         startedAt: new Date(),
         notes: '',
         duration: newSessionData.duration,

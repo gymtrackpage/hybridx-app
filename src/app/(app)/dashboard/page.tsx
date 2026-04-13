@@ -22,7 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, ChartTooltip, CartesianGrid, ChartTooltipContent } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
-import type { Workout, RunningWorkout, PlannedRun } from '@/models/types';
+import type { WorkoutDay, PlannedRun } from '@/models/types';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { formatPace } from '@/lib/pace-utils';
@@ -33,7 +33,7 @@ import { StatsWidget } from '@/components/stats-widget';
 import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/contexts/user-context';
 import { logger } from '@/lib/logger';
-import { isRunningWorkout } from '@/lib/type-guards';
+import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { AndroidBetaBanner } from '@/components/android-beta-banner';
 import { RacePrepDialog } from '@/components/race-prep-dialog';
 import type { StravaLoadError } from '@/components/today-strava-feed';
@@ -128,9 +128,9 @@ export default function DashboardPage() {
     }
 
     setWorkoutSummaryLoading(true);
-    const exercisesForSummary = isRunningWorkout(todaysWorkout.workout)
-      ? (todaysWorkout.workout as RunningWorkout).runs.map(r => r.type).join(', ')
-      : (todaysWorkout.workout as Workout).exercises.map(e => e.name).join(', ');
+    const runParts = hasRuns(todaysWorkout.workout) ? todaysWorkout.workout!.runs.map(r => r.type) : [];
+    const exParts = hasExercises(todaysWorkout.workout) ? todaysWorkout.workout!.exercises.map(e => e.name) : [];
+    const exercisesForSummary = [...runParts, ...exParts].join(', ');
 
     // Delay slightly so dashboard summary fires first, avoiding concurrent API calls
     const timer = setTimeout(() => {
@@ -155,9 +155,9 @@ export default function DashboardPage() {
   // Effect to schedule daily notifications
   useEffect(() => {
     if (isGranted && todaysWorkout?.workout && user) {
-      const exercisesForNotification = isRunningWorkout(todaysWorkout.workout)
-        ? (todaysWorkout.workout as RunningWorkout).runs.map(r => r.type).join(', ')
-        : (todaysWorkout.workout as Workout).exercises.map(e => e.name).join(', ');
+      const notifRunParts = hasRuns(todaysWorkout.workout) ? todaysWorkout.workout.runs.map(r => r.type) : [];
+      const notifExParts = hasExercises(todaysWorkout.workout) ? todaysWorkout.workout.exercises.map(e => e.name) : [];
+      const exercisesForNotification = [...notifRunParts, ...notifExParts].join(', ');
 
       checkAndScheduleNotification({
         workoutTitle: todaysWorkout.workout.title,
@@ -206,10 +206,10 @@ export default function DashboardPage() {
             experience: user.experience,
         });
 
-        const oneOffWorkout: Workout = {
+        const oneOffWorkout: WorkoutDay = {
             ...generated,
             day: 0,
-            programType: 'hyrox'
+            runs: [],
         };
         
         const today = new Date();
@@ -242,7 +242,6 @@ export default function DashboardPage() {
           await updateWorkoutSession(todaysSession.id, {
               finishedAt: new Date(),
               workoutTitle: todaysWorkout.workout.title,
-              programType: todaysWorkout.workout.programType,
           });
           await refreshData();
           toast({ title: 'Workout Completed!', description: 'Nice work. Keep the streak alive!' });
@@ -287,7 +286,8 @@ export default function DashboardPage() {
     );
   }
 
-  const isProgramRunning = isRunningWorkout(todaysWorkout?.workout as any);
+  const workoutHasRuns = hasRuns(todaysWorkout?.workout);
+  const workoutHasExercises = hasExercises(todaysWorkout?.workout);
   const isStravaConnected = user?.strava?.accessToken;
 
   // === NEW USER ONBOARDING DASHBOARD ===
@@ -323,7 +323,7 @@ export default function DashboardPage() {
                                 <div className="p-4 bg-background/80 rounded-lg border">
                                     <h3 className="font-bold text-lg">{todaysWorkout.workout.title}</h3>
                                     <p className="text-sm text-muted-foreground">
-                                        Day {todaysWorkout.day} • {isProgramRunning ? 'Running' : 'Hybrid Strength'}
+                                        Day {todaysWorkout.day} • {workoutHasRuns && workoutHasExercises ? 'Hybrid' : workoutHasRuns ? 'Running' : 'Strength'}
                                     </p>
                                 </div>
                                 <p className="text-sm text-muted-foreground">
@@ -454,7 +454,7 @@ export default function DashboardPage() {
               <div className="flex justify-between items-start">
                   <div className="flex-1">
                     <CardTitle className="flex items-center gap-2">
-                      {isProgramRunning ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
+                      {workoutHasRuns && !workoutHasExercises ? <Route className="h-6 w-6" /> : <Target className="h-6 w-6" />}
                       {program && todaysWorkout?.workout && !programStartsInFuture ? `Today's Workout (Day ${todaysWorkout.day})` : "Today's Plan"}
                       {user?.customProgram && user.customProgram.length > 0 && (
                         <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 ml-2">
@@ -493,27 +493,27 @@ export default function DashboardPage() {
                   <div className="space-y-4">
                       <Separator />
                       <ul className="space-y-4 pt-4">
-                        {isProgramRunning ? (
-                            (todaysWorkout.workout as RunningWorkout).runs.map((run: PlannedRun) => (
-                                <li key={run.description}>
-                                  <p className="font-medium">{run.description}</p>
-                                  {trainingPaces ? (
-                                      <p className="text-sm text-muted-foreground">
-                                          Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
-                                      </p>
-                                  ) : (
-                                      <p className="text-sm text-yellow-600">Enter benchmark times in your profile to see target paces.</p>
-                                  )}
-                                </li>
-                            ))
-                        ) : (
-                            (todaysWorkout.workout as Workout).exercises.map((ex) => (
-                                <li key={ex.name}>
-                                    <p className="font-medium">{ex.name}</p>
-                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{ex.details}</p>
-                                </li>
-                            ))
+                        {workoutHasRuns && todaysWorkout.workout.runs.map((run: PlannedRun) => (
+                            <li key={run.description}>
+                              <p className="font-medium">{run.description}</p>
+                              {trainingPaces ? (
+                                  <p className="text-sm text-muted-foreground">
+                                      Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
+                                  </p>
+                              ) : (
+                                  <p className="text-sm text-yellow-600">Enter benchmark times in your profile to see target paces.</p>
+                              )}
+                            </li>
+                        ))}
+                        {workoutHasRuns && workoutHasExercises && (
+                            <li><Separator /></li>
                         )}
+                        {workoutHasExercises && todaysWorkout.workout.exercises.map((ex) => (
+                            <li key={ex.name}>
+                                <p className="font-medium">{ex.name}</p>
+                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{ex.details}</p>
+                            </li>
+                        ))}
                       </ul>
                   </div>
               ) : (
