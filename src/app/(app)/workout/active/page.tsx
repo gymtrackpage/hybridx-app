@@ -1,4 +1,3 @@
-// src/app/(app)/workout/active/page.tsx
 'use client';
 
 import { useEffect, useState, useMemo, lazy, Suspense, useCallback } from 'react';
@@ -24,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { isRunningWorkout } from '@/lib/type-guards';
 import { ExerciseHistory } from '@/components/exercise-history';
 import { convertDistanceInText, convertTextWithUnits } from '@/lib/unit-conversion';
+import { WorkoutTimer } from '@/components/workout-timer';
 
 // Lazy load the modal component
 const WorkoutCompleteModal = lazy(() => import('@/components/workout-complete-modal'));
@@ -42,6 +42,7 @@ export default function ActiveWorkoutPage() {
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   const [exerciseChecklist, setExerciseChecklist] = useState<Record<string, boolean>>({});
   const [isOnline, setIsOnline] = useState(true);
+  const [showTimer, setShowTimer] = useState(false);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -72,7 +73,7 @@ export default function ActiveWorkoutPage() {
 
 
   const loadWorkoutSummary = async () => {
-    if (!user || !workoutInfo?.workout || summaryText || summaryLoading) return; 
+    if (!user || !workoutInfo?.workout || summaryText || summaryLoading) return;
 
     setSummaryLoading(true);
 
@@ -98,7 +99,6 @@ export default function ActiveWorkoutPage() {
       setSummaryText(summaryResult.summary);
     } catch (error) {
       console.error("Failed to generate AI workout summary:", error);
-      // Fall back to the workout title so "⏳ Enhancing..." never gets stuck on screen
       setSummaryText(workoutInfo?.workout?.title ?? '');
     } finally {
       setSummaryLoading(false);
@@ -114,7 +114,7 @@ export default function ActiveWorkoutPage() {
 
       return () => clearTimeout(timer);
     }
-  }, [user, workoutInfo, session, loading]); // Remove summaryText dependency to prevent loops, checks internal state
+  }, [user, workoutInfo, session, loading]);
 
   const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
     if (!session) return;
@@ -169,7 +169,7 @@ export default function ActiveWorkoutPage() {
         setIsExtending(false);
     }
   };
-  
+
   const handleFinishWorkout = async () => {
       if(!session || !workoutInfo?.workout) return;
       debouncedSaveNotes.flush();
@@ -233,7 +233,7 @@ export default function ActiveWorkoutPage() {
         </div>
     );
   }
-  
+
   if (!workoutInfo?.workout || !session) {
       return (
           <div className="text-center max-w-2xl mx-auto">
@@ -316,7 +316,7 @@ export default function ActiveWorkoutPage() {
                         </div>
                     )}
                 </div>
-                
+
                 {isRunning && !trainingPaces && (
                     <div className="p-4 border border-yellow-400 bg-yellow-50 rounded-md text-yellow-800 flex items-start gap-3">
                         <AlertTriangle className="h-5 w-5 mt-0.5" />
@@ -330,12 +330,20 @@ export default function ActiveWorkoutPage() {
                     </div>
                 )}
 
-                <Button asChild variant="secondary" className="w-full">
-                    <Link href="https://timer.hybridx.club/" target="_blank">
-                        <Timer className="mr-2" />
-                        Use the Timer
-                    </Link>
+                <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => setShowTimer((prev) => !prev)}
+                >
+                    <Timer className="mr-2" />
+                    {showTimer ? 'Hide Timer' : 'Use the Timer'}
                 </Button>
+
+                {showTimer && (
+                    <div className="rounded-lg border border-border bg-muted/20 p-4">
+                        <WorkoutTimer />
+                    </div>
+                )}
 
                 {!session.finishedAt && totalCount > 0 && (
                     <div className="space-y-1">
@@ -415,14 +423,14 @@ export default function ActiveWorkoutPage() {
                                  );
                             })
                         )}
-                        
+
                         {extendedExercises.length > 0 && (
                             <>
                                 <Separator />
                                 <h3 className="text-base font-semibold !mt-6">Workout Extension:</h3>
                             </>
                         )}
-                        
+
                         {extendedExercises.map((item, index) => {
                             const key = `ext-${index}`;
                             const isDone = !!exerciseChecklist[key];
