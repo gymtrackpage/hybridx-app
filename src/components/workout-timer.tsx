@@ -12,10 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
-type TimerMode = 'for-time' | 'amrap' | 'emom' | 'tabata' | 'reps';
-type TimerSet = { setNumber: number; duration: number };
-type Round = { roundNumber: number; sets: TimerSet[]; startTime: number; totalDuration: number };
+import type { TimerMode, TimerRound, TimerRecord } from '@/models/types';
 
 const generateTimeOptions = (): number[] => {
   const opts: number[] = [];
@@ -42,10 +39,13 @@ const fmtShort = (seconds: number): string => {
 const fmtOption = (seconds: number): string =>
   `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 
-export function WorkoutTimer() {
+interface WorkoutTimerProps {
+  onComplete?: (record: TimerRecord) => void;
+}
+
+export function WorkoutTimer({ onComplete }: WorkoutTimerProps = {}) {
   const [timerMode, setTimerMode] = useState<TimerMode>('for-time');
 
-  // Settings
   const [amrapDuration, setAmrapDuration] = useState(600);
   const [amrapRounds, setAmrapRounds] = useState(0);
   const [emomRounds, setEmomRounds] = useState(10);
@@ -54,25 +54,19 @@ export function WorkoutTimer() {
   const [tabataRest, setTabataRest] = useState(10);
   const [tabataRounds, setTabataRounds] = useState(8);
 
-  // Core state
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
-  // For-Time tracking
   const [currentSet, setCurrentSet] = useState(1);
   const [currentRound, setCurrentRound] = useState(1);
-  const [workoutLog, setWorkoutLog] = useState<Round[]>([]);
+  const [workoutLog, setWorkoutLog] = useState<TimerRound[]>([]);
   const [lastSplitTime, setLastSplitTime] = useState(0);
 
-  // Tabata state
   const [tabataPhase, setTabataPhase] = useState<'work' | 'rest'>('work');
   const [tabataCurrentRound, setTabataCurrentRound] = useState(1);
-
-  // EMOM state
   const [emomTime, setEmomTime] = useState(emomInterval);
 
-  // Reps state
   const [repCount, setRepCount] = useState(0);
   const [repMode, setRepMode] = useState<'count-up' | 'count-down'>('count-up');
   const [targetReps, setTargetReps] = useState(10);
@@ -81,7 +75,6 @@ export function WorkoutTimer() {
 
   const [summaryOpen, setSummaryOpen] = useState(false);
 
-  // Refs
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef(0);
@@ -107,7 +100,7 @@ export function WorkoutTimer() {
     const elapsed = Math.round(elapsedTimeRef.current / 1000);
     const duration = elapsed - lastSplitTime;
     setWorkoutLog((prev) => {
-      const log = JSON.parse(JSON.stringify(prev)) as Round[];
+      const log = JSON.parse(JSON.stringify(prev)) as TimerRound[];
       const idx = log.findIndex((r) => r.roundNumber === currentRound);
       if (idx > -1) {
         log[idx].sets.push({ setNumber: currentSet, duration });
@@ -118,13 +111,6 @@ export function WorkoutTimer() {
     setLastSplitTime(elapsed);
     onDone?.();
   }, [lastSplitTime, currentSet, currentRound]);
-
-  const handleComplete = useCallback(() => {
-    setIsRunning(false);
-    if (timerMode === 'for-time') logSet();
-    playSound('complete');
-    setSummaryOpen(true);
-  }, [timerMode, logSet]);
 
   const cancelCountdown = useCallback(() => {
     if (countdownRef.current) { clearTimeout(countdownRef.current); countdownRef.current = null; }
@@ -150,33 +136,52 @@ export function WorkoutTimer() {
   }, [timerMode, repMode, targetReps, emomInterval, cancelCountdown]);
 
   useEffect(() => { resetState(); }, [timerMode, resetState]);
-
-  useEffect(() => {
-    if (timerMode === 'emom') setEmomTime(emomInterval);
-  }, [emomInterval, emomRounds, timerMode]);
-
-  useEffect(() => {
-    if (timerMode === 'reps') setRepCount(repMode === 'count-up' ? 0 : targetReps);
-  }, [repMode, targetReps, timerMode]);
+  useEffect(() => { if (timerMode === 'emom') setEmomTime(emomInterval); }, [emomInterval, emomRounds, timerMode]);
+  useEffect(() => { if (timerMode === 'reps') setRepCount(repMode === 'count-up' ? 0 : targetReps); }, [repMode, targetReps, timerMode]);
 
   const emomTotal = emomRounds * emomInterval;
 
-  useEffect(() => {
-    if (!isRunning) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      return;
+  // Inline final-set logic so onComplete always receives the complete log
+  const handleComplete = useCallback(() => {
+    setIsRunning(false);
+    playSound('complete');
+    setSummaryOpen(true);
+
+    let finalLog = workoutLog;
+    if (timerMode === 'for-time') {
+      const elapsed = Math.round(elapsedTimeRef.current / 1000);
+      const duration = elapsed - lastSplitTime;
+      const newLog = JSON.parse(JSON.stringify(workoutLog)) as TimerRound[];
+      const idx = newLog.findIndex((r) => r.roundNumber === currentRound);
+      if (idx > -1) {
+        newLog[idx].sets.push({ setNumber: currentSet, duration });
+        newLog[idx].totalDuration = elapsed - newLog[idx].startTime;
+      }
+      finalLog = newLog;
+      setWorkoutLog(newLog);
+      setLastSplitTime(elapsed);
     }
+
+    onComplete?.({
+      timerMode,
+      totalTime: Math.round(elapsedTimeRef.current / 1000),
+      completedAt: new Date().toISOString(),
+      workoutLog: timerMode === 'for-time' ? finalLog : undefined,
+      amrapRounds: timerMode === 'amrap' ? amrapRounds : undefined,
+      repLog: timerMode === 'reps' ? repLog : undefined,
+    });
+  }, [timerMode, workoutLog, lastSplitTime, currentRound, currentSet, amrapRounds, repLog, onComplete]);
+
+  useEffect(() => {
+    if (!isRunning) { if (intervalRef.current) clearInterval(intervalRef.current); return; }
     intervalRef.current = setInterval(() => {
       const now = Date.now();
       elapsedTimeRef.current = now - startTimeRef.current;
       const elapsed = Math.floor(elapsedTimeRef.current / 1000);
       const lastElapsed = Math.floor((lastTickRef.current - startTimeRef.current) / 1000);
-
       if (elapsed > lastElapsed) {
         switch (timerMode) {
-          case 'for-time':
-            setTime(elapsed);
-            break;
+          case 'for-time': setTime(elapsed); break;
           case 'amrap': {
             const rem = amrapDuration - elapsed;
             setTime(rem);
@@ -185,8 +190,7 @@ export function WorkoutTimer() {
             break;
           }
           case 'emom': {
-            const intervalTime = elapsed % emomInterval;
-            const newEmomTime = emomInterval - intervalTime;
+            const newEmomTime = emomInterval - (elapsed % emomInterval);
             if (newEmomTime !== emomTime) {
               setEmomTime(newEmomTime);
               if (newEmomTime === 3) playSound('countdown');
@@ -221,14 +225,9 @@ export function WorkoutTimer() {
 
   const handleStartStop = useCallback(() => {
     if (countdown > 0) { cancelCountdown(); return; }
-    if (isRunning) {
-      elapsedTimeRef.current = Date.now() - startTimeRef.current;
-      setIsRunning(false);
-      return;
-    }
+    if (isRunning) { elapsedTimeRef.current = Date.now() - startTimeRef.current; setIsRunning(false); return; }
     const doStart = () => {
-      setCountdown(0);
-      setIsRunning(true);
+      setCountdown(0); setIsRunning(true);
       startTimeRef.current = Date.now() - elapsedTimeRef.current;
       lastTickRef.current = Date.now();
       if (elapsedTimeRef.current === 0 && timerMode === 'for-time') {
@@ -238,17 +237,11 @@ export function WorkoutTimer() {
     if (elapsedTimeRef.current === 0) {
       playSound('countdown');
       const sequence = (n: number) => {
-        if (n > 0) {
-          setCountdown(n);
-          countdownRef.current = setTimeout(() => sequence(n - 1), 1000);
-        } else {
-          doStart();
-        }
+        if (n > 0) { setCountdown(n); countdownRef.current = setTimeout(() => sequence(n - 1), 1000); }
+        else doStart();
       };
       sequence(3);
-    } else {
-      doStart();
-    }
+    } else { doStart(); }
   }, [isRunning, countdown, timerMode, cancelCountdown]);
 
   const handleNextSet = useCallback(() => {
@@ -261,21 +254,13 @@ export function WorkoutTimer() {
     const elapsed = Math.round(elapsedTimeRef.current / 1000);
     logSet(() => {
       const next = currentRound + 1;
-      setCurrentRound(next);
-      setCurrentSet(1);
-      setLastSplitTime(elapsed);
-      setWorkoutLog((prev) => [
-        ...prev,
-        { roundNumber: next, sets: [], startTime: elapsed, totalDuration: 0 },
-      ]);
+      setCurrentRound(next); setCurrentSet(1); setLastSplitTime(elapsed);
+      setWorkoutLog((prev) => [...prev, { roundNumber: next, sets: [], startTime: elapsed, totalDuration: 0 }]);
     });
   }, [currentRound, isRunning, logSet]);
 
   const handleAmrapRound = () => { if (isRunning) setAmrapRounds((r) => r + 1); };
-
-  const handleRepCounter = (dir: 'up' | 'down') =>
-    setRepCount((c) => (dir === 'up' ? c + 1 : Math.max(0, c - 1)));
-
+  const handleRepCounter = (dir: 'up' | 'down') => setRepCount((c) => dir === 'up' ? c + 1 : Math.max(0, c - 1));
   const handleNextRepSet = () => {
     setRepLog((prev) => [...prev, { set: currentRepSet, reps: repCount }]);
     setCurrentRepSet((s) => s + 1);
@@ -287,17 +272,11 @@ export function WorkoutTimer() {
   const nonEmptyRounds = workoutLog.filter((r) => r.sets.length > 0);
 
   const renderDisplay = () => {
-    if (isCountingDown) return (
-      <p className="text-8xl font-bold tabular-nums text-primary">{countdown}</p>
-    );
-    if (timerMode === 'amrap') return (
-      <p className="text-6xl font-bold tabular-nums">{fmt(time)}</p>
-    );
+    if (isCountingDown) return <p className="text-8xl font-bold tabular-nums text-primary">{countdown}</p>;
+    if (timerMode === 'amrap') return <p className="text-6xl font-bold tabular-nums">{fmt(time)}</p>;
     if (timerMode === 'tabata') return (
       <div className="text-center space-y-1">
-        <p className={`text-3xl font-bold uppercase tracking-widest ${
-          tabataPhase === 'work' ? 'text-red-500' : 'text-green-500'
-        }`}>{tabataPhase}</p>
+        <p className={`text-3xl font-bold uppercase tracking-widest ${tabataPhase === 'work' ? 'text-red-500' : 'text-green-500'}`}>{tabataPhase}</p>
         <p className="text-6xl font-bold tabular-nums">{fmtShort(time)}</p>
         <p className="text-lg text-muted-foreground">Round {tabataCurrentRound} / {tabataRounds}</p>
       </div>
@@ -325,9 +304,7 @@ export function WorkoutTimer() {
           <TabsTrigger value="tabata" className="text-xs px-1">Tabata</TabsTrigger>
           <TabsTrigger value="reps" className="text-xs px-1">Reps</TabsTrigger>
         </TabsList>
-
         <TabsContent value="for-time" />
-
         <TabsContent value="amrap">
           <Card><CardContent className="p-3 space-y-2">
             <Label className="text-xs text-muted-foreground">Duration</Label>
@@ -337,7 +314,6 @@ export function WorkoutTimer() {
             </Select>
           </CardContent></Card>
         </TabsContent>
-
         <TabsContent value="emom">
           <Card><CardContent className="p-3 space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -356,7 +332,6 @@ export function WorkoutTimer() {
             <p className="text-xs text-center text-muted-foreground">Total: {fmt(emomRounds * emomInterval)}</p>
           </CardContent></Card>
         </TabsContent>
-
         <TabsContent value="tabata">
           <Card><CardContent className="p-3">
             <div className="grid grid-cols-3 gap-3">
@@ -373,19 +348,12 @@ export function WorkoutTimer() {
             </div>
           </CardContent></Card>
         </TabsContent>
-
         <TabsContent value="reps">
           <div className="space-y-3">
             <Card><CardContent className="p-3 space-y-3">
               <RadioGroup value={repMode} onValueChange={(v) => setRepMode(v as 'count-up' | 'count-down')} className="flex justify-around">
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="count-up" id="rep-up" />
-                  <Label htmlFor="rep-up" className="text-sm">Count Up</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem value="count-down" id="rep-dn" />
-                  <Label htmlFor="rep-dn" className="text-sm">Count Down</Label>
-                </div>
+                <div className="flex items-center gap-2"><RadioGroupItem value="count-up" id="rep-up" /><Label htmlFor="rep-up" className="text-sm">Count Up</Label></div>
+                <div className="flex items-center gap-2"><RadioGroupItem value="count-down" id="rep-dn" /><Label htmlFor="rep-dn" className="text-sm">Count Down</Label></div>
               </RadioGroup>
               {repMode === 'count-down' && (
                 <div className="space-y-1">
@@ -395,12 +363,8 @@ export function WorkoutTimer() {
               )}
             </CardContent></Card>
             <Card>
-              <CardHeader className="pb-1 pt-3">
-                <CardTitle className="text-center text-sm text-muted-foreground">Set {currentRepSet}</CardTitle>
-              </CardHeader>
-              <CardContent className="text-center py-2">
-                <p className="text-8xl font-bold tabular-nums">{repCount}</p>
-              </CardContent>
+              <CardHeader className="pb-1 pt-3"><CardTitle className="text-center text-sm text-muted-foreground">Set {currentRepSet}</CardTitle></CardHeader>
+              <CardContent className="text-center py-2"><p className="text-8xl font-bold tabular-nums">{repCount}</p></CardContent>
               <CardFooter className="grid grid-cols-2 gap-3 pb-3">
                 <Button size="lg" variant="outline" onClick={() => handleRepCounter('down')} className="h-14"><Minus /></Button>
                 <Button size="lg" variant="outline" onClick={() => handleRepCounter('up')} className="h-14"><Plus /></Button>
@@ -426,9 +390,7 @@ export function WorkoutTimer() {
       {timerMode !== 'reps' && (
         <>
           <Card className="border-accent/40">
-            <CardContent className="flex flex-col items-center justify-center py-6 min-h-[140px]">
-              {renderDisplay()}
-            </CardContent>
+            <CardContent className="flex flex-col items-center justify-center py-6 min-h-[140px]">{renderDisplay()}</CardContent>
             <CardFooter className="grid grid-cols-2 gap-3 pb-4">
               <Button size="lg" variant={isRunning || isCountingDown ? 'destructive' : 'default'} onClick={handleStartStop} className="flex items-center gap-2 h-11">
                 {isRunning ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
@@ -439,18 +401,11 @@ export function WorkoutTimer() {
               </Button>
             </CardFooter>
           </Card>
-
           {timerMode === 'for-time' && (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <Card><CardContent className="py-3 text-center">
-                  <p className="text-xs text-muted-foreground">Round</p>
-                  <p className="text-5xl font-bold tabular-nums">{currentRound}</p>
-                </CardContent></Card>
-                <Card><CardContent className="py-3 text-center">
-                  <p className="text-xs text-muted-foreground">Set</p>
-                  <p className="text-5xl font-bold tabular-nums">{currentSet}</p>
-                </CardContent></Card>
+                <Card><CardContent className="py-3 text-center"><p className="text-xs text-muted-foreground">Round</p><p className="text-5xl font-bold tabular-nums">{currentRound}</p></CardContent></Card>
+                <Card><CardContent className="py-3 text-center"><p className="text-xs text-muted-foreground">Set</p><p className="text-5xl font-bold tabular-nums">{currentSet}</p></CardContent></Card>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Button size="lg" onClick={handleNextSet} disabled={!isRunning} className="h-11 font-semibold">Next Set</Button>
@@ -458,22 +413,15 @@ export function WorkoutTimer() {
               </div>
             </>
           )}
-
           {timerMode === 'amrap' && (
             <>
-              <Card><CardContent className="py-3 text-center">
-                <p className="text-xs text-muted-foreground">Rounds Completed</p>
-                <p className="text-5xl font-bold tabular-nums">{amrapRounds}</p>
-              </CardContent></Card>
+              <Card><CardContent className="py-3 text-center"><p className="text-xs text-muted-foreground">Rounds Completed</p><p className="text-5xl font-bold tabular-nums">{amrapRounds}</p></CardContent></Card>
               <Button size="lg" onClick={handleAmrapRound} disabled={!isRunning} className="w-full h-11 font-semibold flex items-center gap-2">
                 <CheckCircle className="h-5 w-5" />Log Round
               </Button>
             </>
           )}
-
-          <Button variant="outline" className="w-full" disabled={!hasData} onClick={handleComplete}>
-            Complete &amp; View Summary
-          </Button>
+          <Button variant="outline" className="w-full" disabled={!hasData} onClick={handleComplete}>Complete &amp; View Summary</Button>
         </>
       )}
 
