@@ -15,15 +15,15 @@ export interface PersonalRecords {
   run1k?: string;
   run5k?: string;
   run10k?: string;
-  [key: string]: string | undefined; // For flexible additional records
+  [key: string]: string | undefined;
 }
 
 export interface UserRunningProfile {
   benchmarkPaces: {
-    mile?: number;      // total time in seconds
-    fiveK?: number;     // total time in seconds
-    tenK?: number;      // total time in seconds
-    halfMarathon?: number; // total time in seconds
+    mile?: number;
+    fiveK?: number;
+    tenK?: number;
+    halfMarathon?: number;
   };
   injuryHistory?: string[];
 }
@@ -40,16 +40,14 @@ export interface User {
   experience: 'beginner' | 'intermediate' | 'advanced';
   frequency: '3' | '4' | '5+';
   goal: 'strength' | 'endurance' | 'hybrid';
-  unitSystem?: UnitSystem; // Preference for metric vs imperial
+  unitSystem?: UnitSystem;
   programId?: string | null;
   startDate?: Date;
   personalRecords?: PersonalRecords;
   runningProfile?: UserRunningProfile;
   strava?: StravaTokens;
   lastStravaSync?: Date;
-  // AI-adjusted program for the user
   customProgram?: (Workout | RunningWorkout)[] | null;
-  // Subscription fields
   isAdmin?: boolean;
   subscriptionStatus?: SubscriptionStatus;
   stripeCustomerId?: string;
@@ -57,8 +55,7 @@ export interface User {
   trialStartDate?: Date;
   cancel_at_period_end?: boolean;
   cancellation_effective_date?: Date;
-  completedWorkouts?: number; // Added for admin view
-  // Notification preferences
+  completedWorkouts?: number;
   notificationTime?: { hour: number; minute: number };
 }
 
@@ -78,40 +75,66 @@ export interface RunningProgram extends Omit<Program, 'workouts'> {
   workouts: RunningWorkout[];
 }
 
-
 export interface Workout {
   day: number;
   title: string;
   exercises: Exercise[];
-  programType: 'hyrox'; // Explicitly hyrox for this type
+  programType: 'hyrox';
 }
 
 export interface RunningWorkout {
   day: number;
   title: string;
   runs: PlannedRun[];
-  programType: 'running'; // Explicitly running for this type
+  programType: 'running';
   targetRace?: 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon';
-  exercises: []; // To satisfy base type if needed, but should be empty
+  exercises: [];
 }
 
 export type PaceZone = 'recovery' | 'easy' | 'marathon' | 'threshold' | 'interval' | 'repetition';
 
 export interface PlannedRun {
   type: 'easy' | 'tempo' | 'intervals' | 'long' | 'recovery';
-  distance: number; // kilometers
+  distance: number;
   paceZone: PaceZone;
   description: string;
-  targetPace?: number; // calculated automatically in seconds per kilometer
+  targetPace?: number;
   effortLevel: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   noIntervals?: number;
 }
-
 
 export interface Exercise {
   name: string;
   details: string;
 }
+
+// ── Timer types ───────────────────────────────────────────────────────────────
+
+export type TimerMode = 'for-time' | 'amrap' | 'emom' | 'tabata' | 'reps';
+
+export interface TimerSet {
+  setNumber: number;
+  duration: number; // seconds
+}
+
+export interface TimerRound {
+  roundNumber: number;
+  sets: TimerSet[];
+  startTime: number;   // seconds elapsed when round started
+  totalDuration: number; // seconds
+}
+
+/** Persisted timer result saved onto a WorkoutSession */
+export interface TimerRecord {
+  timerMode: TimerMode;
+  totalTime: number;   // seconds
+  completedAt: string; // ISO date string
+  workoutLog?: TimerRound[];               // For Time: round/set splits
+  amrapRounds?: number;                    // AMRAP: rounds completed
+  repLog?: { set: number; reps: number }[]; // Reps: per-set counts
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface WorkoutSession {
     id: string;
@@ -123,23 +146,18 @@ export interface WorkoutSession {
     startedAt: Date;
     finishedAt?: Date;
     notes?: string;
-    duration?: string; // Optional duration for custom workouts
-    extendedExercises?: Exercise[]; // AI-generated exercises
-    skipped?: boolean; // Flag to indicate if workout was skipped
-
-    // Details of the workout that was performed, for sessions not linked to a program
+    duration?: string;
+    extendedExercises?: Exercise[];
+    skipped?: boolean;
     workoutDetails?: Workout | RunningWorkout;
-
-    // Per-exercise checklist for ticking off exercises during a workout
     exerciseChecklist?: Record<string, boolean>;
-
-    // Strava integration fields
+    timerRecord?: TimerRecord;
     stravaId?: string;
     uploadedToStrava?: boolean;
     stravaUploadedAt?: Date;
-    stravaActivity?: { // Store key details from the linked activity
-        distance?: number; // in meters
-        moving_time?: number; // in seconds
+    stravaActivity?: {
+        distance?: number;
+        moving_time?: number;
         name?: string;
     };
 }
@@ -147,8 +165,8 @@ export interface WorkoutSession {
 export interface Article {
   id: string;
   title: string;
-  content: string; // The full article content in Markdown format
-  prompt: string; // The user's original search query
-  tags: string[]; // Keywords for searching
+  content: string;
+  prompt: string;
+  tags: string[];
   createdAt: Date;
 }
