@@ -61,7 +61,8 @@ service cloud.firestore {
 
     match /journalEntries/{entryId} {
       allow get, list: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create, update, delete: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow create, update: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
   }
 }
