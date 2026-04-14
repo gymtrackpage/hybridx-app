@@ -13,13 +13,13 @@ export const primaryNavItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/calendar', icon: Calendar, label: 'Calendar' },
   { href: '/workout/active', icon: CustomWorkoutIcon, label: 'Workout', isCentral: true },
-  { href: '/assistant', icon: Sparkles, label: 'Edge Coach' },
+  { href: '/journal', icon: BookMarked, label: 'Journal' },
   { href: '/profile', icon: User, label: 'Profile' },
 ];
 
 // Secondary content-focused items
 export const secondaryNavItems = [
-  { href: '/journal', icon: BookMarked, label: 'Journal' },
+  { href: '/assistant', icon: Sparkles, label: 'Edge Coach' },
   { href: '/history', icon: History, label: 'History' },
   { href: '/activity-feed', icon: Activity, label: 'Activity Feed' },
   { href: '/articles', icon: Newspaper, label: 'Articles' },
