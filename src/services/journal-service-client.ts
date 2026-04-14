@@ -125,11 +125,12 @@ export async function getUserJournalEntries(
   const q = query(
     journalCollection,
     where('userId', '==', userId),
-    orderBy('date', 'desc'),
     limit(limitCount)
   );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(d => fromFirestore(d as QueryDocumentSnapshot<DocumentData>));
+  const entries = snapshot.docs.map(d => fromFirestore(d as QueryDocumentSnapshot<DocumentData>));
+  // Sort client-side to avoid requiring a composite Firestore index
+  return entries.sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
 export async function getPaginatedJournalEntries(
@@ -137,17 +138,17 @@ export async function getPaginatedJournalEntries(
   pageSize = 20,
   lastDoc: QueryDocumentSnapshot<DocumentData> | null = null
 ): Promise<PaginatedJournalEntries> {
+  // Query without orderBy to avoid requiring a composite index.
+  // We fetch pageSize+1 docs (using cursor if paginating) and sort client-side.
   let q = query(
     journalCollection,
     where('userId', '==', userId),
-    orderBy('date', 'desc'),
     limit(pageSize + 1)
   );
   if (lastDoc) {
     q = query(
       journalCollection,
       where('userId', '==', userId),
-      orderBy('date', 'desc'),
       startAfter(lastDoc),
       limit(pageSize + 1)
     );
@@ -155,10 +156,13 @@ export async function getPaginatedJournalEntries(
   const snapshot = await getDocs(q);
   const docs = snapshot.docs as QueryDocumentSnapshot<DocumentData>[];
   const hasMore = docs.length > pageSize;
-  const entries = docs.slice(0, pageSize).map(d => fromFirestore(d));
+  const entries = docs
+    .slice(0, pageSize)
+    .map(d => fromFirestore(d))
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
   return {
     entries,
-    lastDoc: entries.length > 0 ? docs[entries.length - 1] : null,
+    lastDoc: docs.length > 0 ? docs[Math.min(docs.length, pageSize) - 1] : null,
     hasMore,
   };
 }
