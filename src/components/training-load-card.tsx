@@ -1,15 +1,12 @@
 'use client';
 // src/components/training-load-card.tsx
 // Dashboard card that shows ATL/CTL/TSB training load metrics derived from Strava activities,
-// a weekly activity-type breakdown chart, and an AI-powered holistic training analysis.
+// and a weekly activity-type breakdown chart. Links to /training for the full report.
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { getAuthInstance } from '@/lib/firebase';
 import type { TrainingSummary, ActivityCategory } from '@/services/training-load-service';
-import { formatTrainingSummaryForAI } from '@/services/training-load-service';
-import { analyzeTrainingLoad } from '@/ai/flows/training-load-analysis';
-import type { TrainingLoadAnalysisOutput } from '@/ai/flows/training-load-analysis';
-import type { User } from '@/models/types';
 import {
   Card,
   CardContent,
@@ -21,13 +18,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
-import {
   ChartContainer,
   BarChart as RechartsBarChart,
   Bar,
@@ -37,7 +27,7 @@ import {
   ChartTooltipContent,
   CartesianGrid,
 } from '@/components/ui/chart';
-import { Activity, Brain, AlertTriangle, TrendingUp, TrendingDown, Minus, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, Brain, AlertTriangle, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Colours per activity category for the stacked bar chart
@@ -79,19 +69,11 @@ function TsbIcon({ tsb }: { tsb: number }) {
   return <Minus className="h-4 w-4 text-muted-foreground" />;
 }
 
-interface TrainingLoadCardProps {
-  user: User;
-}
-
-export function TrainingLoadCard({ user }: TrainingLoadCardProps) {
+export function TrainingLoadCard() {
   const [summary, setSummary] = useState<TrainingSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // AI analysis state
-  const [aiAnalysis, setAiAnalysis] = useState<TrainingLoadAnalysisOutput | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
 
   const fetchSummary = useCallback(async () => {
@@ -132,27 +114,6 @@ export function TrainingLoadCard({ user }: TrainingLoadCardProps) {
   useEffect(() => {
     fetchSummary();
   }, [fetchSummary]);
-
-  const handleAiAnalysis = async () => {
-    if (!summary) return;
-    setAiDialogOpen(true);
-    if (aiAnalysis) return; // already fetched
-
-    setAiLoading(true);
-    try {
-      const summaryText = formatTrainingSummaryForAI(summary);
-      const result = await analyzeTrainingLoad({
-        userName: user.firstName,
-        userGoal: user.goal,
-        trainingSummaryText: summaryText,
-      });
-      setAiAnalysis(result);
-    } catch (err: any) {
-      console.error('AI training analysis failed:', err);
-    } finally {
-      setAiLoading(false);
-    }
-  };
 
   // Build chart data from weeklyBreakdown
   const chartData = summary?.weeklyBreakdown.map(week => {
@@ -301,99 +262,15 @@ export function TrainingLoadCard({ user }: TrainingLoadCardProps) {
             </div>
           )}
 
-          {/* AI Analysis CTA */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full"
-            onClick={handleAiAnalysis}
-          >
-            <Brain className="mr-2 h-4 w-4" />
-            AI Training Analysis
+          {/* View Full Report CTA */}
+          <Button variant="outline" size="sm" className="w-full" asChild>
+            <Link href="/training">
+              <Brain className="mr-2 h-4 w-4" />
+              View Full Report
+            </Link>
           </Button>
         </CardContent>
       </Card>
-
-      {/* AI Analysis Dialog */}
-      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Brain className="h-5 w-5" />
-              Holistic Training Analysis
-            </DialogTitle>
-            <DialogDescription>
-              AI-powered insights based on your Strava training data.
-            </DialogDescription>
-          </DialogHeader>
-
-          {aiLoading ? (
-            <div className="space-y-3 py-4">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-5/6" />
-              <Skeleton className="h-4 w-4/6" />
-              <Skeleton className="h-4 w-full mt-4" />
-              <Skeleton className="h-4 w-3/4" />
-            </div>
-          ) : aiAnalysis ? (
-            <div className="space-y-5 text-sm">
-              {/* Fatigue assessment */}
-              <section>
-                <h3 className="font-semibold text-sm mb-1 flex items-center gap-1">
-                  <TsbIcon tsb={loadMetrics.tsb} /> Fatigue & Readiness
-                </h3>
-                <p className="text-muted-foreground leading-relaxed">{aiAnalysis.fatigueAssessment}</p>
-              </section>
-
-              {/* Training balance */}
-              <section>
-                <h3 className="font-semibold text-sm mb-1">Training Balance</h3>
-                <p className="text-muted-foreground leading-relaxed">{aiAnalysis.trainingBalance}</p>
-              </section>
-
-              {/* Week ahead */}
-              <section>
-                <h3 className="font-semibold text-sm mb-1">Week Ahead</h3>
-                <p className="text-muted-foreground leading-relaxed">{aiAnalysis.weekAhead}</p>
-              </section>
-
-              {/* Recommendations */}
-              {aiAnalysis.recommendations.length > 0 && (
-                <section>
-                  <h3 className="font-semibold text-sm mb-2">Recommendations</h3>
-                  <ul className="space-y-1.5">
-                    {aiAnalysis.recommendations.map((rec, i) => (
-                      <li key={i} className="flex gap-2 text-muted-foreground">
-                        <span className="text-primary font-bold shrink-0">{i + 1}.</span>
-                        <span className="leading-snug">{rec}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              {/* Risk flags */}
-              {aiAnalysis.riskFlags.length > 0 && (
-                <section>
-                  <h3 className="font-semibold text-sm mb-2 text-orange-700 flex items-center gap-1">
-                    <AlertTriangle className="h-4 w-4" /> Flags to Watch
-                  </h3>
-                  <ul className="space-y-1.5">
-                    {aiAnalysis.riskFlags.map((flag, i) => (
-                      <li key={i} className="flex gap-2 text-orange-700 bg-orange-50 border border-orange-200 rounded p-2">
-                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                        <span className="leading-snug text-xs">{flag}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground py-4">Analysis unavailable. Please try again.</p>
-          )}
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

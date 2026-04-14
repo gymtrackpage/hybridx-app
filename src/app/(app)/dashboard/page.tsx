@@ -579,7 +579,7 @@ export default function DashboardPage() {
             {/* Training Load Card — shown when Strava is connected */}
             {isStravaConnected && user && (
               <Suspense fallback={<Skeleton className="h-48 w-full rounded-xl" />}>
-                <TrainingLoadCard user={user} />
+                <TrainingLoadCard />
               </Suspense>
             )}
 
