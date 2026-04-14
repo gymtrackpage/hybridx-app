@@ -41,6 +41,9 @@ export type UpdateJournalEntryData = Partial<{
   tags: JournalTag[];
   aiInsight: string;
   aiInsightGeneratedAt: Date;
+  aiInterpretation: string;
+  aiCoachResponse: string;
+  aiAnalysisGeneratedAt: Date;
 }>;
 
 function fromFirestore(doc: QueryDocumentSnapshot<DocumentData>): JournalEntry {
@@ -57,6 +60,13 @@ function fromFirestore(doc: QueryDocumentSnapshot<DocumentData>): JournalEntry {
       ? data.aiInsightGeneratedAt instanceof Timestamp
         ? data.aiInsightGeneratedAt.toDate()
         : new Date(data.aiInsightGeneratedAt)
+      : undefined,
+    aiInterpretation: data.aiInterpretation,
+    aiCoachResponse: data.aiCoachResponse,
+    aiAnalysisGeneratedAt: data.aiAnalysisGeneratedAt
+      ? data.aiAnalysisGeneratedAt instanceof Timestamp
+        ? data.aiAnalysisGeneratedAt.toDate()
+        : new Date(data.aiAnalysisGeneratedAt)
       : undefined,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt),
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(data.updatedAt),
@@ -96,6 +106,10 @@ export async function updateJournalEntry(
   if (data.aiInsight !== undefined) updates.aiInsight = data.aiInsight;
   if (data.aiInsightGeneratedAt !== undefined)
     updates.aiInsightGeneratedAt = Timestamp.fromDate(data.aiInsightGeneratedAt);
+  if (data.aiInterpretation !== undefined) updates.aiInterpretation = data.aiInterpretation;
+  if (data.aiCoachResponse !== undefined) updates.aiCoachResponse = data.aiCoachResponse;
+  if (data.aiAnalysisGeneratedAt !== undefined)
+    updates.aiAnalysisGeneratedAt = Timestamp.fromDate(data.aiAnalysisGeneratedAt);
   await updateDoc(ref, updates);
 }
 

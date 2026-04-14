@@ -21,6 +21,7 @@ import { getProgramClient } from '@/services/program-service-client';
 import { getAllUserSessions } from '@/services/session-service-client';
 import { JournalEntryForm } from '@/components/journal-entry-form';
 import { JournalEntryCard } from '@/components/journal-entry-card';
+import { JournalTrendsCard } from '@/components/journal-trends-card';
 import type { JournalEntry } from '@/models/types';
 
 function JournalSkeleton() {
@@ -167,6 +168,11 @@ export default function JournalPage() {
         </div>
       ) : (
         <div className="space-y-4">
+          {/* Trends intelligence card — shown once athlete has at least 3 entries */}
+          {entries.length >= 3 && (
+            <JournalTrendsCard entries={entries} userData={userData} />
+          )}
+
           {entries.map(entry => (
             <JournalEntryCard
               key={entry.id}
