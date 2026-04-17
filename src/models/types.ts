@@ -170,3 +170,35 @@ export interface Article {
   tags: string[];
   createdAt: Date;
 }
+
+// ── Journal types ─────────────────────────────────────────────────────────────
+
+export type MoodLevel = 'great' | 'good' | 'okay' | 'tired' | 'struggling';
+
+export type JournalTag =
+  | 'form'
+  | 'mental'
+  | 'nutrition'
+  | 'achievement'
+  | 'challenge'
+  | 'recovery'
+  | 'motivation'
+  | 'technique'
+  | 'injury'
+  | 'progress';
+
+export interface JournalEntry {
+  id: string;
+  userId: string;
+  date: Date;                    // Date the athlete is journaling about (defaults to today)
+  content: string;               // Free-form journal text
+  mood?: MoodLevel;              // Optional mood indicator
+  tags?: JournalTag[];           // Optional category tags
+  aiInsight?: string;            // Legacy: combined AI insight (kept for backward compat)
+  aiInsightGeneratedAt?: Date;   // Legacy timestamp
+  aiInterpretation?: string;     // What the coach hears / reads between the lines
+  aiCoachResponse?: string;      // Direct coaching advice
+  aiAnalysisGeneratedAt?: Date;  // When the split analysis was last generated
+  createdAt: Date;
+  updatedAt: Date;
+}
