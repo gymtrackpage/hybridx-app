@@ -269,6 +269,91 @@ export function computeTrainingSummary(activities: StravaActivity[]): TrainingSu
   };
 }
 
+// ─── Daily PMC Time Series (EWMA) ────────────────────────────────────────────
+
+export interface PMCDataPoint {
+  /** ISO date string (YYYY-MM-DD) */
+  date: string;
+  /** Daily training load (sum of all activities that day) */
+  load: number;
+  /** Acute Training Load — 7-day EWMA (fatigue) */
+  atl: number;
+  /** Chronic Training Load — 42-day EWMA (fitness) */
+  ctl: number;
+  /** Training Stress Balance = CTL − ATL (form) */
+  tsb: number;
+}
+
+/**
+ * Compute a daily PMC time series using exponentially weighted moving averages.
+ * This is the standard approach used by TrainingPeaks, Golden Cheetah, etc.
+ *
+ * EWMA formula: new_value = old_value + (daily_load − old_value) × (1 / time_constant)
+ * - ATL time constant = 7 days
+ * - CTL time constant = 42 days
+ * - TSB = yesterday's CTL − yesterday's ATL
+ *
+ * Returns one data point per day, covering the full date range of activities
+ * (minimum 60 days to allow CTL to stabilise).
+ */
+export function computeDailyPMC(activities: StravaActivity[], numDays = 90): PMCDataPoint[] {
+  const ATL_TC = 7;
+  const CTL_TC = 42;
+
+  // Build a map of date → total daily load
+  const dailyLoad = new Map<string, number>();
+  for (const act of activities) {
+    const dateKey = new Date(act.start_date).toISOString().slice(0, 10);
+    const load = estimateActivityLoad(act);
+    dailyLoad.set(dateKey, (dailyLoad.get(dateKey) || 0) + load);
+  }
+
+  // Generate a continuous date range for the last N days
+  const now = new Date();
+  const startDate = new Date(now);
+  startDate.setDate(now.getDate() - numDays);
+
+  const points: PMCDataPoint[] = [];
+  let atl = 0;
+  let ctl = 0;
+
+  for (let d = new Date(startDate); d <= now; d.setDate(d.getDate() + 1)) {
+    const dateKey = d.toISOString().slice(0, 10);
+    const load = dailyLoad.get(dateKey) || 0;
+
+    // EWMA update
+    atl = atl + (load - atl) * (1 / ATL_TC);
+    ctl = ctl + (load - ctl) * (1 / CTL_TC);
+    const tsb = ctl - atl;
+
+    points.push({
+      date: dateKey,
+      load: Math.round(load),
+      atl: Math.round(atl * 10) / 10,
+      ctl: Math.round(ctl * 10) / 10,
+      tsb: Math.round(tsb * 10) / 10,
+    });
+  }
+
+  return points;
+}
+
+/** Extended training summary that includes the daily PMC time series */
+export interface TrainingFormSummary extends TrainingSummary {
+  dailyPMC: PMCDataPoint[];
+}
+
+export function computeTrainingFormSummary(activities: StravaActivity[]): TrainingFormSummary {
+  const sorted = [...activities].sort(
+    (a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+  );
+
+  return {
+    ...computeTrainingSummary(sorted),
+    dailyPMC: computeDailyPMC(sorted, 90),
+  };
+}
+
 // ─── AI-friendly text summary ─────────────────────────────────────────────────
 
 /** Renders training summary as a readable string for injection into AI prompts. */
