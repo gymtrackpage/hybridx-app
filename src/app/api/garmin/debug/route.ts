@@ -17,61 +17,63 @@ export async function GET(req: NextRequest) {
   const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
   const accessToken = await getValidGarminToken(decoded.uid);
 
-  // sport:"RUNNING" works at top level. Now find the correct segment + step format.
-  const execStep = {
-    stepOrder: 1,
-    stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
-    durationType: { durationTypeId: 1, durationTypeKey: 'time' },
-    durationValue: 1800,
-    targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
-  };
+  // sport:"RUNNING" works. Step objects are parsed as null — test step field formats.
+  const seg = (workoutSteps: any[]) => ({
+    workoutSegments: [{ segmentOrder: 1, workoutSteps }],
+  });
 
   const payloadVariants = [
     {
-      label: 'segment-sport-string',
+      // All string-enum step fields + stepId
+      label: 'string-enums+stepId',
       payload: {
-        workoutName: 'HybridX A',
-        sport: 'RUNNING',
-        estimatedDurationInSecs: 1800,
-        workoutSegments: [{
-          segmentOrder: 1,
-          sport: 'RUNNING',
-          workoutSteps: [execStep],
-        }],
+        workoutName: 'HybridX A', sport: 'RUNNING', estimatedDurationInSecs: 1800,
+        ...seg([{
+          stepId: 0, stepOrder: 1,
+          stepType: 'INTERVAL',
+          durationType: 'TIME', durationValue: 1800,
+          targetType: 'NO_TARGET',
+        }]),
       },
     },
     {
-      label: 'segment-no-sport-field',
+      // Object enums + stepId (Garmin Connect web-app format)
+      label: 'object-enums+stepId',
       payload: {
-        workoutName: 'HybridX B',
-        sport: 'RUNNING',
-        estimatedDurationInSecs: 1800,
-        workoutSegments: [{
-          segmentOrder: 1,
-          workoutSteps: [execStep],
-        }],
+        workoutName: 'HybridX B', sport: 'RUNNING', estimatedDurationInSecs: 1800,
+        ...seg([{
+          stepId: 0, stepOrder: 1,
+          stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
+          durationType: { durationTypeId: 1, durationTypeKey: 'time' },
+          durationValue: 1800,
+          targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
+        }]),
       },
     },
     {
-      label: 'segment-sportType-obj',
+      // String enums, no stepId
+      label: 'string-enums-no-stepId',
       payload: {
-        workoutName: 'HybridX C',
-        sport: 'RUNNING',
-        estimatedDurationInSecs: 1800,
-        workoutSegments: [{
-          segmentOrder: 1,
-          sportType: { sportTypeId: 1, sportTypeKey: 'running' },
-          workoutSteps: [execStep],
-        }],
+        workoutName: 'HybridX C', sport: 'RUNNING', estimatedDurationInSecs: 1800,
+        ...seg([{
+          stepOrder: 1,
+          stepType: 'INTERVAL',
+          durationType: 'TIME', durationValue: 1800,
+          targetType: 'NO_TARGET',
+        }]),
       },
     },
     {
-      label: 'no-segments-flat-steps',
+      // Minimal: only required-looking fields
+      label: 'minimal-step',
       payload: {
-        workoutName: 'HybridX D',
-        sport: 'RUNNING',
-        estimatedDurationInSecs: 1800,
-        workoutSteps: [execStep],
+        workoutName: 'HybridX D', sport: 'RUNNING',
+        ...seg([{
+          stepId: 0, stepOrder: 1,
+          stepType: 'INTERVAL',
+          durationType: 'OPEN',
+          targetType: 'NO_TARGET',
+        }]),
       },
     },
   ];
