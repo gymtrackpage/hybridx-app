@@ -17,37 +17,63 @@ export async function GET(req: NextRequest) {
   const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
   const accessToken = await getValidGarminToken(decoded.uid);
 
-  // sport is a string enum at top level. Test the likely values.
-  // Steps: also test with and without the 'type' discriminant field.
-  const step = (withType: boolean) => ({
-    ...(withType ? { type: 'ExecutableStepDTO' } : {}),
+  // sport:"RUNNING" works at top level. Now find the correct segment + step format.
+  const execStep = {
     stepOrder: 1,
     stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
     durationType: { durationTypeId: 1, durationTypeKey: 'time' },
     durationValue: 1800,
     targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
-  });
-
-  const base = (sport: string, label: string, withType: boolean) => ({
-    label,
-    payload: {
-      workoutName: `HybridX Test (${label})`,
-      description: 'Test workout',
-      sport,
-      estimatedDurationInSecs: 1800,
-      workoutSegments: [{
-        segmentOrder: 1,
-        sportType: { sportTypeId: 1, sportTypeKey: 'running' },
-        workoutSteps: [step(withType)],
-      }],
-    },
-  });
+  };
 
   const payloadVariants = [
-    base('running',  'sport=running,  step+type',    true),
-    base('running',  'sport=running,  step-type',    false),
-    base('RUNNING',  'sport=RUNNING,  step-type',    false),
-    base('1',        'sport="1",      step-type',    false),
+    {
+      label: 'segment-sport-string',
+      payload: {
+        workoutName: 'HybridX A',
+        sport: 'RUNNING',
+        estimatedDurationInSecs: 1800,
+        workoutSegments: [{
+          segmentOrder: 1,
+          sport: 'RUNNING',
+          workoutSteps: [execStep],
+        }],
+      },
+    },
+    {
+      label: 'segment-no-sport-field',
+      payload: {
+        workoutName: 'HybridX B',
+        sport: 'RUNNING',
+        estimatedDurationInSecs: 1800,
+        workoutSegments: [{
+          segmentOrder: 1,
+          workoutSteps: [execStep],
+        }],
+      },
+    },
+    {
+      label: 'segment-sportType-obj',
+      payload: {
+        workoutName: 'HybridX C',
+        sport: 'RUNNING',
+        estimatedDurationInSecs: 1800,
+        workoutSegments: [{
+          segmentOrder: 1,
+          sportType: { sportTypeId: 1, sportTypeKey: 'running' },
+          workoutSteps: [execStep],
+        }],
+      },
+    },
+    {
+      label: 'no-segments-flat-steps',
+      payload: {
+        workoutName: 'HybridX D',
+        sport: 'RUNNING',
+        estimatedDurationInSecs: 1800,
+        workoutSteps: [execStep],
+      },
+    },
   ];
 
   const results: any[] = [];
