@@ -30,9 +30,15 @@ export async function getUser(userId: string): Promise<User | null> {
         if (!data) return null;
         
         // Correctly handle the nested expiresAt timestamp within the strava object
-        const stravaData = data.strava ? { 
-            ...data.strava, 
-            expiresAt: safeToDate(data.strava.expiresAt)! 
+        const stravaData = data.strava ? {
+            ...data.strava,
+            expiresAt: safeToDate(data.strava.expiresAt)!
+        } : undefined;
+
+        const garminData = data.garmin ? {
+            ...data.garmin,
+            expiresAt: safeToDate(data.garmin.expiresAt)!,
+            refreshExpiresAt: safeToDate(data.garmin.refreshExpiresAt),
         } : undefined;
 
         const user: User = {
@@ -49,6 +55,13 @@ export async function getUser(userId: string): Promise<User | null> {
             runningProfile: data.runningProfile || { benchmarkPaces: {} },
             strava: stravaData,
             lastStravaSync: safeToDate(data.lastStravaSync),
+            garmin: garminData,
+            garminConnectedAt: safeToDate(data.garminConnectedAt),
+            pendingGarminAuth: data.pendingGarminAuth,
+            garminPlanSync: data.garminPlanSync ? {
+                ...data.garminPlanSync,
+                lastSyncedAt: safeToDate(data.garminPlanSync.lastSyncedAt) || new Date(0),
+            } : undefined,
             customProgram: data.customProgram || null,
             isAdmin: data.isAdmin || false,
             subscriptionStatus: data.subscriptionStatus || 'trial',

@@ -8,6 +8,35 @@ export interface StravaTokens {
   athleteId: number;
 }
 
+export interface GarminTokens {
+  accessToken: string;
+  refreshToken: string;
+  /** Access-token expiry. */
+  expiresAt: Date;
+  /** Refresh-token expiry (Garmin issues a new one on each refresh). */
+  refreshExpiresAt?: Date;
+  /** Garmin user UUID returned by the user-id endpoint. Used to dedupe webhooks. */
+  garminUserId?: string;
+  scope?: string;
+  tokenType?: string;
+}
+
+/** Short-lived state stored on the user doc between /connect and /exchange. */
+export interface PendingGarminAuth {
+  codeVerifier: string;
+  state: string;
+  /** Epoch ms when the pending auth expires (10 minutes after creation). */
+  expiresAt: number;
+}
+
+/** Mapping of program day → Garmin workout id, so we can push updates / deletes. */
+export interface GarminPlanSync {
+  programId: string;
+  /** Map keyed by day number (as string for Firestore-friendly keys). */
+  workouts: Record<string, { workoutId: string; scheduledDate?: string }>;
+  lastSyncedAt: Date;
+}
+
 export interface PersonalRecords {
   backSquat?: string;
   deadlift?: string;
@@ -47,6 +76,10 @@ export interface User {
   runningProfile?: UserRunningProfile;
   strava?: StravaTokens;
   lastStravaSync?: Date;
+  garmin?: GarminTokens;
+  garminConnectedAt?: Date;
+  pendingGarminAuth?: PendingGarminAuth;
+  garminPlanSync?: GarminPlanSync;
   customProgram?: (Workout | RunningWorkout)[] | null;
   isAdmin?: boolean;
   subscriptionStatus?: SubscriptionStatus;

@@ -8,6 +8,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { Loader2, Link as LinkIcon, Bell, Settings } from 'lucide-react';
 import { ThemeSwitcher } from '@/components/theme-switcher';
+import { GarminIntegrationCard } from '@/components/garmin-integration-card';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -166,12 +167,27 @@ export default function ProfilePage() {
         
     } else if (stravaError) {
         const errorMessage = decodeURIComponent(stravaError);
-        toast({ 
-            title: 'Strava Connection Failed', 
-            description: errorMessage, 
-            variant: 'destructive' 
+        toast({
+            title: 'Strava Connection Failed',
+            description: errorMessage,
+            variant: 'destructive'
         });
         // Clean up URL
+        window.history.replaceState({}, '', '/profile');
+    }
+
+    const garminSuccess = urlParams.get('garmin');
+    const garminError = urlParams.get('garmin-error');
+    if (garminSuccess === 'success') {
+        toast({ title: 'Connected!', description: 'Garmin account linked successfully.' });
+        fetchUserData();
+        window.history.replaceState({}, '', '/profile');
+    } else if (garminError) {
+        toast({
+            title: 'Garmin Connection Failed',
+            description: decodeURIComponent(garminError),
+            variant: 'destructive',
+        });
         window.history.replaceState({}, '', '/profile');
     }
   }, [toast]);
@@ -374,6 +390,11 @@ export default function ProfilePage() {
                   </Button>
               </CardContent>
             </Card>
+
+            <GarminIntegrationCard
+              isConnected={!!user?.garmin?.accessToken}
+              onChange={fetchUserData}
+            />
 
             <Card>
                 <Form {...notificationForm}>

@@ -31,3 +31,7 @@ env:
     secret: GMAIL_USER
   - variable: GMAIL_APP_PASSWORD
     secret: GMAIL_APP_PASSWORD
+  - variable: GARMIN_CLIENT_ID
+    secret: GARMIN_CLIENT_ID
+  - variable: GARMIN_CLIENT_SECRET
+    secret: GARMIN_CLIENT_SECRET
