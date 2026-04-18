@@ -17,50 +17,37 @@ export async function GET(req: NextRequest) {
   const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
   const accessToken = await getValidGarminToken(decoded.uid);
 
-  // Minimal test payloads using different field name variants
-  const payloadVariants = [
-    {
-      label: 'sportType-top-level',
-      payload: {
-        workoutName: 'HybridX Test',
-        description: 'Test workout',
+  // sport is a string enum at top level. Test the likely values.
+  // Steps: also test with and without the 'type' discriminant field.
+  const step = (withType: boolean) => ({
+    ...(withType ? { type: 'ExecutableStepDTO' } : {}),
+    stepOrder: 1,
+    stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
+    durationType: { durationTypeId: 1, durationTypeKey: 'time' },
+    durationValue: 1800,
+    targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
+  });
+
+  const base = (sport: string, label: string, withType: boolean) => ({
+    label,
+    payload: {
+      workoutName: `HybridX Test (${label})`,
+      description: 'Test workout',
+      sport,
+      estimatedDurationInSecs: 1800,
+      workoutSegments: [{
+        segmentOrder: 1,
         sportType: { sportTypeId: 1, sportTypeKey: 'running' },
-        estimatedDurationInSecs: 1800,
-        workoutSegments: [{
-          segmentOrder: 1,
-          sportType: { sportTypeId: 1, sportTypeKey: 'running' },
-          workoutSteps: [{
-            type: 'ExecutableStepDTO',
-            stepOrder: 1,
-            stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
-            durationType: { durationTypeId: 1, durationTypeKey: 'time' },
-            durationValue: 1800,
-            targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
-          }],
-        }],
-      },
+        workoutSteps: [step(withType)],
+      }],
     },
-    {
-      label: 'sport-top-level',
-      payload: {
-        workoutName: 'HybridX Test 2',
-        description: 'Test workout',
-        sport: { sportTypeId: 1, sportTypeKey: 'running' },
-        estimatedDurationInSecs: 1800,
-        workoutSegments: [{
-          segmentOrder: 1,
-          sportType: { sportTypeId: 1, sportTypeKey: 'running' },
-          workoutSteps: [{
-            type: 'ExecutableStepDTO',
-            stepOrder: 1,
-            stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
-            durationType: { durationTypeId: 1, durationTypeKey: 'time' },
-            durationValue: 1800,
-            targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
-          }],
-        }],
-      },
-    },
+  });
+
+  const payloadVariants = [
+    base('running',  'sport=running,  step+type',    true),
+    base('running',  'sport=running,  step-type',    false),
+    base('RUNNING',  'sport=RUNNING,  step-type',    false),
+    base('1',        'sport="1",      step-type',    false),
   ];
 
   const results: any[] = [];
