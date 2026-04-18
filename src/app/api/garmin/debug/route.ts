@@ -22,65 +22,45 @@ export async function GET(_req: NextRequest) {
     workoutSegments: [{ segmentOrder: 1, workoutSteps }],
   });
 
-  // Round 1 showed sportType object on segment DID deserialize steps (error was "Sport cannot be null").
-  // Round 4 showed sport="RUNNING" string alone still got "Steps cannot be null".
-  // Hypothesis: Garmin needs BOTH sport string AND sportType object on the segment to route correctly.
-  const segWithSportType = (workoutSteps: any[]) => ({
-    workoutSegments: [{ segmentOrder: 1, sportType: { sportTypeId: 1, sportTypeKey: 'running' }, workoutSteps }],
-  });
+  const step = {
+    stepOrder: 1,
+    stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
+    durationType: { durationTypeId: 1, durationTypeKey: 'time' },
+    durationValue: 1800,
+    targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
+  };
 
   const payloadVariants = [
     {
-      // KEY TEST: sport string + sportType object on both workout and segment + ExecutableStepDTO
-      label: 'RUNNING+sportType-obj+segment-sportType+ExecutableStepDTO',
+      // No type discriminant at all — let Garmin infer from other fields
+      label: 'no-type-discriminant',
       payload: {
-        workoutName: 'HybridX A',
-        sport: 'RUNNING',
-        sportType: { sportTypeId: 1, sportTypeKey: 'running' },
-        estimatedDurationInSecs: 1800,
-        ...segWithSportType([{
-          type: 'ExecutableStepDTO',
-          stepOrder: 1,
-          stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
-          durationType: { durationTypeId: 1, durationTypeKey: 'time' },
-          durationValue: 1800,
-          targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
-        }]),
+        workoutName: 'HybridX A', sport: 'RUNNING', estimatedDurationInSecs: 1800,
+        ...seg([{ ...step, stepOrder: 1 }]),
       },
     },
     {
-      // Variant: sport string + sportType object on workout only (no segment sportType)
-      label: 'RUNNING+sportType-obj+no-segment-sportType+ExecutableStepDTO',
+      // @type (with @ sign) — some Jackson configs use this property name
+      label: '@type-discriminant',
       payload: {
-        workoutName: 'HybridX B',
-        sport: 'RUNNING',
-        sportType: { sportTypeId: 1, sportTypeKey: 'running' },
-        estimatedDurationInSecs: 1800,
-        ...seg([{
-          type: 'ExecutableStepDTO',
-          stepOrder: 1,
-          stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
-          durationType: { durationTypeId: 1, durationTypeKey: 'time' },
-          durationValue: 1800,
-          targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
-        }]),
+        workoutName: 'HybridX B', sport: 'RUNNING', estimatedDurationInSecs: 1800,
+        ...seg([{ '@type': 'ExecutableStepDTO', ...step }]),
       },
     },
     {
-      // Variant: segment sportType only (no top-level sportType), sport string only
-      label: 'RUNNING+no-top-sportType+segment-sportType+ExecutableStepDTO',
+      // workoutSteps at top level (not inside workoutSegments) — some API versions flatten this
+      label: 'top-level-workoutSteps-no-segments',
       payload: {
-        workoutName: 'HybridX C',
-        sport: 'RUNNING',
-        estimatedDurationInSecs: 1800,
-        ...segWithSportType([{
-          type: 'ExecutableStepDTO',
-          stepOrder: 1,
-          stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
-          durationType: { durationTypeId: 1, durationTypeKey: 'time' },
-          durationValue: 1800,
-          targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
-        }]),
+        workoutName: 'HybridX C', sport: 'RUNNING', estimatedDurationInSecs: 1800,
+        workoutSteps: [{ type: 'ExecutableStepDTO', ...step }],
+      },
+    },
+    {
+      // stepId: 1 (not 0) — Garmin may require non-zero stepId for deserialization
+      label: 'ExecutableStepDTO+stepId-1',
+      payload: {
+        workoutName: 'HybridX D', sport: 'RUNNING', estimatedDurationInSecs: 1800,
+        ...seg([{ type: 'ExecutableStepDTO', stepId: 1, ...step }]),
       },
     },
   ];
