@@ -17,31 +17,19 @@ export async function GET(req: NextRequest) {
   const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
   const accessToken = await getValidGarminToken(decoded.uid);
 
-  // sport:"RUNNING" works. Step objects are parsed as null — test step field formats.
+  // sport:"RUNNING" works. Now test with type discriminant restored (Jackson polymorphism).
   const seg = (workoutSteps: any[]) => ({
     workoutSegments: [{ segmentOrder: 1, workoutSteps }],
   });
 
   const payloadVariants = [
     {
-      // All string-enum step fields + stepId
-      label: 'string-enums+stepId',
+      // THE KEY TEST: sport=RUNNING (fixed) + type discriminant + object enums
+      label: 'RUNNING+ExecutableStepDTO+object-enums',
       payload: {
         workoutName: 'HybridX A', sport: 'RUNNING', estimatedDurationInSecs: 1800,
         ...seg([{
-          stepId: 0, stepOrder: 1,
-          stepType: 'INTERVAL',
-          durationType: 'TIME', durationValue: 1800,
-          targetType: 'NO_TARGET',
-        }]),
-      },
-    },
-    {
-      // Object enums + stepId (Garmin Connect web-app format)
-      label: 'object-enums+stepId',
-      payload: {
-        workoutName: 'HybridX B', sport: 'RUNNING', estimatedDurationInSecs: 1800,
-        ...seg([{
+          type: 'ExecutableStepDTO',
           stepId: 0, stepOrder: 1,
           stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
           durationType: { durationTypeId: 1, durationTypeKey: 'time' },
@@ -51,12 +39,13 @@ export async function GET(req: NextRequest) {
       },
     },
     {
-      // String enums, no stepId
-      label: 'string-enums-no-stepId',
+      // type discriminant + string enums
+      label: 'RUNNING+ExecutableStepDTO+string-enums',
       payload: {
-        workoutName: 'HybridX C', sport: 'RUNNING', estimatedDurationInSecs: 1800,
+        workoutName: 'HybridX B', sport: 'RUNNING', estimatedDurationInSecs: 1800,
         ...seg([{
-          stepOrder: 1,
+          type: 'ExecutableStepDTO',
+          stepId: 0, stepOrder: 1,
           stepType: 'INTERVAL',
           durationType: 'TIME', durationValue: 1800,
           targetType: 'NO_TARGET',
@@ -64,15 +53,22 @@ export async function GET(req: NextRequest) {
       },
     },
     {
-      // Minimal: only required-looking fields
-      label: 'minimal-step',
+      // RepeatGroupDTO wrapping a step — test group format at same time
+      label: 'RUNNING+RepeatGroupDTO',
       payload: {
-        workoutName: 'HybridX D', sport: 'RUNNING',
+        workoutName: 'HybridX C', sport: 'RUNNING', estimatedDurationInSecs: 1800,
         ...seg([{
+          type: 'RepeatGroupDTO',
           stepId: 0, stepOrder: 1,
-          stepType: 'INTERVAL',
-          durationType: 'OPEN',
-          targetType: 'NO_TARGET',
+          numberOfIterations: 3,
+          workoutSteps: [{
+            type: 'ExecutableStepDTO',
+            stepId: 0, stepOrder: 2,
+            stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
+            durationType: { durationTypeId: 2, durationTypeKey: 'distance' },
+            durationValue: 1000,
+            targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
+          }],
         }]),
       },
     },
