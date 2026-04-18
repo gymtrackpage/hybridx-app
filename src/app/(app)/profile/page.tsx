@@ -179,7 +179,7 @@ export default function ProfilePage() {
     const garminSuccess = urlParams.get('garmin');
     const garminError = urlParams.get('garmin-error');
     if (garminSuccess === 'success') {
-        toast({ title: 'Connected!', description: 'Garmin account linked successfully.' });
+        toast({ title: 'Garmin Connected!', description: 'Account linked. Click "Sync next 14 days" to push your training plan to your watch.' });
         fetchUserData();
         window.history.replaceState({}, '', '/profile');
     } else if (garminError) {

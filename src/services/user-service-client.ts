@@ -30,8 +30,14 @@ export async function getUserClient(userId: string): Promise<User | null> {
             startDate: data.startDate instanceof Timestamp ? data.startDate.toDate() : undefined,
             personalRecords: data.personalRecords || {},
             runningProfile: data.runningProfile || { benchmarkPaces: {} },
-            strava: data.strava ? { ...data.strava, expiresAt: data.strava.expiresAt.toDate() } : undefined,
+            strava: data.strava ? { ...data.strava, expiresAt: data.strava.expiresAt instanceof Timestamp ? data.strava.expiresAt.toDate() : new Date(data.strava.expiresAt) } : undefined,
             lastStravaSync: data.lastStravaSync instanceof Timestamp ? data.lastStravaSync.toDate() : undefined,
+            garmin: data.garmin ? {
+                ...data.garmin,
+                expiresAt: data.garmin.expiresAt instanceof Timestamp ? data.garmin.expiresAt.toDate() : new Date(data.garmin.expiresAt),
+                refreshExpiresAt: data.garmin.refreshExpiresAt instanceof Timestamp ? data.garmin.refreshExpiresAt.toDate() : data.garmin.refreshExpiresAt ? new Date(data.garmin.refreshExpiresAt) : undefined,
+            } : undefined,
+            garminConnectedAt: data.garminConnectedAt instanceof Timestamp ? data.garminConnectedAt.toDate() : undefined,
             customProgram: data.customProgram || null,
             isAdmin: data.isAdmin || false,
             // Fallback for subscription status if it's missing
