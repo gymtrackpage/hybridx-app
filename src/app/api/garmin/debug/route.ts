@@ -18,63 +18,61 @@ export async function GET(_req: NextRequest) {
   const accessToken = await getValidGarminToken(decoded.uid);
 
   // sport:"RUNNING" works. Now test with type discriminant restored (Jackson polymorphism).
-  const seg = (workoutSteps: any[]) => ({
-    workoutSegments: [{ segmentOrder: 1, workoutSteps }],
-  });
-
+// Research shows the Connect/Partner API uses a flat "steps" array (no workoutSegments),
+  // type="WorkoutStep", intensity field, and lowercase sportType string.
   const payloadVariants = [
     {
-      // Try "intensity" field name (common in Garmin Connect internal format) + flat string enums
-      label: 'intensity-field+flat-strings',
+      // PRIMARY TEST: flat steps array, WorkoutStep type, intensity, lowercase sportType
+      label: 'flat-steps+WorkoutStep+intensity+sportType-lc',
       payload: {
-        workoutName: 'HybridX A', sport: 'RUNNING', estimatedDurationInSecs: 1800,
-        ...seg([{
-          stepOrder: 1,
+        workoutName: 'HybridX A',
+        sportType: 'running',
+        estimatedDurationInSecs: 1800,
+        steps: [{
+          type: 'WorkoutStep',
+          stepId: 1, stepOrder: 1,
           intensity: 'INTERVAL',
           durationType: 'TIME',
           durationValue: 1800,
-          targetType: 'NO_TARGET',
-        }]),
+          targetType: 'OPEN',
+        }],
       },
     },
     {
-      // stepType as flat string (INTERVAL) — no nested object, no type discriminant
-      label: 'stepType-string+flat',
+      // Variant: sport:"RUNNING" (uppercase) + flat steps + WorkoutStep
+      label: 'flat-steps+WorkoutStep+sport-UC',
       payload: {
-        workoutName: 'HybridX B', sport: 'RUNNING', estimatedDurationInSecs: 1800,
-        ...seg([{
-          stepOrder: 1,
-          stepType: 'INTERVAL',
+        workoutName: 'HybridX B',
+        sport: 'RUNNING',
+        estimatedDurationInSecs: 1800,
+        steps: [{
+          type: 'WorkoutStep',
+          stepId: 1, stepOrder: 1,
+          intensity: 'INTERVAL',
           durationType: 'TIME',
           durationValue: 1800,
-          targetType: 'NO_TARGET',
-        }]),
+          targetType: 'OPEN',
+        }],
       },
     },
     {
-      // Bare minimum — only stepOrder + durationType + durationValue
-      label: 'bare-minimum-step',
+      // Variant: workoutSegments with "steps" key (not workoutSteps) + WorkoutStep
+      label: 'segments+steps-key+WorkoutStep',
       payload: {
-        workoutName: 'HybridX C', sport: 'RUNNING', estimatedDurationInSecs: 1800,
-        ...seg([{
-          stepOrder: 1,
-          durationType: 'TIME',
-          durationValue: 1800,
-        }]),
-      },
-    },
-    {
-      // type discriminant with fully-qualified name (some Jackson configs require this)
-      label: 'fully-qualified-type',
-      payload: {
-        workoutName: 'HybridX D', sport: 'RUNNING', estimatedDurationInSecs: 1800,
-        ...seg([{
-          type: 'com.garmin.training.dto.ExecutableStepDTO',
-          stepOrder: 1,
-          durationType: 'TIME',
-          durationValue: 1800,
-          targetType: 'NO_TARGET',
-        }]),
+        workoutName: 'HybridX C',
+        sportType: 'running',
+        estimatedDurationInSecs: 1800,
+        workoutSegments: [{
+          segmentOrder: 1,
+          steps: [{
+            type: 'WorkoutStep',
+            stepId: 1, stepOrder: 1,
+            intensity: 'INTERVAL',
+            durationType: 'TIME',
+            durationValue: 1800,
+            targetType: 'OPEN',
+          }],
+        }],
       },
     },
   ];
