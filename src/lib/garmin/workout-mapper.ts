@@ -508,11 +508,18 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
   const counter = new StepCounter();
   const steps: WorkoutStep[] = [];
 
+  // Warmup — lap button to advance when ready
+  steps.push(buildStep(counter, {
+    intensity: 'WARMUP',
+    description: 'Warm up — press lap when ready',
+    durationType: 'OPEN',
+    targetType: 'OPEN',
+  }));
+
   for (const ex of day.exercises) {
     const reps = parseSetsReps(ex.details);
     const rpe = parseRpe(ex.details);
 
-    const timeMatch = ex.details.match(/(\d+)\s*minute/i);
     if (/max hold|dead hang/i.test(ex.name + ex.details)) {
       steps.push(
         buildRepeat(counter, reps?.sets ?? 3, () => [
@@ -528,19 +535,6 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
             targetType: 'OPEN',
           }),
         ]),
-      );
-      continue;
-    }
-
-    if (!reps && timeMatch && /of\s+/.test(ex.details)) {
-      steps.push(
-        buildStep(counter, {
-          intensity: 'ACTIVE',
-          description: ex.name,
-          durationType: 'TIME',
-          durationValue: parseInt(timeMatch[1], 10) * 60,
-          targetType: 'OPEN',
-        }),
       );
       continue;
     }
@@ -584,6 +578,7 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
       continue;
     }
 
+    // Fallback: single open step (covers AMRAP circuits, timed sets, etc.)
     steps.push(
       buildStep(counter, {
         intensity: 'ACTIVE',
@@ -593,6 +588,14 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
       }),
     );
   }
+
+  // Cooldown — lap button to finish
+  steps.push(buildStep(counter, {
+    intensity: 'COOLDOWN',
+    description: 'Cool down — press lap when done',
+    durationType: 'OPEN',
+    targetType: 'OPEN',
+  }));
 
   return {
     workoutName: workoutName(day),
@@ -608,14 +611,28 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
 
 function mapHyroxCircuit(day: WorkoutDay): GarminWorkout {
   const counter = new StepCounter();
-  const steps: WorkoutStep[] = day.exercises.map((ex) =>
+  const steps: WorkoutStep[] = [
     buildStep(counter, {
-      intensity: 'ACTIVE',
-      description: `${ex.name}: ${truncate(ex.details, 180)}`,
+      intensity: 'WARMUP',
+      description: 'Warm up — press lap when ready',
       durationType: 'OPEN',
       targetType: 'OPEN',
     }),
-  );
+    ...day.exercises.map((ex) =>
+      buildStep(counter, {
+        intensity: 'ACTIVE',
+        description: `${ex.name}: ${truncate(ex.details, 180)}`,
+        durationType: 'OPEN',
+        targetType: 'OPEN',
+      }),
+    ),
+    buildStep(counter, {
+      intensity: 'COOLDOWN',
+      description: 'Cool down — press lap when done',
+      durationType: 'OPEN',
+      targetType: 'OPEN',
+    }),
+  ];
 
   return {
     workoutName: workoutName(day),
