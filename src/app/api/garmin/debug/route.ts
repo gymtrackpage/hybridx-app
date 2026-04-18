@@ -1,7 +1,6 @@
 // src/app/api/garmin/debug/route.ts
-// Temporary diagnostic endpoint — sends a minimal test workout to Garmin
-// and returns the raw response/error so we can see exactly what Garmin expects.
-// DELETE THIS FILE once the payload format is confirmed working.
+// Temporary diagnostic endpoint — sends test workouts to Garmin to confirm format.
+// DELETE THIS FILE once repeat groups and STRENGTH_TRAINING sport are confirmed.
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getAdminAuth } from '@/lib/firebase-admin';
@@ -17,62 +16,44 @@ export async function GET(_req: NextRequest) {
   const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
   const accessToken = await getValidGarminToken(decoded.uid);
 
-  // sport:"RUNNING" works. Now test with type discriminant restored (Jackson polymorphism).
-// Research shows the Connect/Partner API uses a flat "steps" array (no workoutSegments),
-  // type="WorkoutStep", intensity field, and lowercase sportType string.
+  // Confirmed working: sport="RUNNING", flat steps[], type="WorkoutStep", intensity field.
+  // This round validates repeat groups and STRENGTH_TRAINING sport type.
   const payloadVariants = [
     {
-      // PRIMARY TEST: flat steps array, WorkoutStep type, intensity, lowercase sportType
-      label: 'flat-steps+WorkoutStep+intensity+sportType-lc',
+      label: 'repeat-group+RUNNING',
       payload: {
-        workoutName: 'HybridX A',
-        sportType: 'running',
-        estimatedDurationInSecs: 1800,
-        steps: [{
-          type: 'WorkoutStep',
-          stepId: 1, stepOrder: 1,
-          intensity: 'INTERVAL',
-          durationType: 'TIME',
-          durationValue: 1800,
-          targetType: 'OPEN',
-        }],
-      },
-    },
-    {
-      // Variant: sport:"RUNNING" (uppercase) + flat steps + WorkoutStep
-      label: 'flat-steps+WorkoutStep+sport-UC',
-      payload: {
-        workoutName: 'HybridX B',
+        workoutName: 'HybridX Intervals',
         sport: 'RUNNING',
-        estimatedDurationInSecs: 1800,
-        steps: [{
-          type: 'WorkoutStep',
-          stepId: 1, stepOrder: 1,
-          intensity: 'INTERVAL',
-          durationType: 'TIME',
-          durationValue: 1800,
-          targetType: 'OPEN',
-        }],
+        estimatedDurationInSecs: 2700,
+        steps: [
+          { type: 'WorkoutStep', stepOrder: 1, intensity: 'WARMUP', durationType: 'TIME', durationValue: 600, targetType: 'OPEN' },
+          {
+            type: 'WorkoutRepeatStep', stepOrder: 2,
+            repeatType: 'REPEAT_UNTIL_STEPS_CMPLT', repeatValue: 4,
+            steps: [
+              { type: 'WorkoutStep', stepOrder: 1, intensity: 'INTERVAL', durationType: 'DISTANCE', durationValue: 1000, targetType: 'OPEN' },
+              { type: 'WorkoutStep', stepOrder: 2, intensity: 'RECOVERY', durationType: 'TIME', durationValue: 90, targetType: 'OPEN' },
+            ],
+          },
+          { type: 'WorkoutStep', stepOrder: 3, intensity: 'COOLDOWN', durationType: 'TIME', durationValue: 300, targetType: 'OPEN' },
+        ],
       },
     },
     {
-      // Variant: workoutSegments with "steps" key (not workoutSteps) + WorkoutStep
-      label: 'segments+steps-key+WorkoutStep',
+      label: 'strength-workout+STRENGTH_TRAINING',
       payload: {
-        workoutName: 'HybridX C',
-        sportType: 'running',
-        estimatedDurationInSecs: 1800,
-        workoutSegments: [{
-          segmentOrder: 1,
-          steps: [{
-            type: 'WorkoutStep',
-            stepId: 1, stepOrder: 1,
-            intensity: 'INTERVAL',
-            durationType: 'TIME',
-            durationValue: 1800,
-            targetType: 'OPEN',
-          }],
-        }],
+        workoutName: 'HybridX Strength',
+        sport: 'STRENGTH_TRAINING',
+        steps: [
+          {
+            type: 'WorkoutRepeatStep', stepOrder: 1,
+            repeatType: 'REPEAT_UNTIL_STEPS_CMPLT', repeatValue: 3,
+            steps: [
+              { type: 'WorkoutStep', stepOrder: 1, intensity: 'ACTIVE', description: 'Squats — 8 reps', durationType: 'REPS', durationValue: 8, targetType: 'OPEN' },
+              { type: 'WorkoutStep', stepOrder: 2, intensity: 'REST', durationType: 'OPEN', targetType: 'OPEN' },
+            ],
+          },
+        ],
       },
     },
   ];
@@ -87,7 +68,6 @@ export async function GET(_req: NextRequest) {
         { headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } },
       );
       results.push({ label, status: res.status, data: res.data });
-      // Clean up the test workout immediately
       const workoutId = res.data?.workoutId ?? res.data?.id;
       if (workoutId) {
         try {

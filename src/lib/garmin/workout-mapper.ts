@@ -1,18 +1,13 @@
 /**
  * HybridX → Garmin Training API workout mapper.
  *
- * Pure functions, no I/O. Takes WorkoutDay (one row per program day with
- * an array of {name, details} exercises) and emits a Garmin Training API
- * workout payload.
- *
- * Coverage:
- *  - Running: easy, long, intervals, tempo, threshold, hills, strides
- *  - Strength: sets × reps, AMRAPs, RPE-based, max-holds
- *  - Hyrox circuits / simulations: lap-button driven OTHER steps
- *  - Rest / welcome / race-day: returns null (skipped)
- *
- * Garmin enum IDs match the canonical Garmin Connect workout JSON.
- * Verify field names against the Partner Training API spec when going live.
+ * Confirmed working format (from live API testing):
+ *   - sport: "RUNNING" | "STRENGTH_TRAINING" | "CARDIO_TRAINING" (uppercase string, not object)
+ *   - Steps in a flat `steps` array at the top level (no workoutSegments wrapper)
+ *   - type: "WorkoutStep" | "WorkoutRepeatStep" (not ExecutableStepDTO/RepeatGroupDTO)
+ *   - intensity: "WARMUP" | "INTERVAL" | "COOLDOWN" | "RECOVERY" | "REST" | "ACTIVE"
+ *   - durationType: "TIME" | "DISTANCE" | "OPEN" | "REPS" (uppercase strings)
+ *   - targetType: "OPEN" | "HEART_RATE" | "SPEED" etc. (uppercase strings)
  */
 
 // ============================================================
@@ -38,85 +33,38 @@ export interface WorkoutDay {
 // GARMIN TRAINING API OUTPUT TYPES
 // ============================================================
 
-export const SportType = {
-  RUNNING: { sportTypeId: 1, sportTypeKey: 'running' },
-  CYCLING: { sportTypeId: 2, sportTypeKey: 'cycling' },
-  OTHER: { sportTypeId: 3, sportTypeKey: 'other' },
-  STRENGTH: { sportTypeId: 5, sportTypeKey: 'strength_training' },
-  CARDIO: { sportTypeId: 6, sportTypeKey: 'cardio_training' },
-} as const;
-
-export const StepType = {
-  REST: { stepTypeId: 1, stepTypeKey: 'rest' },
-  WARMUP: { stepTypeId: 2, stepTypeKey: 'warmup' },
-  COOLDOWN: { stepTypeId: 3, stepTypeKey: 'cooldown' },
-  INTERVAL: { stepTypeId: 4, stepTypeKey: 'interval' },
-  RECOVERY: { stepTypeId: 5, stepTypeKey: 'recovery' },
-  OTHER: { stepTypeId: 6, stepTypeKey: 'other' },
-} as const;
-
-export const DurationType = {
-  TIME: { durationTypeId: 1, durationTypeKey: 'time' },
-  DISTANCE: { durationTypeId: 2, durationTypeKey: 'distance' },
-  OPEN: { durationTypeId: 3, durationTypeKey: 'open' },
-  HR_REACHED: { durationTypeId: 4, durationTypeKey: 'heart.rate' },
-  CALORIES: { durationTypeId: 5, durationTypeKey: 'calories' },
-  REPS: { durationTypeId: 6, durationTypeKey: 'reps' },
-} as const;
-
-export const TargetType = {
-  NO_TARGET: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
-  POWER_ZONE: { workoutTargetTypeId: 2, workoutTargetTypeKey: 'power.zone' },
-  CADENCE_ZONE: { workoutTargetTypeId: 3, workoutTargetTypeKey: 'cadence.zone' },
-  HEART_RATE_ZONE: { workoutTargetTypeId: 4, workoutTargetTypeKey: 'heart.rate.zone' },
-  SPEED_ZONE: { workoutTargetTypeId: 5, workoutTargetTypeKey: 'speed.zone' },
-  PACE_ZONE: { workoutTargetTypeId: 6, workoutTargetTypeKey: 'pace.zone' },
-} as const;
-
-type SportTypeValue = (typeof SportType)[keyof typeof SportType];
-type StepTypeValue = (typeof StepType)[keyof typeof StepType];
-type DurationTypeValue = (typeof DurationType)[keyof typeof DurationType];
-type TargetTypeValue = (typeof TargetType)[keyof typeof TargetType];
-
-export interface ExecutableStep {
-  type: 'ExecutableStepDTO';
+export interface WorkoutStepItem {
+  type: 'WorkoutStep';
   stepOrder: number;
-  stepType: StepTypeValue;
+  intensity: 'WARMUP' | 'COOLDOWN' | 'INTERVAL' | 'ACTIVE' | 'REST' | 'RECOVERY';
   description?: string;
-  durationType: DurationTypeValue;
+  durationType: 'TIME' | 'DISTANCE' | 'OPEN' | 'REPS' | 'CALORIES';
   durationValue?: number;
-  targetType: TargetTypeValue;
-  targetValueOne?: number;
-  targetValueTwo?: number;
-  zoneNumber?: number;
+  targetType: 'OPEN' | 'HEART_RATE' | 'SPEED' | 'CADENCE' | 'POWER';
+  targetValueLow?: number;
+  targetValueHigh?: number;
 }
 
-export interface RepeatGroup {
-  type: 'RepeatGroupDTO';
+export interface WorkoutRepeatStepItem {
+  type: 'WorkoutRepeatStep';
   stepOrder: number;
-  numberOfIterations: number;
-  workoutSteps: WorkoutStep[];
-  smartRepeat?: boolean;
+  repeatType: 'REPEAT_UNTIL_STEPS_CMPLT';
+  repeatValue: number;
+  steps: WorkoutStepItem[];
 }
 
-export type WorkoutStep = ExecutableStep | RepeatGroup;
-
-export interface WorkoutSegment {
-  segmentOrder: number;
-  sportType: SportTypeValue;
-  workoutSteps: WorkoutStep[];
-}
+export type WorkoutStep = WorkoutStepItem | WorkoutRepeatStepItem;
 
 export interface GarminWorkout {
   workoutName: string;
   description?: string;
-  sport: SportTypeValue;
+  sport: 'RUNNING' | 'STRENGTH_TRAINING' | 'CARDIO_TRAINING' | 'GENERIC';
   estimatedDurationInSecs?: number;
-  workoutSegments: WorkoutSegment[];
+  steps: WorkoutStep[];
 }
 
 // ============================================================
-// RPE → HR ZONE
+// RPE → HR ZONE BPM RANGES (using typical zones, no user HR needed)
 // ============================================================
 
 export function rpeToHrZone(rpe: number): number {
@@ -292,41 +240,44 @@ class StepCounter {
   }
 }
 
-function buildExecutable(
+function buildStep(
   counter: StepCounter,
   params: {
-    stepType: StepTypeValue;
+    intensity: WorkoutStepItem['intensity'];
     description?: string;
-    durationType?: DurationTypeValue;
+    durationType?: WorkoutStepItem['durationType'];
     durationValue?: number;
-    targetType?: TargetTypeValue;
-    zoneNumber?: number;
+    targetType?: WorkoutStepItem['targetType'];
+    targetValueLow?: number;
+    targetValueHigh?: number;
   },
-): ExecutableStep {
+): WorkoutStepItem {
   return {
-    type: 'ExecutableStepDTO',
+    type: 'WorkoutStep',
     stepOrder: counter.next(),
-    stepType: params.stepType,
+    intensity: params.intensity,
     description: params.description,
-    durationType: params.durationType ?? DurationType.OPEN,
+    durationType: params.durationType ?? 'OPEN',
     durationValue: params.durationValue,
-    targetType: params.targetType ?? TargetType.NO_TARGET,
-    zoneNumber: params.zoneNumber,
+    targetType: params.targetType ?? 'OPEN',
+    targetValueLow: params.targetValueLow,
+    targetValueHigh: params.targetValueHigh,
   };
 }
 
-function buildRepeatGroup(
+function buildRepeat(
   counter: StepCounter,
   iterations: number,
-  buildInner: () => WorkoutStep[],
-): RepeatGroup {
+  buildInner: () => WorkoutStepItem[],
+): WorkoutRepeatStepItem {
   const stepOrder = counter.next();
-  const workoutSteps = buildInner();
+  const steps = buildInner();
   return {
-    type: 'RepeatGroupDTO',
+    type: 'WorkoutRepeatStep',
     stepOrder,
-    numberOfIterations: iterations,
-    workoutSteps,
+    repeatType: 'REPEAT_UNTIL_STEPS_CMPLT',
+    repeatValue: iterations,
+    steps,
   };
 }
 
@@ -335,7 +286,6 @@ function truncate(s: string, max: number): string {
 }
 
 function workoutName(day: WorkoutDay): string {
-  // Garmin caps workout names around 50 chars on most devices.
   return truncate(`D${day.day} – ${day.title}`, 50);
 }
 
@@ -355,27 +305,24 @@ function mapRunEasy(day: WorkoutDay): GarminWorkout {
   const details = day.exercises.map((e) => `${e.name} ${e.details}`).join(' ');
   const durationSecs = parseDurationMinutes(details) ?? 1800;
   const rpe = parseRpe(details);
-  const zone = rpe?.zone ?? 2;
+  const zoneDesc = rpe ? ` (RPE ${rpe.low}${rpe.high !== rpe.low ? `–${rpe.high}` : ''})` : '';
 
   const steps: WorkoutStep[] = [
-    buildExecutable(counter, {
-      stepType: StepType.INTERVAL,
-      description: day.exercises.map((e) => e.name).join('; '),
-      durationType: DurationType.TIME,
+    buildStep(counter, {
+      intensity: 'ACTIVE',
+      description: day.exercises.map((e) => e.name).join('; ') + zoneDesc,
+      durationType: 'TIME',
       durationValue: durationSecs,
-      targetType: TargetType.HEART_RATE_ZONE,
-      zoneNumber: zone,
+      targetType: 'OPEN',
     }),
   ];
 
   return {
     workoutName: workoutName(day),
     description: workoutDescription(day),
-    sport: SportType.RUNNING,
+    sport: 'RUNNING',
     estimatedDurationInSecs: durationSecs,
-    workoutSegments: [
-      { segmentOrder: 1, sportType: SportType.RUNNING, workoutSteps: steps },
-    ],
+    steps,
   };
 }
 
@@ -394,10 +341,11 @@ function mapRunIntervals(day: WorkoutDay): GarminWorkout {
   if (warmup) {
     const secs = parseInt(warmup[1], 10) * 60;
     steps.push(
-      buildExecutable(counter, {
-        stepType: StepType.WARMUP,
-        durationType: DurationType.TIME,
+      buildStep(counter, {
+        intensity: 'WARMUP',
+        durationType: 'TIME',
         durationValue: secs,
+        targetType: 'OPEN',
       }),
     );
     estimatedSecs += secs;
@@ -409,11 +357,12 @@ function mapRunIntervals(day: WorkoutDay): GarminWorkout {
   if (shakeout && !warmup) {
     const secs = parseInt(shakeout[1], 10) * 60;
     steps.push(
-      buildExecutable(counter, {
-        stepType: StepType.WARMUP,
+      buildStep(counter, {
+        intensity: 'WARMUP',
         description: 'Easy jog',
-        durationType: DurationType.TIME,
+        durationType: 'TIME',
         durationValue: secs,
+        targetType: 'OPEN',
       }),
     );
     estimatedSecs += secs;
@@ -427,26 +376,27 @@ function mapRunIntervals(day: WorkoutDay): GarminWorkout {
     const recSecs = pat.recovery === 'open' ? 30 : pat.recovery;
     estimatedSecs += pat.reps * (workSecs + recSecs);
 
-    const group = buildRepeatGroup(counter, pat.reps, () => {
-      const workStep = buildExecutable(counter, {
-        stepType: StepType.INTERVAL,
+    const group = buildRepeat(counter, pat.reps, () => {
+      const workStep = buildStep(counter, {
+        intensity: 'INTERVAL',
         description: pat.description,
-        durationType: pat.distanceM ? DurationType.DISTANCE : DurationType.TIME,
+        durationType: pat.distanceM ? 'DISTANCE' : 'TIME',
         durationValue: pat.distanceM ?? pat.timeS,
-        targetType: TargetType.HEART_RATE_ZONE,
-        zoneNumber: pat.zone,
+        targetType: 'OPEN',
       });
       const recStep =
         pat.recovery === 'open'
-          ? buildExecutable(counter, {
-              stepType: StepType.RECOVERY,
+          ? buildStep(counter, {
+              intensity: 'RECOVERY',
               description: 'Jog/walk recovery — lap when ready',
-              durationType: DurationType.OPEN,
+              durationType: 'OPEN',
+              targetType: 'OPEN',
             })
-          : buildExecutable(counter, {
-              stepType: StepType.RECOVERY,
-              durationType: DurationType.TIME,
+          : buildStep(counter, {
+              intensity: 'RECOVERY',
+              durationType: 'TIME',
               durationValue: pat.recovery,
+              targetType: 'OPEN',
             });
       return [workStep, recStep];
     });
@@ -457,10 +407,11 @@ function mapRunIntervals(day: WorkoutDay): GarminWorkout {
   if (cooldown) {
     const secs = parseInt(cooldown[1], 10) * 60;
     steps.push(
-      buildExecutable(counter, {
-        stepType: StepType.COOLDOWN,
-        durationType: DurationType.TIME,
+      buildStep(counter, {
+        intensity: 'COOLDOWN',
+        durationType: 'TIME',
         durationValue: secs,
+        targetType: 'OPEN',
       }),
     );
     estimatedSecs += secs;
@@ -471,11 +422,9 @@ function mapRunIntervals(day: WorkoutDay): GarminWorkout {
   return {
     workoutName: workoutName(day),
     description: workoutDescription(day),
-    sport: SportType.RUNNING,
+    sport: 'RUNNING',
     estimatedDurationInSecs: estimatedSecs || undefined,
-    workoutSegments: [
-      { segmentOrder: 1, sportType: SportType.RUNNING, workoutSteps: steps },
-    ],
+    steps,
   };
 }
 
@@ -566,15 +515,17 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
     const timeMatch = ex.details.match(/(\d+)\s*minute/i);
     if (/max hold|dead hang/i.test(ex.name + ex.details)) {
       steps.push(
-        buildRepeatGroup(counter, reps?.sets ?? 3, () => [
-          buildExecutable(counter, {
-            stepType: StepType.INTERVAL,
+        buildRepeat(counter, reps?.sets ?? 3, () => [
+          buildStep(counter, {
+            intensity: 'ACTIVE',
             description: `${ex.name} — max hold`,
-            durationType: DurationType.OPEN,
+            durationType: 'OPEN',
+            targetType: 'OPEN',
           }),
-          buildExecutable(counter, {
-            stepType: StepType.REST,
-            durationType: DurationType.OPEN,
+          buildStep(counter, {
+            intensity: 'REST',
+            durationType: 'OPEN',
+            targetType: 'OPEN',
           }),
         ]),
       );
@@ -583,11 +534,12 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
 
     if (!reps && timeMatch && /of\s+/.test(ex.details)) {
       steps.push(
-        buildExecutable(counter, {
-          stepType: StepType.INTERVAL,
+        buildStep(counter, {
+          intensity: 'ACTIVE',
           description: ex.name,
-          durationType: DurationType.TIME,
+          durationType: 'TIME',
           durationValue: parseInt(timeMatch[1], 10) * 60,
+          targetType: 'OPEN',
         }),
       );
       continue;
@@ -605,23 +557,26 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
       const description = `${ex.name} — ${repLabel}${rpeLabel}`;
 
       steps.push(
-        buildRepeatGroup(counter, reps.sets, () => {
-          const workStep: ExecutableStep = reps.isAmrap
-            ? buildExecutable(counter, {
-                stepType: StepType.INTERVAL,
+        buildRepeat(counter, reps.sets, () => {
+          const workStep: WorkoutStepItem = reps.isAmrap
+            ? buildStep(counter, {
+                intensity: 'ACTIVE',
                 description,
-                durationType: DurationType.OPEN,
+                durationType: 'OPEN',
+                targetType: 'OPEN',
               })
-            : buildExecutable(counter, {
-                stepType: StepType.INTERVAL,
+            : buildStep(counter, {
+                intensity: 'ACTIVE',
                 description,
-                durationType: DurationType.REPS,
+                durationType: 'REPS',
                 durationValue: reps.repsMax ?? reps.reps,
+                targetType: 'OPEN',
               });
-          const restStep = buildExecutable(counter, {
-            stepType: StepType.REST,
+          const restStep = buildStep(counter, {
+            intensity: 'REST',
             description: 'Rest 60–120s',
-            durationType: DurationType.OPEN,
+            durationType: 'OPEN',
+            targetType: 'OPEN',
           });
           return [workStep, restStep];
         }),
@@ -630,10 +585,11 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
     }
 
     steps.push(
-      buildExecutable(counter, {
-        stepType: StepType.OTHER,
+      buildStep(counter, {
+        intensity: 'ACTIVE',
         description: `${ex.name}: ${truncate(ex.details, 150)}`,
-        durationType: DurationType.OPEN,
+        durationType: 'OPEN',
+        targetType: 'OPEN',
       }),
     );
   }
@@ -641,10 +597,8 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
   return {
     workoutName: workoutName(day),
     description: workoutDescription(day),
-    sport: SportType.STRENGTH,
-    workoutSegments: [
-      { segmentOrder: 1, sportType: SportType.STRENGTH, workoutSteps: steps },
-    ],
+    sport: 'STRENGTH_TRAINING',
+    steps,
   };
 }
 
@@ -655,20 +609,19 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
 function mapHyroxCircuit(day: WorkoutDay): GarminWorkout {
   const counter = new StepCounter();
   const steps: WorkoutStep[] = day.exercises.map((ex) =>
-    buildExecutable(counter, {
-      stepType: StepType.OTHER,
+    buildStep(counter, {
+      intensity: 'ACTIVE',
       description: `${ex.name}: ${truncate(ex.details, 180)}`,
-      durationType: DurationType.OPEN,
+      durationType: 'OPEN',
+      targetType: 'OPEN',
     }),
   );
 
   return {
     workoutName: workoutName(day),
     description: workoutDescription(day),
-    sport: SportType.CARDIO,
-    workoutSegments: [
-      { segmentOrder: 1, sportType: SportType.CARDIO, workoutSteps: steps },
-    ],
+    sport: 'CARDIO_TRAINING',
+    steps,
   };
 }
 
