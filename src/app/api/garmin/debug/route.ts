@@ -9,7 +9,7 @@ import { getValidGarminToken } from '@/lib/garmin/token';
 import axios from 'axios';
 import { GARMIN_API_BASE } from '@/lib/garmin/oauth';
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get('__session')?.value;
   if (!sessionCookie) return NextResponse.json({ error: 'Not logged in' }, { status: 401 });
@@ -22,15 +22,25 @@ export async function GET(req: NextRequest) {
     workoutSegments: [{ segmentOrder: 1, workoutSteps }],
   });
 
+  // Round 1 showed sportType object on segment DID deserialize steps (error was "Sport cannot be null").
+  // Round 4 showed sport="RUNNING" string alone still got "Steps cannot be null".
+  // Hypothesis: Garmin needs BOTH sport string AND sportType object on the segment to route correctly.
+  const segWithSportType = (workoutSteps: any[]) => ({
+    workoutSegments: [{ segmentOrder: 1, sportType: { sportTypeId: 1, sportTypeKey: 'running' }, workoutSteps }],
+  });
+
   const payloadVariants = [
     {
-      // THE KEY TEST: sport=RUNNING (fixed) + type discriminant + object enums
-      label: 'RUNNING+ExecutableStepDTO+object-enums',
+      // KEY TEST: sport string + sportType object on both workout and segment + ExecutableStepDTO
+      label: 'RUNNING+sportType-obj+segment-sportType+ExecutableStepDTO',
       payload: {
-        workoutName: 'HybridX A', sport: 'RUNNING', estimatedDurationInSecs: 1800,
-        ...seg([{
+        workoutName: 'HybridX A',
+        sport: 'RUNNING',
+        sportType: { sportTypeId: 1, sportTypeKey: 'running' },
+        estimatedDurationInSecs: 1800,
+        ...segWithSportType([{
           type: 'ExecutableStepDTO',
-          stepId: 0, stepOrder: 1,
+          stepOrder: 1,
           stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
           durationType: { durationTypeId: 1, durationTypeKey: 'time' },
           durationValue: 1800,
@@ -39,36 +49,37 @@ export async function GET(req: NextRequest) {
       },
     },
     {
-      // type discriminant + string enums
-      label: 'RUNNING+ExecutableStepDTO+string-enums',
+      // Variant: sport string + sportType object on workout only (no segment sportType)
+      label: 'RUNNING+sportType-obj+no-segment-sportType+ExecutableStepDTO',
       payload: {
-        workoutName: 'HybridX B', sport: 'RUNNING', estimatedDurationInSecs: 1800,
+        workoutName: 'HybridX B',
+        sport: 'RUNNING',
+        sportType: { sportTypeId: 1, sportTypeKey: 'running' },
+        estimatedDurationInSecs: 1800,
         ...seg([{
           type: 'ExecutableStepDTO',
-          stepId: 0, stepOrder: 1,
-          stepType: 'INTERVAL',
-          durationType: 'TIME', durationValue: 1800,
-          targetType: 'NO_TARGET',
+          stepOrder: 1,
+          stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
+          durationType: { durationTypeId: 1, durationTypeKey: 'time' },
+          durationValue: 1800,
+          targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
         }]),
       },
     },
     {
-      // RepeatGroupDTO wrapping a step — test group format at same time
-      label: 'RUNNING+RepeatGroupDTO',
+      // Variant: segment sportType only (no top-level sportType), sport string only
+      label: 'RUNNING+no-top-sportType+segment-sportType+ExecutableStepDTO',
       payload: {
-        workoutName: 'HybridX C', sport: 'RUNNING', estimatedDurationInSecs: 1800,
-        ...seg([{
-          type: 'RepeatGroupDTO',
-          stepId: 0, stepOrder: 1,
-          numberOfIterations: 3,
-          workoutSteps: [{
-            type: 'ExecutableStepDTO',
-            stepId: 0, stepOrder: 2,
-            stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
-            durationType: { durationTypeId: 2, durationTypeKey: 'distance' },
-            durationValue: 1000,
-            targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
-          }],
+        workoutName: 'HybridX C',
+        sport: 'RUNNING',
+        estimatedDurationInSecs: 1800,
+        ...segWithSportType([{
+          type: 'ExecutableStepDTO',
+          stepOrder: 1,
+          stepType: { stepTypeId: 4, stepTypeKey: 'interval' },
+          durationType: { durationTypeId: 1, durationTypeKey: 'time' },
+          durationValue: 1800,
+          targetType: { workoutTargetTypeId: 1, workoutTargetTypeKey: 'no.target' },
         }]),
       },
     },
