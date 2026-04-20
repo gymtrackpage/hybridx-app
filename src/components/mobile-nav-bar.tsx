@@ -19,7 +19,7 @@ export const primaryNavItems = [
 
 // Secondary content-focused items
 export const secondaryNavItems = [
-  { href: '/form', icon: Gauge, label: 'Training Form' },
+  { href: '/training', icon: Gauge, label: 'Training Form' },
   { href: '/assistant', icon: Sparkles, label: 'Edge Coach' },
   { href: '/history', icon: History, label: 'History' },
   { href: '/activity-feed', icon: Activity, label: 'Activity Feed' },

@@ -6,10 +6,20 @@ import type { Workout, RunningWorkout, PlannedRun } from '@/models/types';
 import type { WorkoutDay } from './workout-mapper';
 
 function describePlannedRun(run: PlannedRun): { name: string; details: string } {
-  const reps =
-    run.noIntervals && run.noIntervals > 1 ? `${run.noIntervals}x ` : '';
-  const dist = run.distance ? `${run.distance}km` : '';
-  const name = [reps + dist, run.type].filter(Boolean).join(' ').trim() || 'Run';
+  // Express distance in whole meters when < 1 km to avoid decimal ambiguity in
+  // the mapper's regex (e.g. 0.8 km → 800m, giving "5x800m" not "5x 0.8km").
+  const distMeters = run.distance ? Math.round(run.distance * 1000) : 0;
+  const distStr = distMeters >= 1000
+    ? `${run.distance}km`
+    : distMeters > 0 ? `${distMeters}m` : '';
+
+  // Produce canonical "5x800m" format that findAllIntervalPatterns expects.
+  let name: string;
+  if (run.noIntervals && run.noIntervals > 1 && distStr) {
+    name = `${run.noIntervals}x${distStr}`;
+  } else {
+    name = [distStr, run.type].filter(Boolean).join(' ').trim() || 'Run';
+  }
 
   const detailsParts: string[] = [];
   if (run.description) detailsParts.push(run.description);

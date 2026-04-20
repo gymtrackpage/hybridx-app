@@ -104,6 +104,15 @@ export function parseDistanceMeters(text: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
+export function parseTimedSets(
+  text: string,
+): { sets: number; timeS: number } | null {
+  // Matches "3x90 seconds", "3x60sec", "3x90s", "3x90-second holds"
+  const m = text.match(/(\d+)\s*x\s*(\d+)\s*(?:seconds?|secs?|s\b)/i);
+  if (!m) return null;
+  return { sets: parseInt(m[1], 10), timeS: parseInt(m[2], 10) };
+}
+
 export function parseSetsReps(
   text: string,
 ): { sets: number; reps: number; repsMax?: number; isAmrap: boolean } | null {
@@ -112,14 +121,20 @@ export function parseSetsReps(
   if (/\bAMRAP\b/i.test(text) && !/\d+\s*min.*AMRAP/i.test(text)) {
     return { sets: 1, reps: 0, isAmrap: true };
   }
-  const m = text.match(/(\d+)\s*x\s*(\d+)(?:\s*[-–]\s*(\d+))?\b(?!\s*m\b)/i);
-  if (!m) return null;
-  return {
-    sets: parseInt(m[1], 10),
-    reps: parseInt(m[2], 10),
-    repsMax: m[3] ? parseInt(m[3], 10) : undefined,
-    isAmrap: false,
-  };
+  // Exclude when reps value is followed by a distance (m) or time (sec/s) unit
+  const m = text.match(/(\d+)\s*x\s*(\d+)(?:\s*[-–]\s*(\d+))?\b(?!\s*(?:m\b|sec|s\b))/i);
+  if (m) {
+    return {
+      sets: parseInt(m[1], 10),
+      reps: parseInt(m[2], 10),
+      repsMax: m[3] ? parseInt(m[3], 10) : undefined,
+      isAmrap: false,
+    };
+  }
+  // Standalone "N reps" with no sets prefix (e.g. "100 reps")
+  const solo = text.match(/^(\d+)\s*reps?\b/i);
+  if (solo) return { sets: 1, reps: parseInt(solo[1], 10), isAmrap: false };
+  return null;
 }
 
 export function parseRunIntervals(
@@ -517,8 +532,29 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
   }));
 
   for (const ex of day.exercises) {
-    const reps = parseSetsReps(ex.details);
     const rpe = parseRpe(ex.details);
+
+    // ── Timed sets: "3x90 seconds", "3x60sec per side" ──────────────────────
+    const timedSets = parseTimedSets(ex.details);
+    if (timedSets) {
+      const perSide = /per side|each side/i.test(ex.details);
+      const label = perSide ? `${ex.name} — each side` : ex.name;
+      steps.push(
+        buildRepeat(counter, timedSets.sets * (perSide ? 2 : 1), () => [
+          buildStep(counter, {
+            intensity: 'ACTIVE',
+            description: label,
+            durationType: 'TIME',
+            durationValue: timedSets.timeS,
+            targetType: 'OPEN',
+          }),
+          buildStep(counter, { intensity: 'REST', durationType: 'OPEN', targetType: 'OPEN' }),
+        ]),
+      );
+      continue;
+    }
+
+    const reps = parseSetsReps(ex.details);
 
     if (/max hold|dead hang/i.test(ex.name + ex.details)) {
       steps.push(
