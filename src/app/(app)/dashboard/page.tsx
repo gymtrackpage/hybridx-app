@@ -22,7 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, ChartTooltip, CartesianGrid, ChartTooltipContent } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
-import type { WorkoutDay, PlannedRun } from '@/models/types';
+import type { WorkoutDay, RunningWorkout, PlannedRun } from '@/models/types';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { formatPace } from '@/lib/pace-utils';
@@ -128,8 +128,8 @@ export default function DashboardPage() {
     }
 
     setWorkoutSummaryLoading(true);
-    const runParts = hasRuns(todaysWorkout.workout) ? todaysWorkout.workout!.runs.map(r => r.type) : [];
-    const exParts = hasExercises(todaysWorkout.workout) ? todaysWorkout.workout!.exercises.map(e => e.name) : [];
+    const runParts = hasRuns(todaysWorkout.workout) ? todaysWorkout.workout.runs.map(r => r.type) : [];
+    const exParts = hasExercises(todaysWorkout.workout) ? todaysWorkout.workout.exercises.map(e => e.name) : [];
     const exercisesForSummary = [...runParts, ...exParts].join(', ');
 
     // Delay slightly so dashboard summary fires first, avoiding concurrent API calls
@@ -155,7 +155,7 @@ export default function DashboardPage() {
   // Effect to schedule daily notifications
   useEffect(() => {
     if (isGranted && todaysWorkout?.workout && user) {
-      const notifRunParts = hasRuns(todaysWorkout.workout) ? todaysWorkout.workout.runs.map(r => r.type) : [];
+      const notifRunParts = hasRuns(todaysWorkout.workout) ? (todaysWorkout.workout).runs.map(r => r.type) : [];
       const notifExParts = hasExercises(todaysWorkout.workout) ? todaysWorkout.workout.exercises.map(e => e.name) : [];
       const exercisesForNotification = [...notifRunParts, ...notifExParts].join(', ');
 
@@ -493,7 +493,7 @@ export default function DashboardPage() {
                   <div className="space-y-4">
                       <Separator />
                       <ul className="space-y-4 pt-4">
-                        {workoutHasRuns && todaysWorkout.workout.runs.map((run: PlannedRun) => (
+                        {workoutHasRuns && (todaysWorkout.workout as RunningWorkout).runs.map((run: PlannedRun) => (
                             <li key={run.description}>
                               <p className="font-medium">{run.description}</p>
                               {trainingPaces ? (

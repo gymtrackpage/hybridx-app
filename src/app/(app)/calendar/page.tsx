@@ -282,10 +282,10 @@ export default function CalendarPage() {
 
   const getCompletedExercises = (session: WorkoutSession): { name: string, details: string }[] => {
     if (session.workoutDetails) {
-        const runs = (session.workoutDetails.runs ?? []).map((r: any) => ({
+        const runs = hasRuns(session.workoutDetails) ? session.workoutDetails.runs.map(r => ({
             name: r.description || r.type,
             details: `${r.distance}km – ${r.type}`,
-        }));
+        })) : [];
         const exercises = (session.workoutDetails.exercises ?? []).map((e: any) => ({
             name: e.name,
             details: e.details || 'Completed',
@@ -530,7 +530,7 @@ export default function CalendarPage() {
               <div>
                 <h4 className="font-semibold mb-2">Planned Workout</h4>
                 <div className="space-y-4">
-                  {hasRuns(selectedWorkout) && (selectedWorkout.runs ?? []).map((run, index) => (
+                  {hasRuns(selectedWorkout) && selectedWorkout.runs.map((run, index) => (
                       <div key={index} className="space-y-1">
                         <p className="font-medium text-foreground">{run.description}</p>
                       </div>

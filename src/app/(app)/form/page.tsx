@@ -102,32 +102,63 @@ const CATEGORY_LABELS: Record<ActivityCategory, string> = {
   other: 'Other',
 };
 
+// ── Extended PMC point (includes projections) ────────────────────────────────
+
+interface ChartPoint extends PMCDataPoint {
+  ctlProj: number | null;
+  atlProj: number | null;
+  tsbProj: number | null;
+  isProjected: boolean;
+}
+
 // ── Custom Tooltip ──────────────────────────────────────────────────────────
 
-function PMCTooltip({ active, payload, label }: any) {
+function PMCTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
-  const data = payload[0]?.payload as PMCDataPoint | undefined;
+  const data = payload[0]?.payload as ChartPoint | undefined;
   if (!data) return null;
 
+  const ctl  = data.isProjected ? data.ctlProj  : data.ctl;
+  const atl  = data.isProjected ? data.atlProj  : data.atl;
+  const tsb  = data.isProjected ? data.tsbProj  : data.tsb;
+  const load = data.isProjected ? null           : data.load;
+
   return (
-    <div className="rounded-lg border bg-background px-3 py-2 shadow-xl text-xs space-y-1">
-      <p className="font-medium">{format(parseISO(data.date), 'MMM d, yyyy')}</p>
+    <div className="rounded-lg border bg-background px-3 py-2 shadow-xl text-xs space-y-1 min-w-[160px]">
+      <div className="flex items-center gap-2">
+        <p className="font-medium">{format(parseISO(data.date), 'MMM d, yyyy')}</p>
+        {data.isProjected && (
+          <span className="text-[10px] text-muted-foreground border rounded px-1">projected</span>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-        {data.load > 0 && (
+        {load != null && load > 0 && (
           <>
             <span className="text-muted-foreground">Load</span>
-            <span className="font-mono font-medium text-right">{data.load}</span>
+            <span className="font-mono font-medium text-right">{load}</span>
           </>
         )}
-        <span className="text-muted-foreground">Fitness (CTL)</span>
-        <span className="font-mono font-medium text-right text-blue-600">{data.ctl}</span>
-        <span className="text-muted-foreground">Fatigue (ATL)</span>
-        <span className="font-mono font-medium text-right text-rose-500">{data.atl}</span>
-        <span className="text-muted-foreground">Form (TSB)</span>
-        <span className={cn(
-          'font-mono font-medium text-right',
-          data.tsb > 5 ? 'text-green-600' : data.tsb < -10 ? 'text-orange-600' : 'text-muted-foreground'
-        )}>{data.tsb > 0 ? '+' : ''}{data.tsb}</span>
+        {ctl != null && (
+          <>
+            <span className="text-muted-foreground">Fitness (CTL)</span>
+            <span className="font-mono font-medium text-right text-blue-500">{ctl}</span>
+          </>
+        )}
+        {atl != null && (
+          <>
+            <span className="text-muted-foreground">Fatigue (ATL)</span>
+            <span className="font-mono font-medium text-right text-rose-500">{atl}</span>
+          </>
+        )}
+        {tsb != null && (
+          <>
+            <span className="text-muted-foreground">Form (TSB)</span>
+            <span className={cn(
+              'font-mono font-medium text-right',
+              (tsb ?? 0) > 5 ? 'text-green-500' : (tsb ?? 0) < -10 ? 'text-orange-500' : 'text-muted-foreground'
+            )}>{(tsb ?? 0) > 0 ? '+' : ''}{tsb}</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -255,6 +286,40 @@ export default function TrainingFormPage() {
   const current = pmcData.length > 0 ? pmcData[pmcData.length - 1] : null;
   const previous = pmcData.length > 1 ? pmcData[pmcData.length - 2] : null;
   const weekAgo = pmcData.length > 7 ? pmcData[pmcData.length - 8] : null;
+
+  // Build chart data: historical points + 14-day no-training projection
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const historicalChart: ChartPoint[] = pmcData.map((p, i) => ({
+    ...p,
+    ctlProj: i === pmcData.length - 1 ? p.ctl : null,
+    atlProj: i === pmcData.length - 1 ? p.atl : null,
+    tsbProj: i === pmcData.length - 1 ? p.tsb : null,
+    isProjected: false,
+  }));
+
+  const projectionPoints: ChartPoint[] = [];
+  let projAtl = current?.atl ?? 0;
+  let projCtl = current?.ctl ?? 0;
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    projAtl = projAtl + (0 - projAtl) * (1 / 7);
+    projCtl = projCtl + (0 - projCtl) * (1 / 42);
+    const projTsb = projCtl - projAtl;
+    projectionPoints.push({
+      date: d.toISOString().slice(0, 10),
+      load: 0,
+      ctl: 0,
+      atl: 0,
+      tsb: 0,
+      ctlProj: Math.round(projCtl * 10) / 10,
+      atlProj: Math.round(projAtl * 10) / 10,
+      tsbProj: Math.round(projTsb * 10) / 10,
+      isProjected: true,
+    });
+  }
+
+  const chartData: ChartPoint[] = [...historicalChart, ...projectionPoints];
 
   // Weekly load chart data
   const weeklyData = data?.weeklyBreakdown.map(w => ({
@@ -408,7 +473,7 @@ export default function TrainingFormPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-base">Performance Management Chart</CardTitle>
-              <CardDescription>Fitness, fatigue, and form over time</CardDescription>
+              <CardDescription>Fitness, fatigue &amp; form over time · dashed = 14-day no-training projection</CardDescription>
             </div>
             <div className="flex gap-1">
               {([30, 60, 90] as const).map(range => (
@@ -428,25 +493,36 @@ export default function TrainingFormPage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="h-72 w-full">
+        <CardContent className="pt-0">
+          <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={pmcData} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
+              <ComposedChart data={chartData} margin={{ top: 10, right: 8, left: -18, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="tsbGradientPos" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(142 71% 45%)" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="hsl(142 71% 45%)" stopOpacity={0.02} />
+                  {/* CTL — blue area fill */}
+                  <linearGradient id="ctlFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#3b82f6" stopOpacity={0.35} />
+                    <stop offset="60%"  stopColor="#3b82f6" stopOpacity={0.15} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.03} />
                   </linearGradient>
-                  <linearGradient id="tsbGradientNeg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(25 95% 53%)" stopOpacity={0.02} />
-                    <stop offset="100%" stopColor="hsl(25 95% 53%)" stopOpacity={0.3} />
+                  {/* CTL projected — lighter version */}
+                  <linearGradient id="ctlFillProj" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#3b82f6" stopOpacity={0.15} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
                   </linearGradient>
-                  <linearGradient id="loadGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="hsl(var(--muted-foreground))" stopOpacity={0.05} />
+                  {/* TSB positive fill (green) */}
+                  <linearGradient id="tsbFillPos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#22c55e" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0.02} />
+                  </linearGradient>
+                  {/* Load bars */}
+                  <linearGradient id="loadFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stopColor="#94a3b8" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#94a3b8" stopOpacity={0.05} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
+
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.4} />
+
                 <XAxis
                   dataKey="date"
                   tickFormatter={formatDate}
@@ -460,73 +536,126 @@ export default function TrainingFormPage() {
                   tickLine={false}
                   axisLine={false}
                 />
-                <Tooltip content={<PMCTooltip />} />
-                <ReferenceLine y={0} stroke="hsl(var(--border))" strokeDasharray="4 4" />
-                {/* Daily load as subtle bars */}
-                <Bar
-                  dataKey="load"
-                  fill="url(#loadGradient)"
-                  radius={[2, 2, 0, 0]}
-                  maxBarSize={6}
-                  opacity={0.6}
+
+                <Tooltip content={<PMCTooltip />} cursor={{ stroke: 'hsl(var(--border))', strokeWidth: 1 }} />
+
+                {/* Zero baseline */}
+                <ReferenceLine y={0} stroke="hsl(var(--border))" strokeWidth={1} />
+
+                {/* Today marker */}
+                <ReferenceLine
+                  x={todayStr}
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeDasharray="4 4"
+                  strokeWidth={1}
+                  label={{ value: 'Today', position: 'insideTopRight', fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
                 />
-                {/* TSB fill area */}
+
+                {/* Daily load bars (subtle) */}
+                <Bar dataKey="load" fill="url(#loadFill)" radius={[2, 2, 0, 0]} maxBarSize={5} opacity={0.7} />
+
+                {/* CTL — historical: filled area + line */}
                 <Area
                   type="monotone"
-                  dataKey="tsb"
-                  stroke="none"
-                  fill="url(#tsbGradientPos)"
-                  fillOpacity={1}
-                  baseValue={0}
-                />
-                {/* CTL = Fitness line */}
-                <Line
-                  type="monotone"
                   dataKey="ctl"
-                  stroke="hsl(217 91% 60%)"
+                  stroke="#3b82f6"
                   strokeWidth={2.5}
+                  fill="url(#ctlFill)"
+                  fillOpacity={1}
                   dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
                   name="Fitness (CTL)"
                 />
-                {/* ATL = Fatigue line */}
+
+                {/* CTL — projected: dashed line, lighter fill */}
+                <Area
+                  type="monotone"
+                  dataKey="ctlProj"
+                  stroke="#3b82f6"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  fill="url(#ctlFillProj)"
+                  fillOpacity={1}
+                  dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                  legendType="none"
+                />
+
+                {/* ATL — historical: red solid line */}
                 <Line
                   type="monotone"
                   dataKey="atl"
-                  stroke="hsl(346 77% 56%)"
-                  strokeWidth={2}
+                  stroke="#ef4444"
+                  strokeWidth={2.5}
                   dot={false}
-                  strokeDasharray="6 3"
+                  connectNulls={false}
+                  isAnimationActive={false}
                   name="Fatigue (ATL)"
                 />
-                {/* TSB = Form line */}
+
+                {/* ATL — projected: dashed red */}
                 <Line
                   type="monotone"
-                  dataKey="tsb"
-                  stroke="hsl(142 71% 45%)"
-                  strokeWidth={2}
+                  dataKey="atlProj"
+                  stroke="#ef4444"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
                   dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                  legendType="none"
+                />
+
+                {/* TSB — historical: green area */}
+                <Area
+                  type="monotone"
+                  dataKey="tsb"
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                  fill="url(#tsbFillPos)"
+                  fillOpacity={1}
+                  baseValue={0}
+                  dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
                   name="Form (TSB)"
+                />
+
+                {/* TSB — projected: dashed green */}
+                <Line
+                  type="monotone"
+                  dataKey="tsbProj"
+                  stroke="#22c55e"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                  legendType="none"
                 />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
+
           {/* Legend */}
-          <div className="flex flex-wrap items-center justify-center gap-4 mt-3 text-xs">
+          <div className="flex flex-wrap items-center justify-center gap-5 mt-3 text-xs">
             <div className="flex items-center gap-1.5">
-              <div className="w-4 h-0.5 bg-blue-500 rounded-full" style={{ height: 3 }} />
+              <div className="w-5 rounded-full" style={{ height: 3, backgroundColor: '#3b82f6' }} />
               <span className="text-muted-foreground">Fitness (CTL)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-4 rounded-full" style={{ height: 2, borderTop: '2px dashed hsl(346 77% 56%)' }} />
+              <div className="w-5 rounded-full" style={{ height: 3, backgroundColor: '#ef4444' }} />
               <span className="text-muted-foreground">Fatigue (ATL)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-4 h-0.5 rounded-full" style={{ height: 3, backgroundColor: 'hsl(142 71% 45%)' }} />
+              <div className="w-5 rounded-full" style={{ height: 3, backgroundColor: '#22c55e' }} />
               <span className="text-muted-foreground">Form (TSB)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm bg-muted-foreground/20" />
-              <span className="text-muted-foreground">Daily Load</span>
+              <div className="w-5 rounded-full" style={{ height: 2, borderTop: '2px dashed #94a3b8' }} />
+              <span className="text-muted-foreground">Projected</span>
             </div>
           </div>
         </CardContent>

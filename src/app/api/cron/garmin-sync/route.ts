@@ -5,7 +5,8 @@
 // Cloud Scheduler target:
 //   GET https://app.hybridx.club/api/cron/garmin-sync
 //   Authorization: Bearer <CRON_SECRET>
-//   Schedule: 0 3 * * *  (03:00 UTC daily)
+//   Schedule: 0 3 */10 * *  (03:00 UTC every 10 days — safety net only)
+//   Immediate re-sync is triggered automatically when a user changes program.
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { getValidGarminToken } from '@/lib/garmin/token';
@@ -56,6 +57,15 @@ export async function GET(request: Request) {
       const data = userDoc.data();
       if (!data.garmin?.accessToken) { results.skipped++; continue; }
       if (!data.programId || !data.startDate) { results.skipped++; continue; }
+
+      // Skip if synced within the last 8 days — program-change events handle fresher syncs.
+      const lastSynced: Date | undefined = data.garminPlanSync?.lastSyncedAt instanceof Timestamp
+        ? data.garminPlanSync.lastSyncedAt.toDate()
+        : data.garminPlanSync?.lastSyncedAt ? new Date(data.garminPlanSync.lastSyncedAt) : undefined;
+      if (lastSynced && (today.getTime() - lastSynced.getTime()) < 8 * 86400000) {
+        results.skipped++;
+        continue;
+      }
 
       const startDate: Date =
         data.startDate instanceof Timestamp

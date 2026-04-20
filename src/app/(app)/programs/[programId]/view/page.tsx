@@ -235,7 +235,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                                 list-style-position: inside;
                             `;
                             // Render run segments first, then exercises
-                            (workout.runs ?? []).forEach(run => {
+                            (hasRuns(workout) ? workout.runs : []).forEach(run => {
                                 const item = document.createElement('li');
                                 item.innerHTML = `<strong style="color: #2563eb;">${run.type}:</strong> ${run.distance}km`;
                                 item.style.cssText = `font-size: 8px; line-height: 1.3; margin-bottom: 2px; color: #52525b;`;
@@ -322,6 +322,12 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
 
         // Refresh the UserContext to update Today's Workout on dashboard/workout pages
         await refreshData();
+
+        // If Garmin is connected, push the new plan immediately (fire-and-forget).
+        if (user.garminConnectedAt) {
+            fetch('/api/garmin/sync-plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                .catch(() => {});
+        }
 
         toast({
             title: 'Program Scheduled!',

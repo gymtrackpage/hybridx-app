@@ -1,20 +1,24 @@
 // src/lib/type-guards.ts
-import type { WorkoutDay, Program } from "@/models/types";
+import type { Workout, RunningWorkout, WorkoutDay, Program } from "@/models/types";
 
 /**
- * Returns true when a workout day contains at least one run segment.
+ * Type predicate: narrows WorkoutDay to RunningWorkout when runs exist.
  * Use this instead of checking `workout.programType === 'running'`.
  */
-export function hasRuns(workout: WorkoutDay | null | undefined): boolean {
-    return !!workout && Array.isArray(workout.runs) && workout.runs.length > 0;
+export function hasRuns(workout: WorkoutDay | null | undefined): workout is RunningWorkout {
+    if (!workout) return false;
+    const w = workout as RunningWorkout;
+    return Array.isArray(w.runs) && w.runs.length > 0;
 }
 
 /**
- * Returns true when a workout day contains at least one strength/gym exercise.
+ * Type predicate: narrows WorkoutDay to Workout when exercises exist.
  * Use this instead of checking `workout.programType === 'hyrox'`.
  */
-export function hasExercises(workout: WorkoutDay | null | undefined): boolean {
-    return !!workout && Array.isArray(workout.exercises) && workout.exercises.length > 0;
+export function hasExercises(workout: WorkoutDay | null | undefined): workout is Workout {
+    if (!workout) return false;
+    const w = workout as Workout;
+    return Array.isArray(w.exercises) && w.exercises.length > 0;
 }
 
 /**

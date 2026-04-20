@@ -92,7 +92,7 @@ export interface User {
   notificationTime?: { hour: number; minute: number };
 }
 
-export type ProgramType = 'hyrox' | 'running';
+export type ProgramType = 'hyrox' | 'running' | 'hybrid';
 
 export interface Program {
   id: string;
@@ -123,6 +123,8 @@ export interface RunningWorkout {
   targetRace?: 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon';
   exercises: [];
 }
+
+export type WorkoutDay = Workout | RunningWorkout;
 
 export type PaceZone = 'recovery' | 'easy' | 'marathon' | 'threshold' | 'interval' | 'repetition';
 

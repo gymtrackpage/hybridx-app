@@ -80,6 +80,13 @@ export default function ProgramsPage() {
               startDate: new Date(),
           });
           setUser(prev => prev ? ({ ...prev, programId: program.id }) : null);
+
+          // If Garmin is connected, push the new plan immediately (fire-and-forget).
+          if (user.garminConnectedAt) {
+              fetch('/api/garmin/sync-plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+                  .catch(() => {});
+          }
+
           toast({ title: 'Program Started', description: `${program.name} is now your active plan.` });
           router.push('/dashboard');
       } catch (e) {
