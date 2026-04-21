@@ -22,7 +22,11 @@ import type { GarminPlanSync } from '@/models/types';
 const DEFAULT_HORIZON_DAYS = 14;
 
 function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Use local date parts to avoid UTC-offset shifting the calendar date.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export async function POST(req: NextRequest) {
