@@ -383,7 +383,8 @@ export function SignupForm() {
           title: "Account Created!",
           description: "Welcome." + programMessage,
       });
-      router.push('/dashboard');
+      // Send to setup page to install PWA + enable notifications before dashboard
+      router.push('/setup');
 
     } catch (error: any) {
         logger.error('Signup error:', error);

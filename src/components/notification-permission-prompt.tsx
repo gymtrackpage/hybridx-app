@@ -6,6 +6,7 @@ import { Bell, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNotificationPermission } from '@/hooks/use-notification-permission';
+import { subscribeUserToPush } from '@/lib/push-subscribe';
 
 const NOTIFICATION_PROMPT_KEY = 'notification_prompt_dismissed';
 const NOTIFICATION_PROMPT_VERSION = '1'; // Increment this to re-show the prompt after updates
@@ -29,17 +30,11 @@ export function NotificationPermissionPrompt() {
   }, [isSupported, permission]);
 
   const handleEnable = async () => {
-    const granted = await requestPermission();
-    if (granted) {
-      // Store user preference and schedule notifications
-      try {
-        await fetch('/api/notifications/schedule', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
-      } catch (error) {
-        logger.error('Error scheduling notifications:', error);
-      }
+    // Request permission + subscribe to web push in one step
+    const success = await subscribeUserToPush();
+    if (!success) {
+      // Fall back to old permission-only request if push subscribe failed
+      await requestPermission();
     }
     setIsVisible(false);
     localStorage.setItem(NOTIFICATION_PROMPT_KEY, NOTIFICATION_PROMPT_VERSION);
