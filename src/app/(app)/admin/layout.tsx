@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, Settings, Users, BookOpen } from "lucide-react";
+import { ChevronLeft, Settings, Users, BookOpen, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/icons";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             </AdminNavLink>
             <AdminNavLink href="/admin/users" icon={Users}>
               Users
+            </AdminNavLink>
+            <AdminNavLink href="/admin/analytics" icon={BarChart2}>
+              Analytics
             </AdminNavLink>
           </div>
         </nav>

@@ -90,6 +90,15 @@ export interface User {
   cancellation_effective_date?: Date;
   completedWorkouts?: number;
   notificationTime?: { hour: number; minute: number };
+  // Analytics fields
+  lastSeenAt?: Date;
+  lastLoginAt?: Date;
+  /** Highest onboarding step reached (1–6); 6 = completed */
+  onboardingCompletedStep?: number;
+  /** Platform at last session: web | pwa | ios | android */
+  platform?: string;
+  sessionCount?: number;
+  totalSessionMinutes?: number;
 }
 
 export type ProgramType = 'hyrox' | 'running' | 'hybrid';

@@ -1,8 +1,9 @@
 
 'use client';
 import { logger } from '@/lib/logger';
+import { trackEvent, updateUserMeta, getPlatform } from '@/lib/analytics';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -112,6 +113,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAndroid, setIsAndroid] = useState(false);
+  const sessionStartRef = useRef<number | null>(null);
+  const trackedUserRef = useRef<string | null>(null);
   
   useEffect(() => {
     setIsAndroid(Capacitor.getPlatform() === 'android');
@@ -128,6 +131,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             if (currentUser) {
                 logger.log('✅ [Layout] User authenticated:', currentUser.email);
                 setUser(currentUser);
+
+                // Start session tracking for this user (once per auth state)
+                if (trackedUserRef.current !== currentUser.uid) {
+                    trackedUserRef.current = currentUser.uid;
+                    sessionStartRef.current = Date.now();
+                    trackEvent(currentUser.uid, 'session_start', { platform: getPlatform() });
+                    updateUserMeta(currentUser.uid, {
+                        lastLoginAt: new Date(),
+                        platform: getPlatform(),
+                    });
+                }
 
                 const appUser = await getUserClient(currentUser.uid);
                 if (appUser && !appUser.isAdmin && pathname !== '/subscription') {
@@ -175,6 +189,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
     };
   }, [router, pathname]);
+
+  // Track page views on route change
+  useEffect(() => {
+    if (user) {
+      trackEvent(user.uid, 'page_view', { path: pathname });
+    }
+  }, [pathname, user]);
+
+  // Track session end when user hides/closes the tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && user && sessionStartRef.current) {
+        const durationSeconds = Math.round((Date.now() - sessionStartRef.current) / 1000);
+        trackEvent(user.uid, 'session_end', {
+          durationSeconds,
+          platform: getPlatform(),
+        });
+        updateUserMeta(user.uid, {
+          sessionCount: (window as any).__axSessionCount
+            ? (window as any).__axSessionCount + 1
+            : 1,
+        });
+        sessionStartRef.current = null;
+      } else if (!document.hidden && user && !sessionStartRef.current) {
+        sessionStartRef.current = Date.now();
+        trackEvent(user.uid, 'session_start', { platform: getPlatform(), resumed: true });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user]);
 
   const handleLogout = async () => {
     try {

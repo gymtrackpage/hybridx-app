@@ -1,6 +1,8 @@
 
 'use client';
 import { logger } from '@/lib/logger';
+import { trackEvent } from '@/lib/analytics';
+import { useAuth } from '@/components/AuthProvider';
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -16,6 +18,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function InstallPwaBanner() {
+  const { user } = useAuth();
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isIos, setIsIos] = useState(false);
@@ -24,28 +27,31 @@ export function InstallPwaBanner() {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setInstallPrompt(e as BeforeInstallPromptEvent);
-      setIsVisible(true); 
+      setIsVisible(true);
+      trackEvent(user?.uid ?? null, 'pwa_prompt_shown', { trigger: 'beforeinstallprompt' });
     };
 
     const isRunningStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
     const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    
+
     if (!isRunningStandalone) {
       setIsIos(isIosDevice);
       window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      
-      if(isIosDevice) {
-          setIsVisible(true);
+
+      if (isIosDevice) {
+        setIsVisible(true);
+        trackEvent(user?.uid ?? null, 'pwa_prompt_shown', { trigger: 'ios_manual' });
       }
     }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, []);
+  }, [user?.uid]);
 
   const handleInstallClick = async () => {
     if (isIos) {
+      trackEvent(user?.uid ?? null, 'pwa_install_accepted', { platform: 'ios' });
       alert("To install, tap the Share button in your browser and then select 'Add to Home Screen'.");
       return;
     }
@@ -55,14 +61,17 @@ export function InstallPwaBanner() {
     const { outcome } = await installPrompt.userChoice;
     if (outcome === 'accepted') {
       logger.log('User accepted the A2HS prompt');
+      trackEvent(user?.uid ?? null, 'pwa_install_accepted', { platform: 'android_chrome' });
     } else {
       logger.log('User dismissed the A2HS prompt');
+      trackEvent(user?.uid ?? null, 'pwa_install_dismissed', { platform: 'android_chrome' });
     }
     setInstallPrompt(null);
     setIsVisible(false);
   };
 
   const handleDismissClick = () => {
+    trackEvent(user?.uid ?? null, 'pwa_install_dismissed', { platform: isIos ? 'ios' : 'web' });
     setIsVisible(false);
   };
   

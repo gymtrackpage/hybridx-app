@@ -1,8 +1,9 @@
 
 'use client';
 import { logger } from '@/lib/logger';
+import { trackEvent } from '@/lib/analytics';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -128,6 +129,8 @@ export function LoginForm() {
           }
       }
 
+      trackEvent(userCredential.user.uid, 'login', { method: 'email' });
+
       const wasRedirected = await completePendingStravaAuth();
 
       if (!wasRedirected) {
@@ -249,10 +252,20 @@ export function SignupForm() {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<Partial<SignupData>>(initialSignupData);
+  const [signupStartedAt] = useState(() => Date.now());
+
+  useEffect(() => {
+    trackEvent(null, 'signup_page_viewed');
+  }, []);
 
   const handleNext = (data: Partial<SignupData>) => {
     setFormData((prev) => ({ ...prev, ...data }));
-    setStep((prev) => prev + 1);
+    const nextStep = step + 1;
+    trackEvent(null, 'onboarding_step_completed', {
+      step,
+      timeOnStepMs: Date.now() - signupStartedAt,
+    });
+    setStep(nextStep);
   };
 
   const handlePrev = () => {
@@ -356,6 +369,15 @@ export function SignupForm() {
       const programMessage = finalData.selectedProgramId
         ? " Your selected program is ready to start!" + adjustmentMessage
         : " You can select a program from your dashboard.";
+
+      trackEvent(user.uid, 'onboarding_completed', {
+        experience: finalData.experience,
+        frequency: finalData.frequency,
+        goal: finalData.goal,
+        selectedProgramId: finalData.selectedProgramId ?? null,
+        programAdjusted: !!customProgram,
+        totalTimeMs: Date.now() - signupStartedAt,
+      });
 
       toast({
           title: "Account Created!",
