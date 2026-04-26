@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ProgramForm } from '@/components/program-form';
 import { ProgramImportDialog } from '@/components/program-import-dialog';
+import { ProgramExportButton } from '@/components/program-export-button';
 
 
 export default function AdminProgramsPage() {
@@ -162,6 +163,7 @@ export default function AdminProgramsPage() {
                             <Edit className="mr-2 h-4 w-4" />
                             Edit
                           </DropdownMenuItem>
+                          <ProgramExportButton program={program} />
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <DropdownMenuItem onSelect={(e) => e.preventDefault()}>

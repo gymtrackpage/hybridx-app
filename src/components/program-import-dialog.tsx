@@ -16,7 +16,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Program, Workout, Exercise, RunningProgram, RunningWorkout, PlannedRun, PaceZone, ProgramType } from '@/models/types';
-import { createProgram } from '@/services/program-service-client';
+import { createProgram, getProgramClient, updateProgram } from '@/services/program-service-client';
+import { isUnifiedCsv, rowsToProgram } from '@/lib/program-csv';
 
 interface ProgramImportDialogProps {
   isOpen: boolean;
@@ -53,6 +54,8 @@ type CsvRow = HyroxCsvRow | RunningCsvRow;
 export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImportDialogProps) {
   const [file, setFile] = useState<File | null>(null);
   const [parsedProgram, setParsedProgram] = useState<Omit<Program, 'id'> | null>(null);
+  const [targetProgramId, setTargetProgramId] = useState<string | null>(null);
+  const [targetProgramName, setTargetProgramName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -63,16 +66,45 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
       setFile(selectedFile);
       setError(null);
       setParsedProgram(null);
+      setTargetProgramId(null);
+      setTargetProgramName(null);
       parseCsv(selectedFile);
+    }
+  };
+
+  const resolveTargetProgram = async (rawId: string | undefined) => {
+    const id = (rawId ?? '').trim();
+    if (!id) {
+      setTargetProgramId(null);
+      setTargetProgramName(null);
+      return;
+    }
+    try {
+      const existing = await getProgramClient(id);
+      if (existing) {
+        setTargetProgramId(id);
+        setTargetProgramName(existing.name);
+      } else {
+        setTargetProgramId(null);
+        setTargetProgramName(null);
+        toast({
+          title: 'Program not found',
+          description: `No program with id "${id}" exists. A new program will be created instead.`,
+        });
+      }
+    } catch (err) {
+      logger.error('Failed to look up existing program:', err);
+      setTargetProgramId(null);
+      setTargetProgramName(null);
     }
   };
 
   const parseCsv = (csvFile: File) => {
     setIsLoading(true);
-    Papa.parse<CsvRow>(csvFile, {
+    Papa.parse<Record<string, string>>(csvFile, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
+      complete: async (results) => {
         if (results.errors.length > 0) {
           setError('Failed to parse CSV. Please check the file format and headers.');
           logger.error('CSV parsing errors:', results.errors);
@@ -80,13 +112,23 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
           return;
         }
         try {
-          // Detect program type based on headers
-          const isRunningProgram = 'runType' in results.data[0] && 'runPaceZone' in results.data[0];
-          const program = isRunningProgram 
-            ? transformRunningData(results.data as RunningCsvRow[])
-            : transformHyroxData(results.data as HyroxCsvRow[]);
-          
-          setParsedProgram(program);
+          const rows = results.data;
+          const headers = results.meta.fields ?? [];
+
+          if (isUnifiedCsv(headers)) {
+            const { id, data } = rowsToProgram(rows);
+            setParsedProgram(data);
+            await resolveTargetProgram(id);
+          } else {
+            // Legacy formats: detect running vs hyrox by run-specific columns.
+            const isRunningProgram = headers.includes('runType') && headers.includes('runPaceZone');
+            const program = isRunningProgram
+              ? transformRunningData(rows as unknown as RunningCsvRow[])
+              : transformHyroxData(rows as unknown as HyroxCsvRow[]);
+            setParsedProgram(program);
+            // Even legacy CSVs may carry an `id` column from a hand edit.
+            await resolveTargetProgram(rows[0]?.id);
+          }
         } catch (e: any) {
           setError(e.message);
         } finally {
@@ -183,11 +225,19 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
 
     setIsLoading(true);
     try {
-      await createProgram(parsedProgram);
-      toast({
-        title: 'Success!',
-        description: 'The program has been imported successfully.',
-      });
+      if (targetProgramId) {
+        await updateProgram(targetProgramId, parsedProgram);
+        toast({
+          title: 'Program updated',
+          description: `"${parsedProgram.name}" has been updated successfully.`,
+        });
+      } else {
+        await createProgram(parsedProgram);
+        toast({
+          title: 'Program created',
+          description: `"${parsedProgram.name}" has been imported successfully.`,
+        });
+      }
       onSuccess();
       resetState();
     } catch (err) {
@@ -201,10 +251,12 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
       setIsLoading(false);
     }
   };
-  
+
   const resetState = () => {
     setFile(null);
     setParsedProgram(null);
+    setTargetProgramId(null);
+    setTargetProgramName(null);
     setError(null);
     setIsLoading(false);
   }
@@ -222,7 +274,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
         <DialogHeader>
           <DialogTitle>Import Program from CSV</DialogTitle>
           <DialogDescription>
-            Upload a CSV file to create a new training program. Make sure it follows the required format.
+            Upload a CSV file to create a new training program, or upload an exported program file to update an existing one.
           </DialogDescription>
         </DialogHeader>
         
@@ -272,8 +324,13 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
                 <div className="p-4 border rounded-md bg-card">
                     <h4 className="font-semibold mb-2 flex items-center gap-2">
                         <CheckCircle className="w-5 h-5 text-green-500" />
-                        Preview of Program to be Imported
+                        {targetProgramId ? 'Will update existing program' : 'Will create new program'}
                     </h4>
+                    {targetProgramId && targetProgramName && (
+                        <p className="text-sm text-muted-foreground mb-2">
+                            Replacing <strong>{targetProgramName}</strong> (id: <code className="text-xs">{targetProgramId}</code>) with the contents of this file.
+                        </p>
+                    )}
                     <p className="text-sm"><strong>Name:</strong> {parsedProgram.name}</p>
                     <p className="text-sm"><strong>Type:</strong> <span className="capitalize">{parsedProgram.programType}</span></p>
                     <p className="text-sm text-muted-foreground"><strong>Description:</strong> {parsedProgram.description}</p>
@@ -288,7 +345,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
           <Button variant="ghost" onClick={() => handleOpenChange(false)}>Cancel</Button>
           <Button onClick={handleImport} disabled={!parsedProgram || isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Import Program
+            {targetProgramId ? 'Update Program' : 'Import Program'}
           </Button>
         </DialogFooter>
       </DialogContent>
