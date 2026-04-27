@@ -1,14 +1,25 @@
 // src/app/(app)/profile/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Loader2, Link as LinkIcon, Bell, Settings } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Bell, Settings, CheckCircle2, XCircle, AlertTriangle, ExternalLink } from 'lucide-react';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { GarminIntegrationCard } from '@/components/garmin-integration-card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { subscribeUserToPush } from '@/lib/push-subscribe';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -61,6 +72,8 @@ export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>('default');
+  const [enablingNotifs, setEnablingNotifs] = useState(false);
 
   const profileForm = useForm<ProfileFormData>({
     resolver: zodResolver(profileFormSchema),
@@ -78,7 +91,7 @@ export default function ProfilePage() {
     resolver: zodResolver(notificationSchema),
     defaultValues: {
       hour: '8',
-      minute: '0',
+      minute: '00',
     },
   });
 
@@ -111,8 +124,8 @@ export default function ProfilePage() {
                     halfMarathon: currentUser.runningProfile?.benchmarkPaces?.halfMarathon ? secondsToTimeString(currentUser.runningProfile.benchmarkPaces.halfMarathon) : '',
                 });
                 notificationForm.reset({
-                    hour: currentUser.notificationTime?.hour?.toString() || '8',
-                    minute: currentUser.notificationTime?.minute?.toString() || '0',
+                    hour: currentUser.notificationTime?.hour?.toString() ?? '8',
+                    minute: (currentUser.notificationTime?.minute ?? 0).toString().padStart(2, '0'),
                 });
             }
         }
@@ -146,6 +159,55 @@ export default function ProfilePage() {
         }
     };
   }, []);
+
+  const isNative = Capacitor.isNativePlatform();
+
+  // Read notification permission on mount — native and web paths differ
+  useEffect(() => {
+    const check = async () => {
+      if (isNative) {
+        try {
+          const status = await LocalNotifications.checkPermissions();
+          setNotifPermission(nativeToWebPermission(status.display));
+        } catch {
+          setNotifPermission('unsupported');
+        }
+      } else {
+        if (typeof window === 'undefined' || !('Notification' in window)) {
+          setNotifPermission('unsupported');
+          return;
+        }
+        setNotifPermission(Notification.permission);
+      }
+    };
+    check();
+  }, [isNative]);
+
+  const handleEnableNotifications = async () => {
+    setEnablingNotifs(true);
+    try {
+      if (isNative) {
+        const status = await LocalNotifications.requestPermissions();
+        const mapped = nativeToWebPermission(status.display);
+        setNotifPermission(mapped);
+        if (mapped === 'granted') {
+          toast({ title: 'Notifications enabled', description: "You'll receive your daily workout reminder." });
+        } else {
+          toast({ title: 'Notifications not enabled', description: 'Permission was not granted.', variant: 'destructive' });
+        }
+      } else {
+        const success = await subscribeUserToPush();
+        setNotifPermission(Notification.permission);
+        if (success) {
+          toast({ title: 'Notifications enabled', description: "You'll receive your daily workout reminder." });
+        } else {
+          toast({ title: 'Could not enable notifications', description: 'Please check your browser settings.', variant: 'destructive' });
+        }
+      }
+    } finally {
+      setEnablingNotifs(false);
+    }
+  };
 
   // Handle URL parameters for Strava auth feedback
   useEffect(() => {
@@ -400,9 +462,15 @@ export default function ProfilePage() {
                 <Form {...notificationForm}>
                     <form onSubmit={notificationForm.handleSubmit(handleNotificationSubmit)}>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
+                            <CardTitle className="flex items-center gap-2 flex-wrap">
                                 <Bell className="h-5 w-5" />
                                 Daily Workout Notifications
+                                <NotificationStatusBadge
+                                    permission={notifPermission}
+                                    onEnable={handleEnableNotifications}
+                                    enabling={enablingNotifs}
+                                    isNative={isNative}
+                                />
                             </CardTitle>
                             <CardDescription>Choose when you'd like to receive your daily workout reminder.</CardDescription>
                         </CardHeader>
@@ -535,5 +603,132 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────
+
+function nativeToWebPermission(display: string): NotificationPermission {
+  if (display === 'granted') return 'granted';
+  if (display === 'denied') return 'denied';
+  return 'default';
+}
+
+// ── Notification permission badge ─────────────────────────────────────
+
+interface NotificationStatusBadgeProps {
+  permission: NotificationPermission | 'unsupported';
+  onEnable: () => void;
+  enabling: boolean;
+  isNative: boolean;
+}
+
+function NotificationStatusBadge({ permission, onEnable, enabling, isNative }: NotificationStatusBadgeProps) {
+  if (permission === 'unsupported') return null;
+
+  if (permission === 'granted') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 border border-green-200">
+        <CheckCircle2 className="h-3 w-3" />
+        Enabled
+      </span>
+    );
+  }
+
+  if (permission === 'denied') {
+    return (
+      <Dialog>
+        <DialogTrigger asChild>
+          <button className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 border border-red-200 hover:bg-red-200 transition-colors cursor-pointer">
+            <XCircle className="h-3 w-3" />
+            Blocked
+          </button>
+        </DialogTrigger>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Notifications are blocked
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-4 text-sm">
+                <p>
+                  Notifications were denied and can&apos;t be re-enabled from inside the app.
+                  Follow the steps below for your device.
+                </p>
+
+                {isNative ? (
+                  <>
+                    <div className="space-y-2">
+                      <p className="font-medium text-foreground">iPhone:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                        <li>Open the <strong>Settings</strong> app</li>
+                        <li>Scroll down and tap <strong>HYBRIDX.CLUB</strong></li>
+                        <li>Tap <strong>Notifications</strong></li>
+                        <li>Enable <strong>Allow Notifications</strong></li>
+                      </ol>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="font-medium text-foreground">Android:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                        <li>Open <strong>Settings</strong> → <strong>Apps</strong></li>
+                        <li>Tap <strong>HYBRIDX.CLUB</strong></li>
+                        <li>Tap <strong>Notifications</strong></li>
+                        <li>Enable <strong>Allow notifications</strong></li>
+                      </ol>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <p className="font-medium text-foreground">Chrome (Android / Desktop):</p>
+                      <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                        <li>Tap the <strong>lock icon</strong> in the address bar</li>
+                        <li>Tap <strong>Notifications</strong></li>
+                        <li>Change from <strong>Block</strong> to <strong>Allow</strong></li>
+                        <li>Reload the page</li>
+                      </ol>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="font-medium text-foreground">iPhone (installed PWA):</p>
+                      <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                        <li>Open the <strong>Settings</strong> app</li>
+                        <li>Scroll down and tap <strong>HYBRIDX.CLUB</strong></li>
+                        <li>Tap <strong>Notifications</strong> and enable them</li>
+                      </ol>
+                    </div>
+                    <a
+                      href="https://support.google.com/chrome/answer/3220216"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-primary hover:underline text-xs"
+                    >
+                      Chrome notification help <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // permission === 'default' — not yet asked
+  return (
+    <button
+      type="button"
+      onClick={onEnable}
+      disabled={enabling}
+      className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700 border border-amber-200 hover:bg-amber-200 transition-colors cursor-pointer disabled:opacity-50"
+    >
+      {enabling ? (
+        <Loader2 className="h-3 w-3 animate-spin" />
+      ) : (
+        <AlertTriangle className="h-3 w-3" />
+      )}
+      {enabling ? 'Enabling…' : 'Not enabled — tap to enable'}
+    </button>
   );
 }
