@@ -134,8 +134,8 @@ export async function GET(request: Request) {
         try {
           const { workoutId } = await createWorkout(accessToken, garminWorkout);
           const scheduledDate = isoDate(new Date(startDate.getTime() + (w.day - 1) * 86400000));
-          await scheduleWorkout(accessToken, workoutId, scheduledDate);
-          newSync.workouts[dayKey] = { workoutId, scheduledDate };
+          const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
+          newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
           userPushed++;
         } catch (e: any) {
           logger.error(`Garmin cron: push failed day ${w.day} user ${userId}:`, e.message);

@@ -1,16 +1,12 @@
 /**
- * Thin wrapper around the Garmin Training API.
+ * Thin wrapper around the Garmin Training API V2.
  *
- * Endpoints (from the Connect Developer Program docs):
- *   POST   {GARMIN_API_BASE}/training-api/workout              → create workout
- *   PUT    {GARMIN_API_BASE}/training-api/workout/{workoutId}  → update workout
- *   DELETE {GARMIN_API_BASE}/training-api/workout/{workoutId}  → delete workout
- *   POST   {GARMIN_API_BASE}/training-api/schedule              → schedule on a date
- *   DELETE {GARMIN_API_BASE}/training-api/schedule/{scheduleId} → unschedule
- *
- * Verify the exact paths against the Partner Training API spec you
- * receive from Garmin after approval — they are stable but the version
- * prefix may differ.
+ * Endpoints (Training API V2 spec):
+ *   POST   {GARMIN_API_BASE}/workoutportal/workout/v2              → create workout
+ *   PUT    {GARMIN_API_BASE}/training-api/workout/v2/{workoutId}   → update workout
+ *   DELETE {GARMIN_API_BASE}/training-api/workout/v2/{workoutId}   → delete workout
+ *   POST   {GARMIN_API_BASE}/training-api/schedule/                → schedule on a date
+ *   DELETE {GARMIN_API_BASE}/training-api/schedule/{scheduleId}    → unschedule
  */
 import axios from 'axios';
 import { GARMIN_API_BASE } from './oauth';
@@ -32,12 +28,10 @@ export async function createWorkout(
   workout: GarminWorkout,
 ): Promise<PushedWorkout> {
   const res = await axios.post(
-    `${GARMIN_API_BASE}/training-api/workout`,
+    `${GARMIN_API_BASE}/workoutportal/workout/v2`,
     workout,
     { headers: authHeaders(accessToken) },
   );
-  // Garmin returns workoutId either at top level or inside a wrapper depending
-  // on the endpoint version — accept both.
   const id = res.data?.workoutId ?? res.data?.id;
   if (!id) throw new Error('Garmin createWorkout: no workoutId in response.');
   return { workoutId: String(id) };
@@ -49,7 +43,7 @@ export async function updateWorkout(
   workout: GarminWorkout,
 ): Promise<void> {
   await axios.put(
-    `${GARMIN_API_BASE}/training-api/workout/${workoutId}`,
+    `${GARMIN_API_BASE}/training-api/workout/v2/${workoutId}`,
     workout,
     { headers: authHeaders(accessToken) },
   );
@@ -59,13 +53,13 @@ export async function deleteWorkout(
   accessToken: string,
   workoutId: string,
 ): Promise<void> {
-  await axios.delete(`${GARMIN_API_BASE}/training-api/workout/${workoutId}`, {
+  await axios.delete(`${GARMIN_API_BASE}/training-api/workout/v2/${workoutId}`, {
     headers: authHeaders(accessToken),
   });
 }
 
 export interface ScheduleResult {
-  workoutScheduleId?: string;
+  scheduleId?: string;
 }
 
 /** Schedule a workout to appear on a calendar date (YYYY-MM-DD). */
@@ -75,16 +69,26 @@ export async function scheduleWorkout(
   isoDate: string,
 ): Promise<ScheduleResult> {
   const res = await axios.post(
-    `${GARMIN_API_BASE}/training-api/schedule`,
+    `${GARMIN_API_BASE}/training-api/schedule/`,
     { workoutId, date: isoDate },
     { headers: authHeaders(accessToken) },
   );
-  return { workoutScheduleId: res.data?.workoutScheduleId };
+  const scheduleId = res.data?.scheduleId ?? res.data?.workoutScheduleId;
+  return { scheduleId: scheduleId ? String(scheduleId) : undefined };
+}
+
+/** Remove a previously scheduled workout from the calendar. */
+export async function unscheduleWorkout(
+  accessToken: string,
+  scheduleId: string,
+): Promise<void> {
+  await axios.delete(`${GARMIN_API_BASE}/training-api/schedule/${scheduleId}`, {
+    headers: authHeaders(accessToken),
+  });
 }
 
 /** Fetch the Garmin user's UUID — used for webhook deduping. */
 export async function fetchGarminUserId(accessToken: string): Promise<string> {
-  // Per Garmin Health/Connect SDK: GET /wellness-api/rest/user/id
   const res = await axios.get(
     `${GARMIN_API_BASE}/wellness-api/rest/user/id`,
     { headers: { Authorization: `Bearer ${accessToken}` } },

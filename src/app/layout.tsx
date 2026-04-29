@@ -19,7 +19,7 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   title: 'HYBRIDX.CLUB',
   description: 'Your AI-powered partner for peak HYROX performance.',
-  manifest: '/manifest.json',
+  ...(process.env.NODE_ENV === 'production' ? { manifest: '/manifest.json' } : {}),
 };
 
 export const viewport: Viewport = {

@@ -1,14 +1,18 @@
 /**
- * HybridX → Garmin Training API workout mapper.
+ * HybridX → Garmin Training API V2 workout mapper.
  *
- * Confirmed working format (from live API testing):
- *   - sport: "RUNNING" | "STRENGTH_TRAINING" | "CARDIO_TRAINING" (uppercase string, not object)
- *   - Steps in a flat `steps` array at the top level (no workoutSegments wrapper)
- *   - type: "WorkoutStep" | "WorkoutRepeatStep" (not ExecutableStepDTO/RepeatGroupDTO)
+ * V2 payload shape (confirmed against Training_API_V2.pdf):
+ *   - sport at top level AND inside each segment
+ *   - All steps live inside segments[].steps (not at top level)
+ *   - type: "WorkoutStep" | "WorkoutRepeatStep"
  *   - intensity: "WARMUP" | "INTERVAL" | "COOLDOWN" | "RECOVERY" | "REST" | "ACTIVE"
  *   - durationType: "TIME" | "DISTANCE" | "OPEN" | "REPS" (uppercase strings)
- *   - targetType: "OPEN" | "HEART_RATE" | "SPEED" etc. (uppercase strings)
+ *   - targetType: "OPEN" | "HEART_RATE" | "PACE" | "SPEED" | "CADENCE" | "POWER"
+ *   - All step fields must be present even when null (API expects complete objects)
+ *   - workoutProvider + workoutSourceId max 20 chars — "HybridX" is safe
  */
+
+import { lookupGarminExercise } from './program-enricher';
 
 // ============================================================
 // INPUT TYPES
@@ -23,26 +27,61 @@ export interface CsvRow {
   exerciseDetails: string;
 }
 
+export interface WorkoutDayExercise {
+  name: string;
+  details: string;
+  // Structured Garmin fields — populated from enriched Exercise objects
+  garminExerciseCategory?: string;
+  garminExerciseName?: string;
+  weightKg?: number;
+  restSeconds?: number;
+  sets?: number;
+  reps?: number;
+  // For run steps: target pace in m/s
+  targetPaceMps?: number;
+}
+
 export interface WorkoutDay {
   day: number;
   title: string;
-  exercises: Array<{ name: string; details: string }>;
+  exercises: WorkoutDayExercise[];
 }
 
 // ============================================================
-// GARMIN TRAINING API OUTPUT TYPES
+// GARMIN TRAINING API V2 OUTPUT TYPES
 // ============================================================
+
+export type GarminSport =
+  | 'RUNNING'
+  | 'STRENGTH_TRAINING'
+  | 'CARDIO_TRAINING'
+  | 'GENERIC';
 
 export interface WorkoutStepItem {
   type: 'WorkoutStep';
   stepOrder: number;
   intensity: 'WARMUP' | 'COOLDOWN' | 'INTERVAL' | 'ACTIVE' | 'REST' | 'RECOVERY';
-  description?: string;
+  description: string | null;
   durationType: 'TIME' | 'DISTANCE' | 'OPEN' | 'REPS' | 'CALORIES';
-  durationValue?: number;
-  targetType: 'OPEN' | 'HEART_RATE' | 'SPEED' | 'CADENCE' | 'POWER';
-  targetValueLow?: number;
-  targetValueHigh?: number;
+  durationValue: number | null;
+  durationValueType: null;
+  targetType: 'OPEN' | 'HEART_RATE' | 'PACE' | 'SPEED' | 'CADENCE' | 'POWER';
+  targetValue: number | null;
+  targetValueLow: number | null;
+  targetValueHigh: number | null;
+  targetValueType: null;
+  secondaryTargetType: null;
+  secondaryTargetValue: null;
+  secondaryTargetValueLow: null;
+  secondaryTargetValueHigh: null;
+  secondaryTargetValueType: null;
+  strokeType: null;
+  drillType: null;
+  equipmentType: null;
+  exerciseCategory: string | null;
+  exerciseName: string | null;
+  weightValue: number | null;
+  weightDisplayUnit: string | null;
 }
 
 export interface WorkoutRepeatStepItem {
@@ -55,12 +94,25 @@ export interface WorkoutRepeatStepItem {
 
 export type WorkoutStep = WorkoutStepItem | WorkoutRepeatStepItem;
 
+export interface GarminWorkoutSegment {
+  segmentOrder: number;
+  sport: GarminSport;
+  poolLength: null;
+  poolLengthUnit: null;
+  steps: WorkoutStep[];
+}
+
 export interface GarminWorkout {
   workoutName: string;
-  description?: string;
-  sport: 'RUNNING' | 'STRENGTH_TRAINING' | 'CARDIO_TRAINING' | 'GENERIC';
+  description: string;
+  sport: GarminSport;
+  workoutProvider: 'HybridX';
+  workoutSourceId: 'HybridX';
+  isSessionTransitionEnabled: false;
+  poolLength: null;
+  poolLengthUnit: null;
   estimatedDurationInSecs?: number;
-  steps: WorkoutStep[];
+  segments: GarminWorkoutSegment[];
 }
 
 // ============================================================
@@ -107,7 +159,6 @@ export function parseDistanceMeters(text: string): number | null {
 export function parseTimedSets(
   text: string,
 ): { sets: number; timeS: number } | null {
-  // Matches "3x90 seconds", "3x60sec", "3x90s", "3x90-second holds"
   const m = text.match(/(\d+)\s*x\s*(\d+)\s*(?:seconds?|secs?|s\b)/i);
   if (!m) return null;
   return { sets: parseInt(m[1], 10), timeS: parseInt(m[2], 10) };
@@ -121,7 +172,6 @@ export function parseSetsReps(
   if (/\bAMRAP\b/i.test(text) && !/\d+\s*min.*AMRAP/i.test(text)) {
     return { sets: 1, reps: 0, isAmrap: true };
   }
-  // Exclude when reps value is followed by a distance (m) or time (sec/s) unit
   const m = text.match(/(\d+)\s*x\s*(\d+)(?:\s*[-–]\s*(\d+))?\b(?!\s*(?:m\b|sec|s\b))/i);
   if (m) {
     return {
@@ -131,7 +181,6 @@ export function parseSetsReps(
       isAmrap: false,
     };
   }
-  // Standalone "N reps" with no sets prefix (e.g. "100 reps")
   const solo = text.match(/^(\d+)\s*reps?\b/i);
   if (solo) return { sets: 1, reps: parseInt(solo[1], 10), isAmrap: false };
   return null;
@@ -245,7 +294,7 @@ export function classifyWorkout(day: WorkoutDay): WorkoutCategory {
 }
 
 // ============================================================
-// WORKOUT BUILDERS
+// STEP BUILDERS
 // ============================================================
 
 class StepCounter {
@@ -255,28 +304,45 @@ class StepCounter {
   }
 }
 
-function buildStep(
-  counter: StepCounter,
-  params: {
-    intensity: WorkoutStepItem['intensity'];
-    description?: string;
-    durationType?: WorkoutStepItem['durationType'];
-    durationValue?: number;
-    targetType?: WorkoutStepItem['targetType'];
-    targetValueLow?: number;
-    targetValueHigh?: number;
-  },
-): WorkoutStepItem {
+interface BuildStepParams {
+  intensity: WorkoutStepItem['intensity'];
+  description?: string | null;
+  durationType?: WorkoutStepItem['durationType'];
+  durationValue?: number | null;
+  targetType?: WorkoutStepItem['targetType'];
+  targetValueLow?: number | null;
+  targetValueHigh?: number | null;
+  exerciseCategory?: string | null;
+  exerciseName?: string | null;
+  weightValue?: number | null;
+}
+
+function buildStep(counter: StepCounter, params: BuildStepParams): WorkoutStepItem {
   return {
     type: 'WorkoutStep',
     stepOrder: counter.next(),
     intensity: params.intensity,
-    description: params.description,
+    description: params.description ?? null,
     durationType: params.durationType ?? 'OPEN',
-    durationValue: params.durationValue,
+    durationValue: params.durationValue ?? null,
+    durationValueType: null,
     targetType: params.targetType ?? 'OPEN',
-    targetValueLow: params.targetValueLow,
-    targetValueHigh: params.targetValueHigh,
+    targetValue: null,
+    targetValueLow: params.targetValueLow ?? null,
+    targetValueHigh: params.targetValueHigh ?? null,
+    targetValueType: null,
+    secondaryTargetType: null,
+    secondaryTargetValue: null,
+    secondaryTargetValueLow: null,
+    secondaryTargetValueHigh: null,
+    secondaryTargetValueType: null,
+    strokeType: null,
+    drillType: null,
+    equipmentType: null,
+    exerciseCategory: params.exerciseCategory ?? null,
+    exerciseName: params.exerciseName ?? null,
+    weightValue: params.weightValue ?? null,
+    weightDisplayUnit: params.weightValue != null ? 'KILOGRAM' : null,
   };
 }
 
@@ -311,9 +377,52 @@ function workoutDescription(day: WorkoutDay): string {
   );
 }
 
-// ------------------------------------------------------------
-// Mapper: easy / long runs
-// ------------------------------------------------------------
+function wrapSegment(sport: GarminSport, steps: WorkoutStep[]): GarminWorkoutSegment {
+  return { segmentOrder: 1, sport, poolLength: null, poolLengthUnit: null, steps };
+}
+
+function makeWorkout(
+  day: WorkoutDay,
+  sport: GarminSport,
+  steps: WorkoutStep[],
+  estimatedDurationInSecs?: number,
+): GarminWorkout {
+  return {
+    workoutName: workoutName(day),
+    description: workoutDescription(day),
+    sport,
+    workoutProvider: 'HybridX',
+    workoutSourceId: 'HybridX',
+    isSessionTransitionEnabled: false,
+    poolLength: null,
+    poolLengthUnit: null,
+    ...(estimatedDurationInSecs != null ? { estimatedDurationInSecs } : {}),
+    segments: [wrapSegment(sport, steps)],
+  };
+}
+
+// ============================================================
+// PACE TARGET HELPERS
+// ============================================================
+
+// When targetPaceMps is present, use PACE target with a ±5% band.
+// When absent, fall back to OPEN so the athlete runs free.
+function paceTarget(
+  targetPaceMps?: number,
+): Pick<BuildStepParams, 'targetType' | 'targetValueLow' | 'targetValueHigh'> {
+  if (targetPaceMps) {
+    return {
+      targetType: 'PACE',
+      targetValueLow: Math.round(targetPaceMps * 0.95 * 1000) / 1000,
+      targetValueHigh: Math.round(targetPaceMps * 1.05 * 1000) / 1000,
+    };
+  }
+  return { targetType: 'OPEN' };
+}
+
+// ============================================================
+// WORKOUT BUILDERS
+// ============================================================
 
 function mapRunEasy(day: WorkoutDay): GarminWorkout {
   const counter = new StepCounter();
@@ -322,28 +431,21 @@ function mapRunEasy(day: WorkoutDay): GarminWorkout {
   const rpe = parseRpe(details);
   const zoneDesc = rpe ? ` (RPE ${rpe.low}${rpe.high !== rpe.low ? `–${rpe.high}` : ''})` : '';
 
+  // Use the first available pace target across all exercises
+  const targetPaceMps = day.exercises.find((e) => e.targetPaceMps)?.targetPaceMps;
+
   const steps: WorkoutStep[] = [
     buildStep(counter, {
       intensity: 'ACTIVE',
       description: day.exercises.map((e) => e.name).join('; ') + zoneDesc,
       durationType: 'TIME',
       durationValue: durationSecs,
-      targetType: 'OPEN',
+      ...paceTarget(targetPaceMps),
     }),
   ];
 
-  return {
-    workoutName: workoutName(day),
-    description: workoutDescription(day),
-    sport: 'RUNNING',
-    estimatedDurationInSecs: durationSecs,
-    steps,
-  };
+  return makeWorkout(day, 'RUNNING', steps, durationSecs);
 }
-
-// ------------------------------------------------------------
-// Mapper: interval / threshold / hills / strides
-// ------------------------------------------------------------
 
 function mapRunIntervals(day: WorkoutDay): GarminWorkout {
   const counter = new StepCounter();
@@ -351,6 +453,7 @@ function mapRunIntervals(day: WorkoutDay): GarminWorkout {
   let estimatedSecs = 0;
 
   const allText = day.exercises.map((e) => `${e.name} ${e.details}`).join(' ');
+  const targetPaceMps = day.exercises.find((e) => e.targetPaceMps)?.targetPaceMps;
 
   const warmup = allText.match(/(\d+)\s*min(?:ute)?\s*warm[- ]?up/i);
   if (warmup) {
@@ -397,7 +500,7 @@ function mapRunIntervals(day: WorkoutDay): GarminWorkout {
         description: pat.description,
         durationType: pat.distanceM ? 'DISTANCE' : 'TIME',
         durationValue: pat.distanceM ?? pat.timeS,
-        targetType: 'OPEN',
+        ...paceTarget(targetPaceMps),
       });
       const recStep =
         pat.recovery === 'open'
@@ -434,13 +537,7 @@ function mapRunIntervals(day: WorkoutDay): GarminWorkout {
 
   if (steps.length === 0) return mapRunEasy(day);
 
-  return {
-    workoutName: workoutName(day),
-    description: workoutDescription(day),
-    sport: 'RUNNING',
-    estimatedDurationInSecs: estimatedSecs || undefined,
-    steps,
-  };
+  return makeWorkout(day, 'RUNNING', steps, estimatedSecs || undefined);
 }
 
 function findAllIntervalPatterns(text: string): Array<{
@@ -515,15 +612,10 @@ function findAllIntervalPatterns(text: string): Array<{
   return results;
 }
 
-// ------------------------------------------------------------
-// Mapper: strength
-// ------------------------------------------------------------
-
 function mapStrength(day: WorkoutDay): GarminWorkout {
   const counter = new StepCounter();
   const steps: WorkoutStep[] = [];
 
-  // Warmup — lap button to advance when ready
   steps.push(buildStep(counter, {
     intensity: 'WARMUP',
     description: 'Warm up — press lap when ready',
@@ -534,7 +626,12 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
   for (const ex of day.exercises) {
     const rpe = parseRpe(ex.details);
 
-    // ── Timed sets: "3x90 seconds", "3x60sec per side" ──────────────────────
+    // Resolve exercise category: prefer structured field, fall back to keyword lookup
+    const garminMatch = (ex.garminExerciseCategory && ex.garminExerciseName)
+      ? { exerciseCategory: ex.garminExerciseCategory, exerciseName: ex.garminExerciseName }
+      : lookupGarminExercise(ex.name);
+
+    // Timed sets: "3x90 seconds", "3x60sec per side"
     const timedSets = parseTimedSets(ex.details);
     if (timedSets) {
       const perSide = /per side|each side/i.test(ex.details);
@@ -547,6 +644,8 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
             durationType: 'TIME',
             durationValue: timedSets.timeS,
             targetType: 'OPEN',
+            ...garminMatch,
+            weightValue: ex.weightKg ?? null,
           }),
           buildStep(counter, { intensity: 'REST', durationType: 'OPEN', targetType: 'OPEN' }),
         ]),
@@ -554,58 +653,48 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
       continue;
     }
 
-    const reps = parseSetsReps(ex.details);
-
     if (/max hold|dead hang/i.test(ex.name + ex.details)) {
+      const setCount = ex.sets ?? parseSetsReps(ex.details)?.sets ?? 3;
       steps.push(
-        buildRepeat(counter, reps?.sets ?? 3, () => [
+        buildRepeat(counter, setCount, () => [
           buildStep(counter, {
             intensity: 'ACTIVE',
             description: `${ex.name} — max hold`,
             durationType: 'OPEN',
             targetType: 'OPEN',
+            ...garminMatch,
           }),
-          buildStep(counter, {
-            intensity: 'REST',
-            durationType: 'OPEN',
-            targetType: 'OPEN',
-          }),
+          buildStep(counter, { intensity: 'REST', durationType: 'OPEN', targetType: 'OPEN' }),
         ]),
       );
       continue;
     }
 
-    if (reps) {
+    // Prefer structured sets/reps over parsed
+    const structuredSets = ex.sets;
+    const structuredReps = ex.reps;
+    const parsedReps = structuredSets == null ? parseSetsReps(ex.details) : null;
+
+    if (structuredSets != null && structuredReps != null) {
       const rpeLabel = rpe
         ? ` @ RPE ${rpe.low}${rpe.high !== rpe.low ? `-${rpe.high}` : ''}`
         : '';
-      const repLabel = reps.isAmrap
-        ? 'AMRAP'
-        : reps.repsMax
-          ? `${reps.reps}-${reps.repsMax}`
-          : `${reps.reps}`;
-      const description = `${ex.name} — ${repLabel}${rpeLabel}`;
-
       steps.push(
-        buildRepeat(counter, reps.sets, () => {
-          const workStep: WorkoutStepItem = reps.isAmrap
-            ? buildStep(counter, {
-                intensity: 'ACTIVE',
-                description,
-                durationType: 'OPEN',
-                targetType: 'OPEN',
-              })
-            : buildStep(counter, {
-                intensity: 'ACTIVE',
-                description,
-                durationType: 'REPS',
-                durationValue: reps.repsMax ?? reps.reps,
-                targetType: 'OPEN',
-              });
+        buildRepeat(counter, structuredSets, () => {
+          const workStep = buildStep(counter, {
+            intensity: 'ACTIVE',
+            description: `${ex.name} — ${structuredReps}${rpeLabel}`,
+            durationType: 'REPS',
+            durationValue: structuredReps,
+            targetType: 'OPEN',
+            ...garminMatch,
+            weightValue: ex.weightKg ?? null,
+          });
           const restStep = buildStep(counter, {
             intensity: 'REST',
-            description: 'Rest 60–120s',
-            durationType: 'OPEN',
+            description: ex.restSeconds ? `Rest ${ex.restSeconds}s` : 'Rest 60–120s',
+            durationType: ex.restSeconds ? 'TIME' : 'OPEN',
+            durationValue: ex.restSeconds ?? null,
             targetType: 'OPEN',
           });
           return [workStep, restStep];
@@ -614,18 +703,67 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
       continue;
     }
 
-    // Fallback: single open step (covers AMRAP circuits, timed sets, etc.)
+    if (parsedReps) {
+      const rpeLabel = rpe
+        ? ` @ RPE ${rpe.low}${rpe.high !== rpe.low ? `-${rpe.high}` : ''}`
+        : '';
+      const repLabel = parsedReps.isAmrap
+        ? 'AMRAP'
+        : parsedReps.repsMax
+          ? `${parsedReps.reps}-${parsedReps.repsMax}`
+          : `${parsedReps.reps}`;
+      const description = `${ex.name} — ${repLabel}${rpeLabel}`;
+
+      // Resolve rest period: prefer structured, fall back to parsed
+      const restFromDetails = parseRecoverySeconds(ex.details);
+      const restSecs = ex.restSeconds ?? (typeof restFromDetails === 'number' ? restFromDetails : null);
+
+      steps.push(
+        buildRepeat(counter, parsedReps.sets, () => {
+          const workStep: WorkoutStepItem = parsedReps.isAmrap
+            ? buildStep(counter, {
+                intensity: 'ACTIVE',
+                description,
+                durationType: 'OPEN',
+                targetType: 'OPEN',
+                ...garminMatch,
+                weightValue: ex.weightKg ?? null,
+              })
+            : buildStep(counter, {
+                intensity: 'ACTIVE',
+                description,
+                durationType: 'REPS',
+                durationValue: parsedReps.repsMax ?? parsedReps.reps,
+                targetType: 'OPEN',
+                ...garminMatch,
+                weightValue: ex.weightKg ?? null,
+              });
+          const restStep = buildStep(counter, {
+            intensity: 'REST',
+            description: restSecs ? `Rest ${restSecs}s` : 'Rest 60–120s',
+            durationType: restSecs ? 'TIME' : 'OPEN',
+            durationValue: restSecs,
+            targetType: 'OPEN',
+          });
+          return [workStep, restStep];
+        }),
+      );
+      continue;
+    }
+
+    // Fallback: single open step
     steps.push(
       buildStep(counter, {
         intensity: 'ACTIVE',
         description: `${ex.name}: ${truncate(ex.details, 150)}`,
         durationType: 'OPEN',
         targetType: 'OPEN',
+        ...garminMatch,
+        weightValue: ex.weightKg ?? null,
       }),
     );
   }
 
-  // Cooldown — lap button to finish
   steps.push(buildStep(counter, {
     intensity: 'COOLDOWN',
     description: 'Cool down — press lap when done',
@@ -633,17 +771,8 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
     targetType: 'OPEN',
   }));
 
-  return {
-    workoutName: workoutName(day),
-    description: workoutDescription(day),
-    sport: 'STRENGTH_TRAINING',
-    steps,
-  };
+  return makeWorkout(day, 'STRENGTH_TRAINING', steps);
 }
-
-// ------------------------------------------------------------
-// Mapper: Hyrox circuits / simulations
-// ------------------------------------------------------------
 
 function mapHyroxCircuit(day: WorkoutDay): GarminWorkout {
   const counter = new StepCounter();
@@ -670,12 +799,7 @@ function mapHyroxCircuit(day: WorkoutDay): GarminWorkout {
     }),
   ];
 
-  return {
-    workoutName: workoutName(day),
-    description: workoutDescription(day),
-    sport: 'CARDIO_TRAINING',
-    steps,
-  };
+  return makeWorkout(day, 'CARDIO_TRAINING', steps);
 }
 
 // ============================================================

@@ -33,7 +33,7 @@ export interface PendingGarminAuth {
 export interface GarminPlanSync {
   programId: string;
   /** Map keyed by day number (as string for Firestore-friendly keys). */
-  workouts: Record<string, { workoutId: string; scheduledDate?: string }>;
+  workouts: Record<string, { workoutId: string; scheduleId?: string; scheduledDate?: string }>;
   lastSyncedAt: Date;
 }
 
@@ -150,6 +150,13 @@ export interface PlannedRun {
 export interface Exercise {
   name: string;
   details: string;
+  // Optional structured fields for Garmin sync — invisible to all UI display components
+  garminExerciseCategory?: string;
+  garminExerciseName?: string;
+  weightKg?: number;
+  restSeconds?: number;
+  sets?: number;
+  reps?: number;
 }
 
 // ── Timer types ───────────────────────────────────────────────────────────────

@@ -22,6 +22,13 @@ export const UNIFIED_CSV_HEADERS = [
   'rowType',
   'exerciseName',
   'exerciseDetails',
+  // Optional Garmin-structured fields (exercise rows only — leave blank for run rows)
+  'garminExerciseCategory',
+  'garminExerciseName',
+  'weightKg',
+  'restSeconds',
+  'sets',
+  'reps',
   'runType',
   'runDistance',
   'runPaceZone',
@@ -53,6 +60,12 @@ function makeBaseRow(program: Program, workout: WorkoutDay): UnifiedRow {
     rowType: '',
     exerciseName: '',
     exerciseDetails: '',
+    garminExerciseCategory: '',
+    garminExerciseName: '',
+    weightKg: '',
+    restSeconds: '',
+    sets: '',
+    reps: '',
     runType: '',
     runDistance: '',
     runPaceZone: '',
@@ -76,6 +89,12 @@ export function programToCsv(program: Program): string {
         row.rowType = 'exercise';
         row.exerciseName = exercise.name;
         row.exerciseDetails = exercise.details;
+        row.garminExerciseCategory = exercise.garminExerciseCategory ?? '';
+        row.garminExerciseName = exercise.garminExerciseName ?? '';
+        row.weightKg = exercise.weightKg != null ? String(exercise.weightKg) : '';
+        row.restSeconds = exercise.restSeconds != null ? String(exercise.restSeconds) : '';
+        row.sets = exercise.sets != null ? String(exercise.sets) : '';
+        row.reps = exercise.reps != null ? String(exercise.reps) : '';
         rows.push(row);
         emitted = true;
       }
@@ -194,7 +213,28 @@ export function rowsToProgram(rows: Record<string, string>[]): ParsedProgram {
       }
       if (!name) throw new Error(`Row ${lineNum}: exerciseName is required for an exercise row.`);
       if (!details) throw new Error(`Row ${lineNum}: exerciseDetails is required for an exercise row.`);
-      bucket.exercises.push({ name, details });
+
+      const garminExerciseCategory = (row.garminExerciseCategory ?? '').trim() || undefined;
+      const garminExerciseName = (row.garminExerciseName ?? '').trim() || undefined;
+      const weightKgRaw = (row.weightKg ?? '').trim();
+      const weightKg = weightKgRaw ? parseFloat(weightKgRaw) : undefined;
+      const restSecondsRaw = (row.restSeconds ?? '').trim();
+      const restSeconds = restSecondsRaw ? parseInt(restSecondsRaw, 10) : undefined;
+      const setsRaw = (row.sets ?? '').trim();
+      const sets = setsRaw ? parseInt(setsRaw, 10) : undefined;
+      const repsRaw = (row.reps ?? '').trim();
+      const reps = repsRaw ? parseInt(repsRaw, 10) : undefined;
+
+      bucket.exercises.push({
+        name,
+        details,
+        ...(garminExerciseCategory ? { garminExerciseCategory } : {}),
+        ...(garminExerciseName ? { garminExerciseName } : {}),
+        ...(weightKg != null && !isNaN(weightKg) ? { weightKg } : {}),
+        ...(restSeconds != null && !isNaN(restSeconds) ? { restSeconds } : {}),
+        ...(sets != null && !isNaN(sets) ? { sets } : {}),
+        ...(reps != null && !isNaN(reps) ? { reps } : {}),
+      });
       return;
     }
 

@@ -118,12 +118,6 @@ export function LoginForm() {
 
           if (sessionResponse.ok) {
             logger.log('✅ Session cookie created successfully');
-
-            // Wait for cookie to be properly set before navigation
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            // Force Next.js to recognize the new session cookie
-            router.refresh();
           } else {
             logger.error('❌ Failed to create session cookie:', await sessionResponse.text());
           }
@@ -138,7 +132,10 @@ export function LoginForm() {
             title: 'Login Successful',
             description: 'Redirecting to your dashboard...',
           });
-          router.push('/dashboard');
+          // Full page navigation ensures the session cookie is sent with the
+          // first request to the server, avoiding middleware redirect-to-login
+          // in proxy environments (e.g. Firebase Studio dev preview).
+          window.location.href = '/dashboard';
       }
     } catch (error: any) {
       logger.error('Login error:', error);
@@ -172,7 +169,7 @@ export function LoginForm() {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="name@example.com" {...field} />
+                    <Input placeholder="name@example.com" autoComplete="email" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -186,7 +183,7 @@ export function LoginForm() {
                   <FormLabel>Password</FormLabel>
                   <FormControl>
                     <div className="relative">
-                      <Input type={showPassword ? 'text' : 'password'} placeholder="••••••••" {...field} />
+                      <Input type={showPassword ? 'text' : 'password'} placeholder="••••••••" autoComplete="current-password" {...field} />
                       <Button
                         type="button"
                         variant="ghost"
@@ -430,10 +427,10 @@ function Step1({ onNext, defaultValues }: any) {
         </CardHeader>
         <CardContent className="space-y-4">
           <FormField control={form.control} name="email" render={({ field }) => (
-            <FormItem><FormLabel>Email</FormLabel><FormControl><Input placeholder="name@example.com" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Email</FormLabel><FormControl><Input placeholder="name@example.com" autoComplete="email" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
           <FormField control={form.control} name="password" render={({ field }) => (
-            <FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" placeholder="Min. 8 characters" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Password</FormLabel><FormControl><Input type="password" placeholder="Min. 8 characters" autoComplete="new-password" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
         </CardContent>
         <CardFooter>

@@ -5,7 +5,9 @@
 import type { Workout, RunningWorkout, PlannedRun } from '@/models/types';
 import type { WorkoutDay } from './workout-mapper';
 
-function describePlannedRun(run: PlannedRun): { name: string; details: string } {
+import type { WorkoutDayExercise } from './workout-mapper';
+
+function describePlannedRun(run: PlannedRun): WorkoutDayExercise {
   // Express distance in whole meters when < 1 km to avoid decimal ambiguity in
   // the mapper's regex (e.g. 0.8 km → 800m, giving "5x800m" not "5x 0.8km").
   const distMeters = run.distance ? Math.round(run.distance * 1000) : 0;
@@ -31,7 +33,10 @@ function describePlannedRun(run: PlannedRun): { name: string; details: string } 
   }
   if (run.paceZone) detailsParts.push(`Zone: ${run.paceZone}`);
 
-  return { name, details: detailsParts.join('. ') };
+  // targetPace is seconds/km; Garmin PACE targets use m/s
+  const targetPaceMps = run.targetPace ? 1000 / run.targetPace : undefined;
+
+  return { name, details: detailsParts.join('. '), ...(targetPaceMps != null ? { targetPaceMps } : {}) };
 }
 
 export function workoutToDay(w: Workout | RunningWorkout): WorkoutDay {
@@ -45,6 +50,15 @@ export function workoutToDay(w: Workout | RunningWorkout): WorkoutDay {
   return {
     day: w.day,
     title: w.title,
-    exercises: w.exercises.map((e) => ({ name: e.name, details: e.details })),
+    exercises: w.exercises.map((e) => ({
+      name: e.name,
+      details: e.details,
+      ...(e.garminExerciseCategory ? { garminExerciseCategory: e.garminExerciseCategory } : {}),
+      ...(e.garminExerciseName ? { garminExerciseName: e.garminExerciseName } : {}),
+      ...(e.weightKg != null ? { weightKg: e.weightKg } : {}),
+      ...(e.restSeconds != null ? { restSeconds: e.restSeconds } : {}),
+      ...(e.sets != null ? { sets: e.sets } : {}),
+      ...(e.reps != null ? { reps: e.reps } : {}),
+    })),
   };
 }

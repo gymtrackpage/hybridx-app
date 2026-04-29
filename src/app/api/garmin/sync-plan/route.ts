@@ -153,8 +153,8 @@ export async function POST(req: NextRequest) {
         const scheduledDate = isoDate(
           new Date(startMs + (w.day - 1) * 86400000),
         );
-        await scheduleWorkout(accessToken, workoutId, scheduledDate);
-        newSync.workouts[dayKey] = { workoutId, scheduledDate };
+        const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
+        newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
         results.push({ day: w.day, status: 'pushed', workoutId });
       } catch (e: any) {
         logger.error(`Garmin push failed for day ${w.day}:`, {

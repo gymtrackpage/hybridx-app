@@ -35,6 +35,13 @@ import { ScrollArea } from './ui/scroll-area';
 const exerciseSchema = z.object({
   name: z.string().min(1, 'Exercise name is required.'),
   details: z.string().min(1, 'Exercise details are required.'),
+  // Optional Garmin sync fields
+  garminExerciseCategory: z.string().optional(),
+  garminExerciseName: z.string().optional(),
+  weightKg: z.coerce.number().positive().optional().or(z.literal('')),
+  restSeconds: z.coerce.number().int().positive().optional().or(z.literal('')),
+  sets: z.coerce.number().int().positive().optional().or(z.literal('')),
+  reps: z.coerce.number().int().positive().optional().or(z.literal('')),
 });
 
 const runSchema = z.object({
@@ -354,36 +361,118 @@ function ExerciseArray({ workoutIndex, control }: { workoutIndex: number; contro
     <div className="space-y-2 pl-4 border-l">
       <h5 className="font-medium text-sm">Exercises</h5>
       {fields.map((field, index) => (
-        <div key={field.id} className="flex items-end gap-2">
-          <FormField
-            control={control}
-            name={`workouts.${workoutIndex}.exercises.${index}.name`}
-            render={({ field }) => (
-              <FormItem className="flex-1">
-                <FormLabel className="text-xs">Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g., Back Squat" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={control}
-            name={`workouts.${workoutIndex}.exercises.${index}.details`}
-            render={({ field }) => (
-              <FormItem className="flex-1">
-                <FormLabel className="text-xs">Details</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g., 5x5 reps" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <Button type="button" variant="ghost" size="icon" className="mb-2" onClick={() => remove(index)}>
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
+        <div key={field.id} className="space-y-2 pb-2 border-b last:border-0">
+          <div className="flex items-end gap-2">
+            <FormField
+              control={control}
+              name={`workouts.${workoutIndex}.exercises.${index}.name`}
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormLabel className="text-xs">Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., Back Squat" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name={`workouts.${workoutIndex}.exercises.${index}.details`}
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormLabel className="text-xs">Details</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., 5x5 reps" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="button" variant="ghost" size="icon" className="mb-2" onClick={() => remove(index)}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
+          <details className="group">
+            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground list-none flex items-center gap-1 select-none w-fit">
+              <span className="transition-transform group-open:rotate-90">▶</span>
+              Garmin sync fields (optional)
+            </summary>
+            <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2 pl-4">
+              <FormField
+                control={control}
+                name={`workouts.${workoutIndex}.exercises.${index}.garminExerciseCategory`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Category</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. SQUAT" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={control}
+                name={`workouts.${workoutIndex}.exercises.${index}.garminExerciseName`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Exercise Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. BARBELL_SQUAT" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={control}
+                name={`workouts.${workoutIndex}.exercises.${index}.weightKg`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Weight (kg)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g. 80" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={control}
+                name={`workouts.${workoutIndex}.exercises.${index}.sets`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Sets</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g. 4" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={control}
+                name={`workouts.${workoutIndex}.exercises.${index}.reps`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Reps</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g. 8" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={control}
+                name={`workouts.${workoutIndex}.exercises.${index}.restSeconds`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Rest (seconds)</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="e.g. 90" {...field} value={field.value ?? ''} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+          </details>
         </div>
       ))}
       <Button type="button" size="sm" variant="outline" onClick={() => append({ name: '', details: '' })}>
