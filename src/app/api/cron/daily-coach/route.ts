@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { analyzeAndAdjust } from '@/ai/flows/analyze-and-adjust';
-import { sendEmail } from '@/lib/email-service'; // Assuming we have this or similar
+
 import { FieldValue } from 'firebase-admin/firestore';
 import type { User, Workout, RunningWorkout } from '@/models/types';
 
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
 
       results.missed++;
 
-      const startDate = userData.startDate.toDate(); // Firestore timestamp
+      const startDate = userData.startDate instanceof Date ? userData.startDate : new Date((userData.startDate as any).toDate?.() ?? userData.startDate);
       const diffTime = Math.abs(yesterday.getTime() - startDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 

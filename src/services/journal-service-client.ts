@@ -110,7 +110,7 @@ export async function updateJournalEntry(
   if (data.aiCoachResponse !== undefined) updates.aiCoachResponse = data.aiCoachResponse;
   if (data.aiAnalysisGeneratedAt !== undefined)
     updates.aiAnalysisGeneratedAt = Timestamp.fromDate(data.aiAnalysisGeneratedAt);
-  await updateDoc(ref, updates);
+  await updateDoc(ref, updates as any);
 }
 
 export async function deleteJournalEntry(entryId: string): Promise<void> {

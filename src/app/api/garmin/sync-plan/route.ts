@@ -22,11 +22,7 @@ import type { GarminPlanSync } from '@/models/types';
 const DEFAULT_HORIZON_DAYS = 14;
 
 function isoDate(d: Date): string {
-  // Use local date parts to avoid UTC-offset shifting the calendar date.
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return d.toISOString().slice(0, 10);
 }
 
 export async function POST(req: NextRequest) {
@@ -82,10 +78,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Compute today's day-number in the program (1-indexed).
-    const startMs = user.startDate.getTime();
+    // Snap startDate to UTC midnight of the intended calendar day — the browser
+    // stores local midnight (e.g. April 19 00:00 AEST = April 18 14:00 UTC) so
+    // the raw timestamp is off by the user's UTC offset. Math.round to the
+    // nearest day boundary recovers the correct date for any ±14h timezone.
+    const startMs = Math.round(user.startDate.getTime() / 86400000) * 86400000;
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayDayNum = Math.floor((today.getTime() - startMs) / 86400000) + 1;
+    const todayMs = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    const todayDayNum = Math.floor((todayMs - startMs) / 86400000) + 1;
 
     const fromDay = Math.max(1, todayDayNum);
     const toDay = todayDayNum + horizon;

@@ -28,10 +28,7 @@ export const dynamic = 'force-dynamic';
 const HORIZON_DAYS = 14;
 
 function isoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return d.toISOString().slice(0, 10);
 }
 
 export async function GET(request: Request) {
@@ -50,7 +47,6 @@ export async function GET(request: Request) {
     .get();
 
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   for (const userDoc of usersSnap.docs) {
     const userId = userDoc.id;
@@ -70,10 +66,12 @@ export async function GET(request: Request) {
         continue;
       }
 
-      const startDate: Date =
+      const startDateRaw: Date =
         data.startDate instanceof Timestamp
           ? data.startDate.toDate()
           : new Date(data.startDate);
+      // Snap to UTC midnight of intended calendar day (browser stores local midnight).
+      const startMs = Math.round(startDateRaw.getTime() / 86400000) * 86400000;
 
       const program = await getProgram(data.programId);
       if (!program) { results.skipped++; continue; }
@@ -87,7 +85,8 @@ export async function GET(request: Request) {
         continue;
       }
 
-      const todayDayNum = Math.floor((today.getTime() - startDate.getTime()) / 86400000) + 1;
+      const todayMs = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+      const todayDayNum = Math.floor((todayMs - startMs) / 86400000) + 1;
       const fromDay = Math.max(1, todayDayNum);
       const toDay = todayDayNum + HORIZON_DAYS;
 
@@ -133,7 +132,7 @@ export async function GET(request: Request) {
 
         try {
           const { workoutId } = await createWorkout(accessToken, garminWorkout);
-          const scheduledDate = isoDate(new Date(startDate.getTime() + (w.day - 1) * 86400000));
+          const scheduledDate = isoDate(new Date(startMs + (w.day - 1) * 86400000));
           const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
           newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
           userPushed++;

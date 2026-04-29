@@ -16,7 +16,7 @@ import { createUser } from '@/services/user-service-client';
 import { getTopPrograms, type ProgramRecommendation } from '@/services/program-recommendation';
 import { getProgramClient } from '@/services/program-service-client';
 import { adjustTrainingPlan } from '@/ai/flows/adjust-training-plan';
-import type { Workout } from '@/models/types';
+import type { WorkoutDay } from '@/models/types';
 import { ProgramPreviewDialog } from '@/components/program-preview-dialog'; // IMPORTED
 
 import { Button } from '@/components/ui/button';
@@ -309,7 +309,7 @@ export function SignupForm() {
 
 
       // 2. Prepare user data
-      let customProgram: Workout[] | null = null;
+      let customProgram: WorkoutDay[] | null = null;
       let adjustmentMessage = "";
 
       // 3. If program selected, check if AI adjustment is needed
@@ -340,7 +340,7 @@ export function SignupForm() {
                 targetDays: finalData.frequency as '3' | '4',
               });
 
-              customProgram = result.adjustedWorkouts as Workout[];
+              customProgram = result.adjustedWorkouts as unknown as WorkoutDay[];
               adjustmentMessage = ` We've intelligently adjusted it to fit your ${finalData.frequency}-day schedule!`;
             }
           }

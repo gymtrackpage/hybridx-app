@@ -112,14 +112,15 @@ function buildDefaultValues(program: Program | null): Partial<ProgramFormData> {
     description: program.description,
     programType,
     workouts: program.workouts.map(w => {
+      const wRuns: any[] = 'runs' in w ? (w as any).runs ?? [] : [];
       // Infer per-workout form type from content: if it has runs (and no exercises) → 'running', else 'hyrox'
-      const formType: 'hyrox' | 'running' = (w.runs?.length ?? 0) > 0 && !(w.exercises?.length ?? 0) ? 'running' : 'hyrox';
+      const formType: 'hyrox' | 'running' = wRuns.length > 0 && !(w.exercises?.length ?? 0) ? 'running' : 'hyrox';
       return {
         day: w.day,
         title: w.title,
         programType: formType,
         exercises: w.exercises ?? [],
-        runs: (w.runs ?? []).map(r => ({
+        runs: wRuns.map((r: any) => ({
           type: r.type,
           description: r.description,
           distance: r.distance,

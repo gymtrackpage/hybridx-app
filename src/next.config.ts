@@ -102,7 +102,7 @@ const withPWA = require('next-pwa')({
   },
 });
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,

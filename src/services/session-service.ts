@@ -30,7 +30,7 @@ function fromFirestore(doc: any): WorkoutSession {
 
 // SERVER-SIDE function using Admin SDK
 function deriveSessionProgramType(workout: WorkoutDay): ProgramType {
-    const hasR = (workout.runs?.length ?? 0) > 0;
+    const hasR = ('runs' in workout ? (workout as any).runs?.length ?? 0 : 0) > 0;
     const hasE = (workout.exercises?.length ?? 0) > 0;
     if (hasR && hasE) return 'hybrid';
     if (hasR) return 'running';

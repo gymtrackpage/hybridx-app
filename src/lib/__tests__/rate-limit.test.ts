@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { checkRateLimit } from '../rate-limit';
 
 // Reset the module's in-memory store before each test by re-importing it fresh.

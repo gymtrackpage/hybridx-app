@@ -8,13 +8,31 @@
  */
 
 import * as admin from 'firebase-admin';
+import { readFileSync } from 'fs';
 import { enrichExerciseWithGarmin } from '../lib/garmin/program-enricher';
 import type { Exercise, Workout, RunningWorkout } from '../models/types';
 
-// Initialise Firebase Admin using Application Default Credentials.
-// Set GOOGLE_APPLICATION_CREDENTIALS env var to your service account JSON path.
+// Load .env.local so FIREBASE_SERVICE_ACCOUNT_KEY is available when running directly.
+try {
+  const env = readFileSync('.env.local', 'utf8');
+  for (const line of env.split('\n')) {
+    const m = line.match(/^([^#=]+)=(.*)$/);
+    if (m) {
+      const key = m[1].trim();
+      const val = m[2].trim().replace(/^'(.*)'$/, '$1').replace(/^"(.*)"$/, '$1');
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+} catch { /* .env.local not present — rely on existing env */ }
+
 if (!admin.apps.length) {
-  admin.initializeApp();
+  const keyJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (keyJson) {
+    admin.initializeApp({ credential: admin.credential.cert(JSON.parse(keyJson)) });
+  } else {
+    // Fall back to Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS).
+    admin.initializeApp();
+  }
 }
 
 const db = admin.firestore();

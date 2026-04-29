@@ -209,8 +209,8 @@ export default function DashboardPage() {
         const oneOffWorkout: WorkoutDay = {
             ...generated,
             day: 0,
-            runs: [],
-        };
+            programType: 'hyrox',
+        } as WorkoutDay;
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);

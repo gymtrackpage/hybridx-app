@@ -162,7 +162,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
           if (workoutsMap.has(day)) {
               workoutsMap.get(day)!.exercises.push(exercise);
           } else {
-              workoutsMap.set(day, { day, title: workoutTitle, exercises: [exercise], runs: [] });
+              workoutsMap.set(day, { day, title: workoutTitle, exercises: [exercise], programType: 'hyrox' as const });
           }
       });
       
@@ -207,6 +207,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
                   title: workoutTitle,
                   runs: [plannedRun],
                   exercises: [],
+                  programType: 'running' as const,
               });
           }
       });

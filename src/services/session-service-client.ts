@@ -142,7 +142,7 @@ export async function createCustomWorkoutSession(userId: string, title: string, 
         title,
         day: 0,
         exercises: [{ name: 'Custom Activity', details: description }],
-        runs: [],
+        programType: 'hyrox',
     };
 
     await getOrCreateWorkoutSession(userId, 'custom-workout', today, workout, true, duration);
@@ -150,7 +150,7 @@ export async function createCustomWorkoutSession(userId: string, title: string, 
 
 
 function deriveSessionProgramType(workout: WorkoutDay): ProgramType {
-    const hasR = (workout.runs?.length ?? 0) > 0;
+    const hasR = ('runs' in workout ? (workout as any).runs?.length ?? 0 : 0) > 0;
     const hasE = (workout.exercises?.length ?? 0) > 0;
     if (hasR && hasE) return 'hybrid';
     if (hasR) return 'running';

@@ -312,7 +312,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
         if (user.frequency !== '5+' && nonRestWorkouts.length > parseInt(user.frequency, 10)) {
             toast({ title: 'Adjusting your plan...', description: 'Our AI coach is tailoring this program to fit your schedule.' });
             const result = await adjustTrainingPlan({
-                currentWorkouts: program.workouts,
+                currentWorkouts: program.workouts as any,
                 targetDays: user.frequency as '3' | '4',
             });
             updateData.customProgram = result.adjustedWorkouts as unknown as WorkoutDay[];
