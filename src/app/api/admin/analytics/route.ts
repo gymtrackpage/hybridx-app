@@ -70,11 +70,12 @@ export async function GET(request: NextRequest) {
       if (e.event === 'onboarding_step_completed') {
         const step = (e.properties?.step as number) ?? 0;
         if (!onboardingStepUsers[step]) onboardingStepUsers[step] = new Set();
-        if (e.userId !== 'anonymous') onboardingStepUsers[step].add(e.userId);
-        // anonymous users still counted for funnel (pre-signup)
-        const anonKey = `${e.sessionId}`;
-        if (!onboardingStepUsers[step]) onboardingStepUsers[step] = new Set();
-        onboardingStepUsers[step].add(anonKey);
+        if (e.userId !== 'anonymous') {
+          onboardingStepUsers[step].add(e.userId);
+        } else {
+          // Pre-signup anonymous users tracked by session
+          onboardingStepUsers[step].add(e.sessionId);
+        }
       }
       if (e.event === 'onboarding_completed') {
         onboardingCompletedUsers.add(e.userId);
