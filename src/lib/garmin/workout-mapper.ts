@@ -663,6 +663,7 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
             durationType: 'OPEN',
             targetType: 'OPEN',
             ...garminMatch,
+            weightValue: ex.weightKg ?? null,
           }),
           buildStep(counter, { intensity: 'REST', durationType: 'OPEN', targetType: 'OPEN' }),
         ]),

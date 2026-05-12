@@ -2,6 +2,18 @@
 import { UnitSystem } from '@/models/types';
 
 /**
+ * Parses a weight string like "100kg", "220lbs", or "100" (assumed kg) into kilograms.
+ * Returns null when the string cannot be parsed or the value is non-positive.
+ */
+export function parseWeightToKg(str: string): number | null {
+  if (!str) return null;
+  const lower = str.toLowerCase().trim();
+  const num = parseFloat(lower);
+  if (isNaN(num) || num <= 0) return null;
+  return lower.includes('lb') ? Math.round(num * 0.453592 * 10) / 10 : num;
+}
+
+/**
  * Converts a weight string (e.g., "60kg", "135lbs") or number to the preferred unit system.
  * Assuming input strings without units are in kg.
  */

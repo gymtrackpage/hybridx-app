@@ -19,7 +19,7 @@ import {
 } from '@/lib/garmin/training-api';
 import { getProgram } from '@/services/program-service';
 import { logger } from '@/lib/logger';
-import type { GarminPlanSync } from '@/models/types';
+import type { GarminPlanSync, PersonalRecords } from '@/models/types';
 import { Timestamp } from 'firebase-admin/firestore';
 
 export const maxDuration = 300;
@@ -111,9 +111,11 @@ export async function GET(request: Request) {
 
       let userPushed = 0;
 
+      const personalRecords = data.personalRecords as PersonalRecords | undefined;
+
       for (const w of targetWorkouts) {
         const dayKey = String(w.day);
-        const garminWorkout = mapWorkoutDay(workoutToDay(w));
+        const garminWorkout = mapWorkoutDay(workoutToDay(w, personalRecords));
 
         if (!garminWorkout) {
           // Remove stale push for this day if it was previously a workout.

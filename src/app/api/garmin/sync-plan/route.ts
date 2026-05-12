@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
 
     for (const w of targetWorkouts) {
       const dayKey = String(w.day);
-      const day = workoutToDay(w);
+      const day = workoutToDay(w, user.personalRecords);
       const garminWorkout = mapWorkoutDay(day);
 
       // Skip rest / welcome / race-day. Also remove any prior push for

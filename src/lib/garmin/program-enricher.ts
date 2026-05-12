@@ -10,8 +10,9 @@
  * the result on the exercise avoids re-parsing on every sync.
  */
 
-import type { Exercise } from '@/models/types';
-import { parseSetsReps, parseRecoverySeconds } from './workout-mapper';
+import type { Exercise, PersonalRecords } from '@/models/types';
+import { parseSetsReps, parseRecoverySeconds, parseRpe } from './workout-mapper';
+import { parseWeightToKg } from '@/lib/unit-conversion';
 
 // ── Garmin exercise lookup table ──────────────────────────────────────────────
 // Rules are checked in order — more specific patterns must come before general ones.
@@ -137,4 +138,76 @@ export function enrichExerciseWithGarmin(exercise: Exercise): Exercise {
   }
 
   return enriched;
+}
+
+// ── 1RM-based weight resolution ───────────────────────────────────────────────
+
+interface WeightRule {
+  patterns: RegExp[];
+  prField: keyof PersonalRecords;
+  /** Fraction of the reference 1RM that represents a typical max for this exercise. */
+  fraction: number;
+}
+
+// More-specific patterns must come before general ones (checked in order).
+const WEIGHT_RULES: WeightRule[] = [
+  // Deadlift variants
+  { patterns: [/romanian\s+deadlift/i, /\brdl\b/i], prField: 'deadlift', fraction: 0.65 },
+  { patterns: [/sumo\s+deadlift/i],                  prField: 'deadlift', fraction: 0.90 },
+  { patterns: [/trap\s*bar\s+deadlift/i, /hex\s*bar\s+deadlift/i], prField: 'deadlift', fraction: 0.90 },
+  { patterns: [/deadlift/i],                          prField: 'deadlift', fraction: 1.00 },
+  // Squat variants
+  { patterns: [/front\s+squat/i],                    prField: 'backSquat', fraction: 0.85 },
+  { patterns: [/goblet\s+squat/i],                   prField: 'backSquat', fraction: 0.35 },
+  { patterns: [/box\s+squat/i],                      prField: 'backSquat', fraction: 0.85 },
+  { patterns: [/bulgarian\s+split\s+squat/i],        prField: 'backSquat', fraction: 0.40 },
+  { patterns: [/squat/i],                            prField: 'backSquat', fraction: 1.00 },
+  // Bench / press variants
+  { patterns: [/incline\s+(?:dumbbell\s+)?(?:bench\s+)?press/i], prField: 'benchPress', fraction: 0.80 },
+  { patterns: [/dumbbell\s+(?:bench\s+)?press/i],    prField: 'benchPress', fraction: 0.70 },
+  { patterns: [/bench\s+press/i],                    prField: 'benchPress', fraction: 1.00 },
+  { patterns: [/push\s+press/i, /overhead\s+press/i, /\bohp\b/i, /shoulder\s+press/i], prField: 'benchPress', fraction: 0.65 },
+  // Rows
+  { patterns: [/barbell\s+row/i, /bent.?over\s+row/i], prField: 'deadlift', fraction: 0.60 },
+  // Hip hinge accessories
+  { patterns: [/hip\s+thrust/i, /glute\s+bridge/i],  prField: 'deadlift', fraction: 0.90 },
+];
+
+/** Epley formula: given N reps to near-failure, returns the fraction of 1RM to use. */
+function repsToFraction(reps: number): number {
+  return 1 / (1 + reps / 30);
+}
+
+const RPE_ZONE_FRACTION: Record<number, number> = { 1: 0.60, 2: 0.70, 3: 0.80, 4: 0.90, 5: 0.95 };
+
+/**
+ * Infers a working weight (kg) from the user's 1RM personal records.
+ * Returns null when no matching rule exists or the relevant PR is not set.
+ * The result is rounded to the nearest 2.5 kg (standard barbell increment).
+ */
+export function resolveWeightKg(
+  exerciseName: string,
+  exerciseDetails: string,
+  exerciseReps: number | undefined,
+  personalRecords: PersonalRecords,
+): number | null {
+  const rule = WEIGHT_RULES.find((r) => r.patterns.some((p) => p.test(exerciseName)));
+  if (!rule) return null;
+
+  const rawMax = personalRecords[rule.prField];
+  if (!rawMax) return null;
+  const maxKg = parseWeightToKg(rawMax);
+  if (!maxKg || maxKg <= 0) return null;
+
+  let fraction: number;
+  const reps = exerciseReps ?? parseSetsReps(exerciseDetails)?.reps;
+  if (reps && reps > 0) {
+    fraction = repsToFraction(reps);
+  } else {
+    const rpe = parseRpe(exerciseDetails);
+    fraction = rpe ? (RPE_ZONE_FRACTION[rpe.zone] ?? 0.70) : 0.70;
+  }
+
+  const raw = maxKg * rule.fraction * fraction;
+  return Math.round(raw / 2.5) * 2.5;
 }
