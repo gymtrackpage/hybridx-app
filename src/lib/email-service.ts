@@ -67,6 +67,87 @@ export async function sendWelcomeEmail(email: string, name?: string) {
 }
 
 /**
+ * Day 2 nudge — for users who quick-started (skipped onboarding) and haven't done a workout.
+ * Reminds them their AI-built Hyrox starter plan is waiting.
+ */
+export async function sendOnboardingNudge1(email: string, name?: string) {
+  try {
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return;
+
+    const html = await getEmailTemplate('onboarding-nudge-email-1.html', {
+      name: name || 'Athlete',
+    });
+    if (!html) return;
+
+    await transporter.sendMail({
+      from: `"HybridX Training" <${process.env.GMAIL_USER}>`,
+      to: email,
+      subject: `${name || 'Athlete'}, your Hyrox starter workouts are ready to go`,
+      html,
+    });
+    console.log(`Onboarding nudge 1 sent to ${email}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send onboarding nudge 1:', error);
+    return { success: false, error };
+  }
+}
+
+/**
+ * Day 6 nudge — for all users who haven't completed any workouts yet.
+ * Lowers the barrier and reinforces what's waiting for them.
+ */
+export async function sendOnboardingNudge2(email: string, name?: string) {
+  try {
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return;
+
+    const html = await getEmailTemplate('onboarding-nudge-email-2.html', {
+      name: name || 'Athlete',
+    });
+    if (!html) return;
+
+    await transporter.sendMail({
+      from: `"HybridX Training" <${process.env.GMAIL_USER}>`,
+      to: email,
+      subject: `One workout changes everything, ${name || 'Athlete'}`,
+      html,
+    });
+    console.log(`Onboarding nudge 2 sent to ${email}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send onboarding nudge 2:', error);
+    return { success: false, error };
+  }
+}
+
+/**
+ * Day 10 nudge — final urgency email for users still not training.
+ * Drives program selection before the trial feeling lapses.
+ */
+export async function sendOnboardingNudge3(email: string, name?: string) {
+  try {
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return;
+
+    const html = await getEmailTemplate('onboarding-nudge-email-3.html', {
+      name: name || 'Athlete',
+    });
+    if (!html) return;
+
+    await transporter.sendMail({
+      from: `"HybridX Training" <${process.env.GMAIL_USER}>`,
+      to: email,
+      subject: `10 days in, ${name || 'Athlete'} — don't let your free trial slip`,
+      html,
+    });
+    console.log(`Onboarding nudge 3 sent to ${email}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to send onboarding nudge 3:', error);
+    return { success: false, error };
+  }
+}
+
+/**
  * Sends a re-engagement email to an inactive user
  */
 export async function sendReEngagementEmail(email: string, name?: string) {

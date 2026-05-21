@@ -93,6 +93,8 @@ export interface User {
   // Analytics fields
   lastSeenAt?: Date;
   lastLoginAt?: Date;
+  /** User clicked "Jump Straight In" and skipped the fitness assessment */
+  onboardingSkipped?: boolean;
   /** Highest onboarding step reached (1–6); 6 = completed */
   onboardingCompletedStep?: number;
   /** Platform at last session: web | pwa | ios | android */

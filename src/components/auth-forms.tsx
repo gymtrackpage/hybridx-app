@@ -268,8 +268,25 @@ export function SignupForm() {
   const handlePrev = () => {
     setStep((prev) => prev - 1);
   };
-  
-  const handleSubmit = async (data: Partial<SignupData>) => {
+
+  const handleSkipAssessmentStep = () => {
+    setStep((prev) => prev + 1);
+  };
+
+  const handleQuickStart = (stepData: Partial<SignupData>) => {
+    const quickData: Partial<SignupData> = {
+      ...formData,
+      ...stepData,
+      experience: 'beginner',
+      frequency: '3',
+      goal: 'hybrid',
+      selectedProgramId: undefined,
+    };
+    setFormData(quickData);
+    void handleSubmit(quickData, true);
+  };
+
+  const handleSubmit = async (data: Partial<SignupData>, isQuickStart = false) => {
     setIsLoading(true);
     const finalData = { ...formData, ...data } as SignupData;
 
@@ -361,6 +378,7 @@ export function SignupForm() {
         programId: finalData.selectedProgramId || null,
         startDate: finalData.selectedProgramId ? new Date() : undefined,
         customProgram: customProgram,
+        onboardingSkipped: isQuickStart,
       });
 
       const programMessage = finalData.selectedProgramId
@@ -404,10 +422,10 @@ export function SignupForm() {
   return (
     <Card className="w-full max-w-3xl">
       {step === 1 && <Step1 onNext={handleNext} defaultValues={formData} />}
-      {step === 2 && <Step2 onNext={handleNext} onPrev={handlePrev} defaultValues={formData} />}
-      {step === 3 && <Step3 onNext={handleNext} onPrev={handlePrev} defaultValues={formData} />}
-      {step === 4 && <Step4 onNext={handleNext} onPrev={handlePrev} defaultValues={formData} />}
-      {step === 5 && <Step5 onNext={handleNext} onPrev={handlePrev} defaultValues={formData} />}
+      {step === 2 && <Step2 onNext={handleNext} onPrev={handlePrev} onQuickStart={handleQuickStart} defaultValues={formData} isLoading={isLoading} />}
+      {step === 3 && <Step3 onNext={handleNext} onPrev={handlePrev} onSkip={handleSkipAssessmentStep} defaultValues={formData} />}
+      {step === 4 && <Step4 onNext={handleNext} onPrev={handlePrev} onSkip={handleSkipAssessmentStep} defaultValues={formData} />}
+      {step === 5 && <Step5 onNext={handleNext} onPrev={handlePrev} onSkip={handleSkipAssessmentStep} defaultValues={formData} />}
       {step === 6 && <Step6 onSubmit={handleSubmit} onPrev={handlePrev} defaultValues={formData} isLoading={isLoading} />}
     </Card>
   );
@@ -441,7 +459,7 @@ function Step1({ onNext, defaultValues }: any) {
   );
 }
 
-function Step2({ onNext, onPrev, defaultValues }: any) {
+function Step2({ onNext, onPrev, onQuickStart, defaultValues, isLoading }: any) {
   const form = useForm({
     resolver: zodResolver(signupSchema.pick({ firstName: true, lastName: true })),
     defaultValues,
@@ -450,8 +468,8 @@ function Step2({ onNext, onPrev, defaultValues }: any) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onNext)}>
         <CardHeader>
-          <CardTitle>Tell us your name</CardTitle>
-          <CardDescription>Let's get personal.</CardDescription>
+          <CardTitle>What's your name?</CardTitle>
+          <CardDescription>Just your name to get started — everything else is optional.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <FormField control={form.control} name="firstName" render={({ field }) => (
@@ -461,16 +479,36 @@ function Step2({ onNext, onPrev, defaultValues }: any) {
             <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input placeholder="Doe" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
         </CardContent>
-        <CardFooter className="justify-between">
-          <Button type="button" variant="ghost" onClick={onPrev}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
-          <Button type="submit">Next <ArrowRight className="ml-2 h-4 w-4" /></Button>
+        <CardFooter className="flex-col gap-3 pt-2">
+          <Button
+            type="button"
+            className="w-full"
+            size="lg"
+            onClick={form.handleSubmit(onQuickStart)}
+            disabled={isLoading}
+          >
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Jump Straight In <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            We'll auto-generate Hyrox workouts for you. Take 2 mins to personalise below and get a matched program instead.
+          </p>
+          <div className="flex items-center w-full gap-2">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground">or personalise your plan</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+          <div className="flex w-full items-center justify-between">
+            <Button type="button" variant="ghost" size="sm" onClick={onPrev}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
+            <Button type="submit" variant="outline" size="sm">Fitness Questions <ArrowRight className="ml-2 h-4 w-4" /></Button>
+          </div>
         </CardFooter>
       </form>
     </Form>
   );
 }
 
-function Step3({ onNext, onPrev, defaultValues }: any) {
+function Step3({ onNext, onPrev, onSkip, defaultValues }: any) {
   const form = useForm({
     resolver: zodResolver(signupSchema.pick({ experience: true })),
     defaultValues,
@@ -478,26 +516,34 @@ function Step3({ onNext, onPrev, defaultValues }: any) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onNext)}>
-        <CardHeader><CardTitle>Fitness Assessment (1/3)</CardTitle><CardDescription>What is your current experience level?</CardDescription></CardHeader>
+        <CardHeader>
+          <CardTitle>Your Training Level <span className="text-sm font-normal text-muted-foreground ml-2">1 of 3</span></CardTitle>
+          <CardDescription>Helps us match you to the right program intensity.</CardDescription>
+        </CardHeader>
         <CardContent>
           <FormField control={form.control} name="experience" render={({ field }) => (
             <FormItem><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2">
-              <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="beginner" /></FormControl><FormLabel className="font-normal">Beginner (New to structured training)</FormLabel></FormItem>
-              <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="intermediate" /></FormControl><FormLabel className="font-normal">Intermediate (Consistent training for 6+ months)</FormLabel></FormItem>
-              <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="advanced" /></FormControl><FormLabel className="font-normal">Advanced (Years of dedicated training)</FormLabel></FormItem>
+              <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="beginner" /></FormControl><FormLabel className="font-normal">Beginner — New to structured training</FormLabel></FormItem>
+              <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="intermediate" /></FormControl><FormLabel className="font-normal">Intermediate — Consistent training 6+ months</FormLabel></FormItem>
+              <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="advanced" /></FormControl><FormLabel className="font-normal">Advanced — Years of dedicated training</FormLabel></FormItem>
             </RadioGroup></FormControl><FormMessage /></FormItem>
           )} />
         </CardContent>
-        <CardFooter className="justify-between">
-          <Button type="button" variant="ghost" onClick={onPrev}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
-          <Button type="submit">Next <ArrowRight className="ml-2 h-4 w-4" /></Button>
+        <CardFooter className="flex-col gap-2">
+          <div className="flex justify-between w-full">
+            <Button type="button" variant="ghost" onClick={onPrev}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
+            <Button type="submit">Next <ArrowRight className="ml-2 h-4 w-4" /></Button>
+          </div>
+          <Button type="button" variant="link" size="sm" className="text-muted-foreground h-auto py-0" onClick={onSkip}>
+            Skip this question
+          </Button>
         </CardFooter>
       </form>
     </Form>
   );
 }
 
-function Step4({ onNext, onPrev, defaultValues }: any) {
+function Step4({ onNext, onPrev, onSkip, defaultValues }: any) {
   const form = useForm({
     resolver: zodResolver(signupSchema.pick({ frequency: true })),
     defaultValues,
@@ -505,7 +551,10 @@ function Step4({ onNext, onPrev, defaultValues }: any) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onNext)}>
-        <CardHeader><CardTitle>Fitness Assessment (2/3)</CardTitle><CardDescription>How many days per week can you train?</CardDescription></CardHeader>
+        <CardHeader>
+          <CardTitle>Your Schedule <span className="text-sm font-normal text-muted-foreground ml-2">2 of 3</span></CardTitle>
+          <CardDescription>How many days per week can you train?</CardDescription>
+        </CardHeader>
         <CardContent>
           <FormField control={form.control} name="frequency" render={({ field }) => (
             <FormItem><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2">
@@ -515,16 +564,21 @@ function Step4({ onNext, onPrev, defaultValues }: any) {
             </RadioGroup></FormControl><FormMessage /></FormItem>
           )} />
         </CardContent>
-        <CardFooter className="justify-between">
-          <Button type="button" variant="ghost" onClick={onPrev}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
-          <Button type="submit">Next <ArrowRight className="ml-2 h-4 w-4" /></Button>
+        <CardFooter className="flex-col gap-2">
+          <div className="flex justify-between w-full">
+            <Button type="button" variant="ghost" onClick={onPrev}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
+            <Button type="submit">Next <ArrowRight className="ml-2 h-4 w-4" /></Button>
+          </div>
+          <Button type="button" variant="link" size="sm" className="text-muted-foreground h-auto py-0" onClick={onSkip}>
+            Skip this question
+          </Button>
         </CardFooter>
       </form>
     </Form>
   );
 }
 
-function Step5({ onNext, onPrev, defaultValues }: any) {
+function Step5({ onNext, onPrev, onSkip, defaultValues }: any) {
   const form = useForm({
     resolver: zodResolver(signupSchema.pick({ goal: true })),
     defaultValues,
@@ -532,19 +586,27 @@ function Step5({ onNext, onPrev, defaultValues }: any) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onNext)}>
-        <CardHeader><CardTitle>Fitness Assessment (3/3)</CardTitle><CardDescription>What is your primary training goal?</CardDescription></CardHeader>
+        <CardHeader>
+          <CardTitle>Your Goal <span className="text-sm font-normal text-muted-foreground ml-2">3 of 3</span></CardTitle>
+          <CardDescription>What brings you to HYBRIDX?</CardDescription>
+        </CardHeader>
         <CardContent>
           <FormField control={form.control} name="goal" render={({ field }) => (
             <FormItem><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="space-y-2">
               <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="strength" /></FormControl><FormLabel className="font-normal">Build Strength</FormLabel></FormItem>
               <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="endurance" /></FormControl><FormLabel className="font-normal">Improve Endurance</FormLabel></FormItem>
-              <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="hybrid" /></FormControl><FormLabel className="font-normal">Hybrid (Balanced approach)</FormLabel></FormItem>
+              <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="hybrid" /></FormControl><FormLabel className="font-normal">Hybrid — Balanced strength and cardio</FormLabel></FormItem>
             </RadioGroup></FormControl><FormMessage /></FormItem>
           )} />
         </CardContent>
-        <CardFooter className="justify-between">
-          <Button type="button" variant="ghost" onClick={onPrev}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
-          <Button type="submit">Next <ArrowRight className="ml-2 h-4 w-4" /></Button>
+        <CardFooter className="flex-col gap-2">
+          <div className="flex justify-between w-full">
+            <Button type="button" variant="ghost" onClick={onPrev}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
+            <Button type="submit">Next <ArrowRight className="ml-2 h-4 w-4" /></Button>
+          </div>
+          <Button type="button" variant="link" size="sm" className="text-muted-foreground h-auto py-0" onClick={onSkip}>
+            Skip this question
+          </Button>
         </CardFooter>
       </form>
     </Form>
