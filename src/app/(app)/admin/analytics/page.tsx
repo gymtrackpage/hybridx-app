@@ -15,6 +15,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -73,13 +75,16 @@ export default function AdminAnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState('30');
+  const [excludeAdmins, setExcludeAdmins] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/analytics?days=${days}`, { credentials: 'include' });
+      const params = new URLSearchParams({ days });
+      if (excludeAdmins) params.set('excludeAdmins', 'true');
+      const res = await fetch(`/api/admin/analytics?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error(await res.text());
       setData(await res.json());
     } catch (e) {
@@ -91,7 +96,7 @@ export default function AdminAnalyticsPage() {
 
   useEffect(() => {
     fetchData();
-  }, [days]);
+  }, [days, excludeAdmins]);
 
   const funnelMax = data?.onboardingFunnel[0]?.count || 1;
 
@@ -105,7 +110,17 @@ export default function AdminAnalyticsPage() {
             User behaviour, retention, and engagement insights.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Switch
+              id="exclude-admins"
+              checked={excludeAdmins}
+              onCheckedChange={setExcludeAdmins}
+            />
+            <Label htmlFor="exclude-admins" className="text-sm text-muted-foreground cursor-pointer">
+              Exclude Admins
+            </Label>
+          </div>
           <Select value={days} onValueChange={setDays}>
             <SelectTrigger className="w-36">
               <SelectValue />

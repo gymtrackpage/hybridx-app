@@ -23,6 +23,7 @@ import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, ChartTooltip,
 import { Skeleton } from '@/components/ui/skeleton';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
 import type { WorkoutDay, RunningWorkout, PlannedRun } from '@/models/types';
+import type { StravaActivity } from '@/services/strava-service';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { formatPace } from '@/lib/pace-utils';
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const { user, program, todaysWorkout, todaysSession, allSessions, streakData, trainingPaces, loading, refreshData } = useUser();
   const [progressData, setProgressData] = useState<{ week: string, workouts: number }[]>([]);
   const [todayStravaSummary, setTodayStravaSummary] = useState<string | null>(null);
+  const [stravaRecentActivities, setStravaRecentActivities] = useState<StravaActivity[]>([]);
   // True once TodayStravaFeed has resolved (success OR no Strava connection) — gates the AI summary
   const [todayStravaLoaded, setTodayStravaLoaded] = useState(false);
   const [stravaLoadError, setStravaLoadError] = useState<StravaLoadError | null>(null);
@@ -74,13 +76,13 @@ export default function DashboardPage() {
   // New User Detection
   const isNewUser = !loading && allSessions.length === 0;
 
-  // Calculate progress data when allSessions changes
+  // Calculate progress data when sessions or Strava activities change
   useEffect(() => {
-    if (allSessions.length > 0) {
-        const weeklyProgress = generateProgressData(allSessions);
+    if (allSessions.length > 0 || stravaRecentActivities.length > 0) {
+        const weeklyProgress = generateProgressData(allSessions, stravaRecentActivities);
         setProgressData(weeklyProgress);
     }
-  }, [allSessions]);
+  }, [allSessions, stravaRecentActivities]);
 
   // Mark Strava as "not needed" for non-connected users so the summary doesn't wait forever
   useEffect(() => {
@@ -169,22 +171,27 @@ export default function DashboardPage() {
   }, [isGranted, todaysWorkout, user]);
 
   
-  const generateProgressData = (sessions: WorkoutSession[]) => {
+  const generateProgressData = (sessions: WorkoutSession[], stravaActivities: StravaActivity[] = []) => {
       const now = new Date();
       const weeklyData: { week: string, workouts: number }[] = [];
-      
+
       for (let i = 3; i >= 0; i--) {
           const weekStart = startOfWeek(subWeeks(now, i), { weekStartsOn: 1 });
           const weekEnd = new Date(weekStart);
           weekEnd.setDate(weekEnd.getDate() + 6);
-          
-          const completedInWeek = sessions.filter(s => 
+
+          const appCount = sessions.filter(s =>
               s.finishedAt && isWithinInterval(s.finishedAt, { start: weekStart, end: weekEnd })
           ).length;
-          
+
+          const stravaCount = stravaActivities.filter(a => {
+              const d = new Date(a.start_date_local || a.start_date);
+              return isWithinInterval(d, { start: weekStart, end: weekEnd });
+          }).length;
+
           weeklyData.push({
               week: `W${4-i}`,
-              workouts: completedInWeek
+              workouts: appCount + stravaCount
           });
       }
       return weeklyData;
@@ -254,8 +261,9 @@ export default function DashboardPage() {
   };
 
   // Stable callback — prevents TodayStravaFeed from re-fetching on every parent render
-  const handleStravaActivitiesLoaded = useCallback((s: string | null, error?: StravaLoadError) => {
+  const handleStravaActivitiesLoaded = useCallback((s: string | null, recentActivities: StravaActivity[], error?: StravaLoadError) => {
     setTodayStravaSummary(s);
+    setStravaRecentActivities(recentActivities);
     setStravaLoadError(error ?? null);
     setTodayStravaLoaded(true);
   }, []);

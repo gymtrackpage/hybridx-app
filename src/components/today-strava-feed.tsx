@@ -26,9 +26,9 @@ import { isToday } from 'date-fns';
 export type StravaLoadError = 'reconnect_required' | 'fetch_error';
 
 interface TodayStravaFeedProps {
-  /** Called once today's activities are known; passes a readable summary string (or null if none).
-   *  `error` is set when loading failed — 'reconnect_required' means the token expired/revoked. */
-  onActivitiesLoaded?: (summary: string | null, error?: StravaLoadError) => void;
+  /** Called once today's activities are known; passes a readable summary string (or null if none),
+   *  the full list of recent activities fetched, and optionally an error code. */
+  onActivitiesLoaded?: (summary: string | null, recentActivities: StravaActivity[], error?: StravaLoadError) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -103,24 +103,23 @@ export function TodayStravaFeed({ onActivitiesLoaded }: TodayStravaFeedProps) {
 
       if (!res.ok) {
         const errorType: StravaLoadError = res.status === 401 ? 'reconnect_required' : 'fetch_error';
-        onActivitiesLoaded?.(null, errorType);
+        onActivitiesLoaded?.(null, [], errorType);
         return;
       }
 
       const { activities: all }: { activities: StravaActivity[] } = await res.json();
+      const safeAll = Array.isArray(all) ? all : [];
 
       // Filter to activities that started today in the user's local timezone
-      const todays = Array.isArray(all)
-        ? all.filter(a => {
-            const d = new Date(a.start_date_local || a.start_date);
-            return isToday(d);
-          })
-        : [];
+      const todays = safeAll.filter(a => {
+        const d = new Date(a.start_date_local || a.start_date);
+        return isToday(d);
+      });
 
       setTodayActivities(todays);
-      onActivitiesLoaded?.(todays.length > 0 ? buildAISummary(todays) : null);
+      onActivitiesLoaded?.(todays.length > 0 ? buildAISummary(todays) : null, safeAll);
     } catch {
-      onActivitiesLoaded?.(null, 'fetch_error');
+      onActivitiesLoaded?.(null, [], 'fetch_error');
     } finally {
       setLoading(false);
     }
