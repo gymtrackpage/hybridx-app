@@ -206,6 +206,13 @@ function determineSubscriptionStatus(
     return (storedStatus as SubscriptionStatus) || 'expired';
 }
 
+// SERVER-SIDE function to delete a user (admin only)
+export async function deleteUser(userId: string): Promise<void> {
+    const adminDb = getAdminDb();
+    await adminDb.collection('users').doc(userId).delete();
+    await getAuth().deleteUser(userId);
+}
+
 // SERVER-SIDE function to get all users (admin only)
 export async function getAllUsers(): Promise<User[]> {
     const adminDb = getAdminDb();

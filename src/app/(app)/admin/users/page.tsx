@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, Crown, Calendar, Mail, User as UserIcon, Filter, CheckCircle } from 'lucide-react';
+import { Users, Crown, Calendar, Mail, User as UserIcon, Filter, CheckCircle, MoreHorizontal, Trash2 } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -26,6 +26,23 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 const getStatusColor = (status: SubscriptionStatus): string => {
   switch (status) {
@@ -56,6 +73,26 @@ export default function AdminUsersPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [experienceFilter, setExperienceFilter] = useState<string>('all');
   const { toast } = useToast();
+
+  const handleDelete = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/admin/users?userId=${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete user');
+      }
+      toast({ title: 'Success', description: 'User deleted successfully.' });
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete user.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const fetchUsers = async (retryCount = 0) => {
     setLoading(true);
@@ -294,12 +331,13 @@ export default function AdminUsersPage() {
                 <TableHead>Trial Start</TableHead>
                 <TableHead>Stripe Status</TableHead>
                 <TableHead>Admin</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center">
+                  <TableCell colSpan={11} className="text-center">
                     Loading users...
                   </TableCell>
                 </TableRow>
@@ -379,11 +417,54 @@ export default function AdminUsersPage() {
                         <span className="text-muted-foreground">User</span>
                       )}
                     </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete user?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently delete{' '}
+                                  <strong>
+                                    {user.firstName || user.lastName
+                                      ? `${user.firstName} ${user.lastName}`.trim()
+                                      : user.email}
+                                  </strong>{' '}
+                                  and cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(user.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center">
+                  <TableCell colSpan={11} className="text-center">
                     No users found matching your filters.
                   </TableCell>
                 </TableRow>
