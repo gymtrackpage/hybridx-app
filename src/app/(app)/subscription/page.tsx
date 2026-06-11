@@ -3,12 +3,13 @@
 
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { differenceInDays, addMonths, format } from 'date-fns';
+import { format } from 'date-fns';
+import { getTrialEndDate, getTrialDaysLeft } from '@/lib/trial';
 import { Loader2, CheckCircle, ShieldCheck, Star, PauseCircle, XCircle } from 'lucide-react';
 
 import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
-import { createCheckoutSession, pauseSubscription, cancelSubscription } from '@/services/stripe-service';
+import { createCheckoutSession, pauseSubscription, cancelSubscription, type SubscriptionPlan } from '@/services/stripe-service';
 import type { User } from '@/models/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +26,78 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+
+// Annual billing only appears once STRIPE_ANNUAL_PRICE_ID is configured and this
+// public flag is set — keeps a half-configured annual button from erroring.
+const ANNUAL_ENABLED = process.env.NEXT_PUBLIC_ANNUAL_PLAN_ENABLED === 'true';
+
+const MEMBER_BENEFITS = [
+    'AI-tailored training plans matched to your goal',
+    'Weekly AI coaching that adapts your plan',
+    'Race-day planner & countdown programs',
+    'Garmin & Strava sync',
+    'Progress tracking, streaks & analytics',
+];
+
+/**
+ * Shared upgrade panel: restates the value of membership, then offers the plan
+ * options. `lostAccess` switches the copy to loss-aversion framing, which
+ * converts better for expired/cancelled users.
+ */
+function UpgradePanel({
+    onSubscribe,
+    isRedirecting,
+    lostAccess = false,
+}: {
+    onSubscribe: (plan: SubscriptionPlan) => void;
+    isRedirecting: boolean;
+    lostAccess?: boolean;
+}) {
+    return (
+        <div className="w-full space-y-4">
+            <ul className="space-y-2">
+                {MEMBER_BENEFITS.map((benefit) => (
+                    <li key={benefit} className="flex items-start gap-2 text-sm">
+                        <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                        <span className={lostAccess ? 'text-foreground' : 'text-muted-foreground'}>
+                            {lostAccess ? `Lose access to: ${benefit}` : benefit}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+                <Button
+                    onClick={() => onSubscribe('monthly')}
+                    disabled={isRedirecting}
+                    variant={ANNUAL_ENABLED ? 'outline' : 'default'}
+                    className="flex-1"
+                >
+                    {isRedirecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Monthly — £5/month
+                </Button>
+
+                {ANNUAL_ENABLED && (
+                    <Button
+                        onClick={() => onSubscribe('annual')}
+                        disabled={isRedirecting}
+                        className="relative flex-1"
+                    >
+                        {isRedirecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Annual — £50/year
+                        <span className="absolute -top-2 -right-2 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-foreground shadow">
+                            2 months free
+                        </span>
+                    </Button>
+                )}
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+                Cancel anytime · Secure payment by Stripe
+            </p>
+        </div>
+    );
+}
 
 export default function SubscriptionPage() {
     const [user, setUser] = useState<User | null>(null);
@@ -62,14 +135,14 @@ export default function SubscriptionPage() {
         };
     }, []);
 
-    const handleSubscribe = async () => {
+    const handleSubscribe = async (plan: SubscriptionPlan = 'monthly') => {
         if (!firebaseUser) {
             toast({ title: 'Error', description: 'You must be logged in.', variant: 'destructive' });
             return;
         }
         setIsRedirecting(true);
         try {
-            const { url } = await createCheckoutSession(firebaseUser.uid);
+            const { url } = await createCheckoutSession(firebaseUser.uid, plan);
             if (url) {
                 window.location.href = url;
             } else {
@@ -144,8 +217,8 @@ export default function SubscriptionPage() {
 
     const status = user?.subscriptionStatus || 'trial';
     const trialStart = user?.trialStartDate;
-    const trialEndDate = trialStart ? addMonths(trialStart, 1) : new Date();
-    const daysLeft = trialStart ? differenceInDays(trialEndDate, new Date()) : 0;
+    const trialEndDate = getTrialEndDate(trialStart) ?? new Date();
+    const daysLeft = getTrialDaysLeft(trialStart);
     const trialEndDateFormatted = trialStart ? format(trialEndDate, 'MMMM do, yyyy') : '';
 
     return (
@@ -223,10 +296,7 @@ export default function SubscriptionPage() {
                         <p className="text-muted-foreground">Your subscription is currently paused. To regain access, please re-subscribe.</p>
                     </CardContent>
                      <CardFooter>
-                        <Button onClick={handleSubscribe} disabled={isRedirecting}>
-                            {isRedirecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                             Resume Subscription (£5/month)
-                        </Button>
+                        <UpgradePanel onSubscribe={handleSubscribe} isRedirecting={isRedirecting} />
                     </CardFooter>
                 </Card>
             )}
@@ -250,10 +320,7 @@ export default function SubscriptionPage() {
                         )}
                     </CardContent>
                     <CardFooter>
-                         <Button onClick={handleSubscribe} disabled={isRedirecting}>
-                            {isRedirecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Subscribe Now (£5/month)
-                        </Button>
+                        <UpgradePanel onSubscribe={handleSubscribe} isRedirecting={isRedirecting} />
                     </CardFooter>
                 </Card>
             )}
@@ -275,10 +342,7 @@ export default function SubscriptionPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardFooter>
-                        <Button onClick={handleSubscribe} disabled={isRedirecting}>
-                            {isRedirecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                             Re-subscribe Now (£5/month)
-                        </Button>
+                        <UpgradePanel onSubscribe={handleSubscribe} isRedirecting={isRedirecting} lostAccess />
                     </CardFooter>
                 </Card>
             )}

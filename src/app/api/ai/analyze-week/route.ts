@@ -1,5 +1,6 @@
 // src/app/api/ai/analyze-week/route.ts
 import { NextResponse } from 'next/server';
+import { requireUser } from '@/lib/api-auth';
 import { analyzeAndAdjust } from '@/ai/flows/analyze-and-adjust';
 import { getUser, updateUserAdmin } from '@/services/user-service';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -10,18 +11,19 @@ import axios from 'axios';
 import type { StravaTokens } from '@/models/types';
 import { computeTrainingSummary, formatTrainingSummaryForAI } from '@/services/training-load-service';
 
-// Mocking session auth for this example, in real app use NextAuth or Firebase Admin verification
 export async function POST(request: Request) {
     try {
+        // AI generation is expensive — require a valid Firebase ID token and
+        // rate-limit per user. userId is derived from the verified token, never
+        // trusted from the body (prevents acting on another user's data).
+        const auth = await requireUser(request, { bucket: 'ai:analyze-week', windowMs: 60_000, max: 5 });
+        if ('response' in auth) return auth.response;
+        const userId = auth.uid;
+
         console.log('[Analyze Week] Starting analysis...');
         const body = await request.json();
-        const { userId, customRequest } = body;
-        console.log('[Analyze Week] User ID:', userId);
+        const { customRequest } = body;
         console.log('[Analyze Week] Custom Request:', customRequest || 'None');
-
-        if (!userId) {
-            return NextResponse.json({ error: 'User ID required' }, { status: 400 });
-        }
 
         // 1. Fetch User Profile
         console.log('[Analyze Week] Fetching user profile...');

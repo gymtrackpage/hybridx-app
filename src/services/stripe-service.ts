@@ -25,12 +25,34 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: '2024-06-20',
 });
 
+export type SubscriptionPlan = 'monthly' | 'annual';
+
+/**
+ * Resolves the Stripe price ID for a given plan.
+ * Annual requires STRIPE_ANNUAL_PRICE_ID to be configured; if it is missing we
+ * fail loudly rather than silently charging the monthly price.
+ */
+function resolvePriceId(plan: SubscriptionPlan): string {
+    if (plan === 'annual') {
+        const annual = process.env.STRIPE_ANNUAL_PRICE_ID;
+        if (!annual) {
+            throw new Error('Annual plan is not available right now. Please choose monthly.');
+        }
+        return annual;
+    }
+    return process.env.STRIPE_PRICE_ID as string;
+}
+
 /**
  * Creates a Stripe Checkout session for a user to subscribe.
  * @param userId - The ID of the user in Firebase.
+ * @param plan - Which billing cadence to check out with (defaults to monthly).
  * @returns An object containing the URL to the checkout session.
  */
-export async function createCheckoutSession(userId: string): Promise<{ url: string | null }> {
+export async function createCheckoutSession(
+    userId: string,
+    plan: SubscriptionPlan = 'monthly',
+): Promise<{ url: string | null }> {
     try {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
         const stripeKey = process.env.STRIPE_SECRET_KEY;
@@ -86,7 +108,7 @@ export async function createCheckoutSession(userId: string): Promise<{ url: stri
             }
         }
         
-        const priceId = process.env.STRIPE_PRICE_ID;
+        const priceId = resolvePriceId(plan);
 
         try {
             const session = await stripe.checkout.sessions.create({

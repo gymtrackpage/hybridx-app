@@ -39,6 +39,7 @@ import { useUser } from '@/contexts/user-context';
 import { logger } from '@/lib/logger';
 import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { AndroidBetaBanner } from '@/components/android-beta-banner';
+import { TrialBanner } from '@/components/trial-banner';
 import { RacePrepDialog } from '@/components/race-prep-dialog';
 import type { StravaLoadError } from '@/components/today-strava-feed';
 
@@ -479,6 +480,31 @@ export default function DashboardPage() {
   return (
     <>
       <div className="space-y-6">
+        {/* Trial countdown — drives trial→paid conversion (hidden for paid/admin users) */}
+        <TrialBanner />
+
+        {/* First-workout activation nudge — completing the first session is the
+            strongest predictor of retention, so we surface it prominently until done. */}
+        {!loading && completedWorkoutCount === 0 && (
+          <Card className="border-accent/50 bg-gradient-to-r from-accent/10 to-primary/10">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Zap className="h-5 w-5 text-accent" />
+                Let&apos;s log your first workout
+              </CardTitle>
+              <CardDescription>
+                Completing your first session unlocks your streak and tailors your coaching. It only takes one to get started.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter className="pt-0">
+              <Button size="sm" onClick={() => router.push(todaysWorkout?.workout ? '/workout/active' : '/programs')}>
+                {todaysWorkout?.workout ? "Start today's workout" : 'Choose a program'}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
+
         {/* Profile completion prompt — shown after 3 workouts for users who skipped onboarding */}
         {showProfilePrompt && (
           <Card className="border-primary/40 bg-gradient-to-r from-primary/5 to-primary/10">

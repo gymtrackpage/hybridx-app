@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit } from '@/lib/rate-limit';
 import nodemailer from 'nodemailer';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -35,6 +36,16 @@ async function getEmailTemplate(templateName: string, replacements: Record<strin
 
 export async function POST(request: NextRequest) {
   try {
+    // Public form — rate-limit per IP so it can't be abused to send spam email.
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const rl = checkRateLimit(`beta-request:${ip}`, 60 * 60_000, 5); // 5 per hour
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+      );
+    }
+
     const { email, name } = await request.json();
 
     if (!email) {

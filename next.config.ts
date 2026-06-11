@@ -57,7 +57,9 @@ const withPWA = require('next-pwa')({
 const nextConfig: NextConfig = {
   /* config options here */
   typescript: {
-    ignoreBuildErrors: true,
+    // Type errors fail the build. The codebase currently typechecks clean
+    // (npm run typecheck) — keep it that way rather than shipping silent errors.
+    ignoreBuildErrors: false,
   },
   serverExternalPackages: ['handlebars', 'dotprompt', '@genkit-ai/core', 'genkit'],
   allowedDevOrigins: ['*.cloudworkstations.dev'],
@@ -76,6 +78,24 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
+  },
+  // Baseline security headers applied to every response.
+  // NOTE: a strict Content-Security-Policy is intentionally omitted here — it
+  // needs to be validated against Firebase Auth, Stripe, Strava and Google AI
+  // origins before enabling, or it will break those integrations.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+        ],
+      },
+    ];
   },
 };
 

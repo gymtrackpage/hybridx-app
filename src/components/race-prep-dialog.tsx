@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { calculateTrainingPhases, type RacePlan } from '@/services/race-scheduler';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { authedFetch } from '@/lib/client-auth';
 import type { WorkoutDay } from '@/models/types';
 import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { updateUser } from '@/services/user-service-client';
@@ -94,7 +95,7 @@ export function RacePrepDialog() {
     setIsGenerating(true);
     
     try {
-        const response = await fetch('/api/ai/generate-race-plan', {
+        const response = await authedFetch('/api/ai/generate-race-plan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
