@@ -12,6 +12,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, AuthErrorCodes, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
+import { authedFetch } from '@/lib/client-auth';
 import { createUser } from '@/services/user-service-client';
 import { getTopPrograms, type ProgramRecommendation } from '@/services/program-recommendation';
 import { getProgramClient } from '@/services/program-service-client';
@@ -301,10 +302,17 @@ export function SignupForm() {
       const user = userCredential.user;
 
       // 1.1. Send a verification email (non-blocking — we don't gate activation
-      // on it, but it improves account quality and email deliverability).
-      sendEmailVerification(user).catch((err) =>
-        logger.error('Failed to send verification email:', err),
-      );
+      // on it). Prefer our own transport (Brevo/Gmail) so it lands in the inbox;
+      // fall back to Firebase's client sender if that call fails.
+      (async () => {
+        try {
+          const res = await authedFetch('/api/auth/send-verification', { method: 'POST' });
+          if (!res.ok) throw new Error(`send-verification failed: ${res.status}`);
+        } catch (err) {
+          logger.error('Verification via transport failed, falling back to Firebase sender:', err);
+          sendEmailVerification(user).catch((e) => logger.error('Fallback verification email failed:', e));
+        }
+      })();
 
       // 1.5. CRITICAL FIX: Create session cookie immediately after signup
       logger.log('🍪 Creating session cookie after signup...');

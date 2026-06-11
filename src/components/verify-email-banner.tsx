@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { MailWarning, X } from 'lucide-react';
 import { onAuthStateChanged, sendEmailVerification, type User as FirebaseUser } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
+import { authedFetch } from '@/lib/client-auth';
 import { logger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -42,11 +43,19 @@ export function VerifyEmailBanner() {
   const handleResend = async () => {
     setSending(true);
     try {
-      await sendEmailVerification(fbUser);
+      // Prefer our own transport (Brevo/Gmail); fall back to Firebase's sender.
+      const res = await authedFetch('/api/auth/send-verification', { method: 'POST' });
+      if (!res.ok) throw new Error(`send-verification failed: ${res.status}`);
       toast({ title: 'Verification email sent', description: `Check ${fbUser.email} for the link.` });
     } catch (err) {
-      logger.error('Resend verification failed:', err);
-      toast({ title: 'Could not send email', description: 'Please try again in a moment.', variant: 'destructive' });
+      logger.error('Resend via transport failed, falling back to Firebase sender:', err);
+      try {
+        await sendEmailVerification(fbUser);
+        toast({ title: 'Verification email sent', description: `Check ${fbUser.email} for the link.` });
+      } catch (err2) {
+        logger.error('Resend verification failed:', err2);
+        toast({ title: 'Could not send email', description: 'Please try again in a moment.', variant: 'destructive' });
+      }
     } finally {
       setSending(false);
     }
