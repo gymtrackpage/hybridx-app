@@ -10,7 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2, AlertCircle, Award } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, AuthErrorCodes, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, AuthErrorCodes, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
 import { createUser } from '@/services/user-service-client';
 import { getTopPrograms, type ProgramRecommendation } from '@/services/program-recommendation';
@@ -299,6 +299,12 @@ export function SignupForm() {
       // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, finalData.email, finalData.password);
       const user = userCredential.user;
+
+      // 1.1. Send a verification email (non-blocking — we don't gate activation
+      // on it, but it improves account quality and email deliverability).
+      sendEmailVerification(user).catch((err) =>
+        logger.error('Failed to send verification email:', err),
+      );
 
       // 1.5. CRITICAL FIX: Create session cookie immediately after signup
       logger.log('🍪 Creating session cookie after signup...');

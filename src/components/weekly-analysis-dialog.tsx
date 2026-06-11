@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Sparkles, CheckCircle, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { updateUser } from '@/services/user-service-client'; // Need to expose this or similar
+import { authedFetch } from '@/lib/client-auth';
 import type { User, Workout, RunningWorkout } from '@/models/types';
 import { Badge } from './ui/badge';
 import { Card, CardContent } from './ui/card';
@@ -37,11 +38,10 @@ export function WeeklyAnalysisDialog({ userId, trigger }: WeeklyAnalysisDialogPr
     setLoading(true);
     setResult(null);
     try {
-      const response = await fetch('/api/ai/analyze-week', {
+      const response = await authedFetch('/api/ai/analyze-week', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId,
           customRequest: customRequest.trim() || undefined,
         }),
       });
@@ -72,11 +72,10 @@ export function WeeklyAnalysisDialog({ userId, trigger }: WeeklyAnalysisDialogPr
 
     setLoading(true);
     try {
-      const response = await fetch('/api/ai/apply-adjustments', {
+      const response = await authedFetch('/api/ai/apply-adjustments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId,
           adjustments: result.adjustments,
         }),
       });

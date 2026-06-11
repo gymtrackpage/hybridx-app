@@ -24,6 +24,13 @@
 .DS_Store
 *.pem
 
+# secrets / signing material — never commit
+*.jks
+*.keystore
+*.p8
+*.p12
+PLAY_STORE_TEST_CREDENTIALS.md
+
 # debug
 npm-debug.log*
 yarn-debug.log*

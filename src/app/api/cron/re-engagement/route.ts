@@ -8,6 +8,13 @@ export const maxDuration = 60; // Set timeout to 60 seconds
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  // Cron-only endpoint: require the shared secret so it cannot be triggered
+  // by the public to blast re-engagement emails (matches the other crons).
+  const authHeader = request.headers.get('authorization');
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+
   try {
     const adminDb = getAdminDb();
     

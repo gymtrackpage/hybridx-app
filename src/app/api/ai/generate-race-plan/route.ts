@@ -1,15 +1,20 @@
 
 import { NextResponse } from 'next/server';
+import { requireUser } from '@/lib/api-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { generateRaceProgram } from '@/services/race-scheduler';
 import { generateRacePlanFlow } from '@/ai/flows/generate-race-plan'; // Import AI Flow
 import type { Program } from '@/models/types';
 
 // Increase timeout for AI generation (it processes a lot of data)
-export const maxDuration = 60; 
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
+    // AI generation is expensive — require a valid token and rate-limit per user.
+    const auth = await requireUser(request, { bucket: 'ai:race-plan', windowMs: 60_000, max: 5 });
+    if ('response' in auth) return auth.response;
+
     const { date, eventName, eventType, eventDetails } = await request.json();
     const raceDate = new Date(date);
 
