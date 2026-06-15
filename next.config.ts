@@ -55,7 +55,7 @@ const withPWA = require('next-pwa')({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: 'standalone',
   typescript: {
     // Type errors fail the build. The codebase currently typechecks clean
     // (npm run typecheck) — keep it that way rather than shipping silent errors.
