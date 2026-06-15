@@ -1,6 +1,7 @@
 'use client';
 import { logger } from '@/lib/logger';
 
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
@@ -155,6 +156,15 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
     control: form.control,
     name: 'workouts',
   });
+
+  // `defaultValues` is only read on the first render, so re-populate the form
+  // whenever a different program is selected (or the dialog is re-opened).
+  // Without this, clicking "Edit" opens the dialog with empty fields.
+  useEffect(() => {
+    if (isOpen) {
+      form.reset(buildDefaultValues(program));
+    }
+  }, [isOpen, program, form]);
 
   // Watch the top-level programType so we can react to changes
   const programType = useWatch({ control: form.control, name: 'programType' });
