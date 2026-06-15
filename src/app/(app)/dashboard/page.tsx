@@ -3,12 +3,15 @@
 
 import { useEffect, useState, useRef, useCallback, lazy, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { BarChart, Target, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History, Calendar, Bell, CheckSquare } from 'lucide-react';
+import { BarChart, Target, Loader2, Route, Zap, PlusSquare, Link as LinkIcon, CheckCircle, History, Calendar, Bell, CheckSquare, Sparkles, Trophy, ArrowRight } from 'lucide-react';
 import { subWeeks, startOfWeek, isWithinInterval, isFuture } from 'date-fns';
 
 import { dashboardSummary } from '@/ai/flows/dashboard-summary';
 import { workoutSummary } from '@/ai/flows/workout-summary';
 import { generateWorkout } from '@/ai/flows/generate-workout';
+import { generateHyroxStarter } from '@/ai/flows/generate-hyrox-starter';
+import { updateUser } from '@/services/user-service-client';
+import { CompleteOnboardingDialog } from '@/components/complete-onboarding-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -23,6 +26,7 @@ import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, ChartTooltip,
 import { Skeleton } from '@/components/ui/skeleton';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
 import type { WorkoutDay, RunningWorkout, PlannedRun } from '@/models/types';
+import type { StravaActivity } from '@/services/strava-service';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { formatPace } from '@/lib/pace-utils';
@@ -35,6 +39,7 @@ import { useUser } from '@/contexts/user-context';
 import { logger } from '@/lib/logger';
 import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { AndroidBetaBanner } from '@/components/android-beta-banner';
+import { TrialBanner } from '@/components/trial-banner';
 import { RacePrepDialog } from '@/components/race-prep-dialog';
 import type { StravaLoadError } from '@/components/today-strava-feed';
 
@@ -55,6 +60,7 @@ export default function DashboardPage() {
   const { user, program, todaysWorkout, todaysSession, allSessions, streakData, trainingPaces, loading, refreshData } = useUser();
   const [progressData, setProgressData] = useState<{ week: string, workouts: number }[]>([]);
   const [todayStravaSummary, setTodayStravaSummary] = useState<string | null>(null);
+  const [stravaRecentActivities, setStravaRecentActivities] = useState<StravaActivity[]>([]);
   // True once TodayStravaFeed has resolved (success OR no Strava connection) — gates the AI summary
   const [todayStravaLoaded, setTodayStravaLoaded] = useState(false);
   const [stravaLoadError, setStravaLoadError] = useState<StravaLoadError | null>(null);
@@ -63,6 +69,12 @@ export default function DashboardPage() {
   const [isGeneratingWorkout, setIsGeneratingWorkout] = useState(false);
   const [isMarkingDone, setIsMarkingDone] = useState(false);
   const [isCustomWorkoutDialogOpen, setIsCustomWorkoutDialogOpen] = useState(false);
+  const [isGeneratingStarterPlan, setIsGeneratingStarterPlan] = useState(false);
+  const [showCompleteOnboarding, setShowCompleteOnboarding] = useState(false);
+  const [profileBannerDismissed, setProfileBannerDismissed] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem('profileBannerDismissed') === 'true'
+  );
+  const starterPlanTriggeredRef = useRef(false);
   const [summary, setSummary] = useState("Here's your plan for today. Let's get it done.");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [workoutSummaryText, setWorkoutSummaryText] = useState("Assign a program to your profile to see your workout.");
@@ -74,19 +86,45 @@ export default function DashboardPage() {
   // New User Detection
   const isNewUser = !loading && allSessions.length === 0;
 
-  // Calculate progress data when allSessions changes
+  // Calculate progress data when sessions or Strava activities change
   useEffect(() => {
-    if (allSessions.length > 0) {
-        const weeklyProgress = generateProgressData(allSessions);
+    if (allSessions.length > 0 || stravaRecentActivities.length > 0) {
+        const weeklyProgress = generateProgressData(allSessions, stravaRecentActivities);
         setProgressData(weeklyProgress);
     }
-  }, [allSessions]);
+  }, [allSessions, stravaRecentActivities]);
 
   // Mark Strava as "not needed" for non-connected users so the summary doesn't wait forever
   useEffect(() => {
     if (!loading && user && !user.strava?.accessToken) {
       setTodayStravaLoaded(true);
     }
+  }, [loading, user]);
+
+  // Auto-generate a Hyrox starter plan for users who skipped onboarding and have no program
+  useEffect(() => {
+    if (loading || !user) return;
+    if (!user.onboardingSkipped || user.programId) return;
+    if (starterPlanTriggeredRef.current) return;
+
+    starterPlanTriggeredRef.current = true;
+    setIsGeneratingStarterPlan(true);
+
+    generateHyroxStarter({ userName: user.firstName })
+      .then(async (result) => {
+        await updateUser(user.id, {
+          customProgram: result.workouts as any,
+          programId: 'hyrox-starter',
+          startDate: new Date(),
+        });
+        await refreshData();
+      })
+      .catch((err) => {
+        logger.error('Failed to generate Hyrox starter plan:', err);
+      })
+      .finally(() => {
+        setIsGeneratingStarterPlan(false);
+      });
   }, [loading, user]);
 
   // Effect for AI Dashboard Summary — fires ONCE after all data including Strava is ready.
@@ -169,22 +207,27 @@ export default function DashboardPage() {
   }, [isGranted, todaysWorkout, user]);
 
   
-  const generateProgressData = (sessions: WorkoutSession[]) => {
+  const generateProgressData = (sessions: WorkoutSession[], stravaActivities: StravaActivity[] = []) => {
       const now = new Date();
       const weeklyData: { week: string, workouts: number }[] = [];
-      
+
       for (let i = 3; i >= 0; i--) {
           const weekStart = startOfWeek(subWeeks(now, i), { weekStartsOn: 1 });
           const weekEnd = new Date(weekStart);
           weekEnd.setDate(weekEnd.getDate() + 6);
-          
-          const completedInWeek = sessions.filter(s => 
+
+          const appCount = sessions.filter(s =>
               s.finishedAt && isWithinInterval(s.finishedAt, { start: weekStart, end: weekEnd })
           ).length;
-          
+
+          const stravaCount = stravaActivities.filter(a => {
+              const d = new Date(a.start_date_local || a.start_date);
+              return isWithinInterval(d, { start: weekStart, end: weekEnd });
+          }).length;
+
           weeklyData.push({
               week: `W${4-i}`,
-              workouts: completedInWeek
+              workouts: appCount + stravaCount
           });
       }
       return weeklyData;
@@ -254,8 +297,9 @@ export default function DashboardPage() {
   };
 
   // Stable callback — prevents TodayStravaFeed from re-fetching on every parent render
-  const handleStravaActivitiesLoaded = useCallback((s: string | null, error?: StravaLoadError) => {
+  const handleStravaActivitiesLoaded = useCallback((s: string | null, recentActivities: StravaActivity[], error?: StravaLoadError) => {
     setTodayStravaSummary(s);
+    setStravaRecentActivities(recentActivities);
     setStravaLoadError(error ?? null);
     setTodayStravaLoaded(true);
   }, []);
@@ -263,6 +307,9 @@ export default function DashboardPage() {
   const programStartsInFuture = user?.startDate && isFuture(user.startDate);
   const showGenerateWorkoutButton = !program || programStartsInFuture || !todaysWorkout?.workout;
   const isWorkoutCompleted = !!todaysSession?.finishedAt;
+  const completedWorkoutCount = allSessions.filter((s) => s.finishedAt && !s.skipped).length;
+  const showProfilePrompt =
+    user?.onboardingSkipped && completedWorkoutCount >= 3 && !profileBannerDismissed;
   
   if (loading) {
     return (
@@ -291,7 +338,7 @@ export default function DashboardPage() {
   const isStravaConnected = user?.strava?.accessToken;
 
   // === NEW USER ONBOARDING DASHBOARD ===
-  if (isNewUser) {
+  if (isNewUser || isGeneratingStarterPlan) {
       return (
         <div className="space-y-6 animate-in fade-in duration-700">
             <div className="space-y-1">
@@ -310,15 +357,27 @@ export default function DashboardPage() {
                 <Card className="border-2 border-primary/20 bg-gradient-to-br from-card to-primary/5 shadow-lg">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2 text-xl">
-                            <Target className="h-6 w-6 text-primary" />
-                            Your First Mission
+                            {user?.onboardingSkipped ? (
+                              <Sparkles className="h-6 w-6 text-primary" />
+                            ) : (
+                              <Target className="h-6 w-6 text-primary" />
+                            )}
+                            {user?.onboardingSkipped ? 'Your Hyrox Starter Plan' : 'Your First Mission'}
                         </CardTitle>
                         <CardDescription>
-                            Complete just 1 workout this week to build momentum.
+                            {user?.onboardingSkipped
+                              ? 'AI-generated Hyrox workouts to get you moving — complete 3 and we\'ll match you to a full program.'
+                              : 'Complete just 1 workout this week to build momentum.'}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        {todaysWorkout?.workout ? (
+                        {isGeneratingStarterPlan ? (
+                            <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                <p className="text-sm font-medium">Building your Hyrox starter workouts...</p>
+                                <p className="text-xs">The AI coach is designing 3 sessions for you</p>
+                            </div>
+                        ) : todaysWorkout?.workout ? (
                             <div className="space-y-4">
                                 <div className="p-4 bg-background/80 rounded-lg border">
                                     <h3 className="font-bold text-lg">{todaysWorkout.workout.title}</h3>
@@ -421,6 +480,61 @@ export default function DashboardPage() {
   return (
     <>
       <div className="space-y-6">
+        {/* Trial countdown — drives trial→paid conversion (hidden for paid/admin users) */}
+        <TrialBanner />
+
+        {/* First-workout activation nudge — completing the first session is the
+            strongest predictor of retention, so we surface it prominently until done. */}
+        {!loading && completedWorkoutCount === 0 && (
+          <Card className="border-accent/50 bg-gradient-to-r from-accent/10 to-primary/10">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Zap className="h-5 w-5 text-accent" />
+                Let&apos;s log your first workout
+              </CardTitle>
+              <CardDescription>
+                Completing your first session unlocks your streak and tailors your coaching. It only takes one to get started.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter className="pt-0">
+              <Button size="sm" onClick={() => router.push(todaysWorkout?.workout ? '/workout/active' : '/programs')}>
+                {todaysWorkout?.workout ? "Start today's workout" : 'Choose a program'}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
+
+        {/* Profile completion prompt — shown after 3 workouts for users who skipped onboarding */}
+        {showProfilePrompt && (
+          <Card className="border-primary/40 bg-gradient-to-r from-primary/5 to-primary/10">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Trophy className="h-5 w-5 text-primary" />
+                You've smashed {completedWorkoutCount} workouts!
+              </CardTitle>
+              <CardDescription>
+                Complete your profile to get a structured program matched to your goals and unlock personalised coaching.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter className="gap-2 pt-0">
+              <Button size="sm" onClick={() => setShowCompleteOnboarding(true)}>
+                Get My Program <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  localStorage.setItem('profileBannerDismissed', 'true');
+                  setProfileBannerDismissed(true);
+                }}
+              >
+                Maybe Later
+              </Button>
+            </CardFooter>
+          </Card>
+        )}
+
         <div className="space-y-1 flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
@@ -693,6 +807,15 @@ export default function DashboardPage() {
             userId={user.id}
          />
         </Suspense>
+      )}
+      {user && (
+        <CompleteOnboardingDialog
+          open={showCompleteOnboarding}
+          onOpenChange={setShowCompleteOnboarding}
+          userId={user.id}
+          userName={user.firstName}
+          onComplete={refreshData}
+        />
       )}
     </>
   );

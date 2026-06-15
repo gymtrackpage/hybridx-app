@@ -93,6 +93,8 @@ export interface User {
   // Analytics fields
   lastSeenAt?: Date;
   lastLoginAt?: Date;
+  /** User clicked "Jump Straight In" and skipped the fitness assessment */
+  onboardingSkipped?: boolean;
   /** Highest onboarding step reached (1–6); 6 = completed */
   onboardingCompletedStep?: number;
   /** Platform at last session: web | pwa | ios | android */
@@ -103,6 +105,8 @@ export interface User {
 
 export type ProgramType = 'hyrox' | 'running' | 'hybrid';
 
+export type SessionType = 'run' | 'strength' | 'cardio' | 'rest';
+
 export interface Program {
   id: string;
   name: string;
@@ -111,9 +115,11 @@ export interface Program {
   workouts: (Workout | RunningWorkout)[];
 }
 
+export type TargetRace = 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon' | 'ultra';
+
 export interface RunningProgram extends Omit<Program, 'workouts'> {
   programType: 'running';
-  targetRace?: 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon';
+  targetRace?: TargetRace;
   workouts: RunningWorkout[];
 }
 
@@ -129,7 +135,7 @@ export interface RunningWorkout {
   title: string;
   runs: PlannedRun[];
   programType: 'running';
-  targetRace?: 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon';
+  targetRace?: TargetRace;
   exercises: [];
 }
 
@@ -150,6 +156,10 @@ export interface PlannedRun {
 export interface Exercise {
   name: string;
   details: string;
+  /** Discriminates strength vs cardio sessions within exercise rows; drives Garmin sport routing. */
+  sessionType?: 'strength' | 'cardio';
+  /** Explicit Garmin sport type string (e.g. 'STRENGTH_TRAINING', 'CARDIO_TRAINING'). */
+  garminSport?: string;
   // Optional structured fields for Garmin sync — invisible to all UI display components
   garminExerciseCategory?: string;
   garminExerciseName?: string;

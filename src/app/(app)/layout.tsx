@@ -35,10 +35,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { InstallPwaBanner } from '@/components/install-pwa-banner';
 import { NotificationPermissionPrompt } from '@/components/notification-permission-prompt';
 import { OfflineIndicator } from '@/components/offline-indicator';
+import { VerifyEmailBanner } from '@/components/verify-email-banner';
 import { getUserClient } from '@/services/user-service-client';
-import { addMonths, isAfter } from 'date-fns';
+import { isTrialExpired } from '@/lib/trial';
 import { MobileNavBar, primaryNavItems, secondaryNavItems, adminNavItems } from '@/components/mobile-nav-bar';
-import { UserProvider } from '@/contexts/user-context';
+import { UserProvider, useUserProfile } from '@/contexts/user-context';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 
@@ -46,6 +47,8 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 function NavMenu() {
     const { setOpenMobile } = useSidebar();
     const pathname = usePathname();
+    const { user } = useUserProfile();
+    const isAdmin = !!user?.isAdmin;
 
     const handleLinkClick = () => {
         setOpenMobile(false);
@@ -81,27 +84,32 @@ function NavMenu() {
                     </SidebarMenuItem>
                 ))}
             </SidebarMenu>
-            <SidebarSeparator />
-            <SidebarMenu>
-                {adminNavItems.map((item) => (
-                    <SidebarMenuItem key={item.href}>
-                        <SidebarMenuButton asChild tooltip={item.label} isActive={pathname.startsWith(item.href)}>
-                            <Link href={item.href} onClick={handleLinkClick}>
-                                <item.icon />
-                                <span>{item.label}</span>
-                            </Link>
-                        </SidebarMenuButton>
-                    </SidebarMenuItem>
-                ))}
-                 <SidebarMenuItem>
-                    <SidebarMenuButton asChild tooltip="Debug" isActive={pathname.startsWith('/debug')}>
-                        <Link href="/debug" onClick={handleLinkClick}>
-                            <Shield />
-                            <span>Debug</span>
-                        </Link>
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
-            </SidebarMenu>
+            {/* Admin/debug navigation is only shown to administrators */}
+            {isAdmin && (
+                <>
+                    <SidebarSeparator />
+                    <SidebarMenu>
+                        {adminNavItems.map((item) => (
+                            <SidebarMenuItem key={item.href}>
+                                <SidebarMenuButton asChild tooltip={item.label} isActive={pathname.startsWith(item.href)}>
+                                    <Link href={item.href} onClick={handleLinkClick}>
+                                        <item.icon />
+                                        <span>{item.label}</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+                        ))}
+                        <SidebarMenuItem>
+                            <SidebarMenuButton asChild tooltip="Debug" isActive={pathname.startsWith('/debug')}>
+                                <Link href="/debug" onClick={handleLinkClick}>
+                                    <Shield />
+                                    <span>Debug</span>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                </>
+            )}
         </>
     );
 }
@@ -146,8 +154,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 const appUser = await getUserClient(currentUser.uid);
                 if (appUser && !appUser.isAdmin && pathname !== '/subscription') {
                     const status = appUser.subscriptionStatus || 'trial';
-                    const trialStart = appUser.trialStartDate;
-                    const trialEnded = trialStart ? isAfter(new Date(), addMonths(new Date(trialStart), 1)) : true;
+                    const trialEnded = isTrialExpired(appUser.trialStartDate);
 
                     if (status === 'trial' && trialEnded) {
                         router.push('/subscription');
@@ -297,6 +304,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     {/* Header content can go here, like breadcrumbs */}
                 </div>
             </header>
+
+            {/* Email verification reminder (hidden once verified/dismissed) */}
+            <VerifyEmailBanner />
 
             {/* Offline Indicator */}
             <OfflineIndicator />

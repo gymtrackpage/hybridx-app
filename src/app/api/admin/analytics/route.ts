@@ -21,8 +21,16 @@ export async function GET(request: NextRequest) {
     const db = getAdminDb();
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get('days') ?? '30', 10);
+    const excludeAdmins = searchParams.get('excludeAdmins') === 'true';
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const cutoffTs = Timestamp.fromDate(cutoff);
+
+    // Fetch admin user IDs if exclusion is requested
+    const adminUserIds = new Set<string>();
+    if (excludeAdmins) {
+      const adminSnapshot = await db.collection('users').where('isAdmin', '==', true).get();
+      adminSnapshot.docs.forEach((d) => adminUserIds.add(d.id));
+    }
 
     // Fetch all events in the time window (admin SDK, no index needed)
     const snapshot = await db
@@ -40,7 +48,10 @@ export async function GET(request: NextRequest) {
       timestamp: Timestamp;
     };
 
-    const events: EventDoc[] = snapshot.docs.map((d) => d.data() as EventDoc);
+    const allEvents: EventDoc[] = snapshot.docs.map((d) => d.data() as EventDoc);
+    const events = excludeAdmins
+      ? allEvents.filter((e) => !adminUserIds.has(e.userId))
+      : allEvents;
 
     // ---- Retention ----
     const now = Date.now();

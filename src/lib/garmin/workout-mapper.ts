@@ -30,6 +30,10 @@ export interface CsvRow {
 export interface WorkoutDayExercise {
   name: string;
   details: string;
+  /** Set when this exercise came from a sessionType row; drives Garmin sport routing. */
+  sessionType?: 'strength' | 'cardio';
+  /** Explicit Garmin sport type override from the CSV garminSport column. */
+  garminSport?: string;
   // Structured Garmin fields — populated from enriched Exercise objects
   garminExerciseCategory?: string;
   garminExerciseName?: string;
@@ -45,16 +49,26 @@ export interface WorkoutDay {
   day: number;
   title: string;
   exercises: WorkoutDayExercise[];
+  /** Explicit session type; when set, bypasses the heuristic classifier. */
+  sessionType?: 'run' | 'strength' | 'cardio' | 'rest';
+  /** Explicit Garmin sport type to use for this session. */
+  garminSport?: string;
 }
 
 // ============================================================
 // GARMIN TRAINING API V2 OUTPUT TYPES
 // ============================================================
 
+// Valid single-segment sport types per Garmin Training API V2 (§3.2.1).
+// FUNCTIONAL_STRENGTH_TRAINING is NOT a supported value — use CARDIO_TRAINING.
 export type GarminSport =
   | 'RUNNING'
+  | 'CYCLING'
+  | 'LAP_SWIMMING'
   | 'STRENGTH_TRAINING'
   | 'CARDIO_TRAINING'
+  | 'YOGA'
+  | 'PILATES'
   | 'GENERIC';
 
 export interface WorkoutStepItem {
@@ -612,7 +626,7 @@ function findAllIntervalPatterns(text: string): Array<{
   return results;
 }
 
-function mapStrength(day: WorkoutDay): GarminWorkout {
+function mapStrength(day: WorkoutDay, sport: GarminSport = 'STRENGTH_TRAINING'): GarminWorkout {
   const counter = new StepCounter();
   const steps: WorkoutStep[] = [];
 
@@ -772,10 +786,10 @@ function mapStrength(day: WorkoutDay): GarminWorkout {
     targetType: 'OPEN',
   }));
 
-  return makeWorkout(day, 'STRENGTH_TRAINING', steps);
+  return makeWorkout(day, sport, steps);
 }
 
-function mapHyroxCircuit(day: WorkoutDay): GarminWorkout {
+function mapHyroxCircuit(day: WorkoutDay, sport: GarminSport = 'CARDIO_TRAINING'): GarminWorkout {
   const counter = new StepCounter();
   const steps: WorkoutStep[] = [
     buildStep(counter, {
@@ -800,7 +814,7 @@ function mapHyroxCircuit(day: WorkoutDay): GarminWorkout {
     }),
   ];
 
-  return makeWorkout(day, 'CARDIO_TRAINING', steps);
+  return makeWorkout(day, sport, steps);
 }
 
 // ============================================================
@@ -808,6 +822,25 @@ function mapHyroxCircuit(day: WorkoutDay): GarminWorkout {
 // ============================================================
 
 export function mapWorkoutDay(day: WorkoutDay): GarminWorkout | null {
+  // When sessionType is explicitly provided, use it to bypass the heuristic classifier.
+  if (day.sessionType) {
+    const sport = day.garminSport as GarminSport | undefined;
+    switch (day.sessionType) {
+      case 'rest':
+        return null;
+      case 'run': {
+        // Still use content-based classification to distinguish intervals vs easy.
+        const category = classifyWorkout(day);
+        return category === 'run_intervals' ? mapRunIntervals(day) : mapRunEasy(day);
+      }
+      case 'strength':
+        return mapStrength(day, sport ?? 'STRENGTH_TRAINING');
+      case 'cardio':
+        return mapHyroxCircuit(day, sport ?? 'CARDIO_TRAINING');
+    }
+  }
+
+  // Heuristic path for legacy WorkoutDay objects without explicit sessionType.
   const category = classifyWorkout(day);
   switch (category) {
     case 'skip':

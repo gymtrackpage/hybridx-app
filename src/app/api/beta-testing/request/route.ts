@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { mailer as transporter, getFromAddress, isEmailConfigured } from '@/lib/email-service';
 import { promises as fs } from 'fs';
 import path from 'path';
-
-// Email transport configuration
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
 
 /**
  * Reads an HTML template from the public folder and replaces placeholders
@@ -35,6 +27,16 @@ async function getEmailTemplate(templateName: string, replacements: Record<strin
 
 export async function POST(request: NextRequest) {
   try {
+    // Public form — rate-limit per IP so it can't be abused to send spam email.
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const rl = checkRateLimit(`beta-request:${ip}`, 60 * 60_000, 5); // 5 per hour
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+      );
+    }
+
     const { email, name } = await request.json();
 
     if (!email) {
@@ -44,7 +46,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    if (!isEmailConfigured()) {
       console.error('Email credentials not configured');
       return NextResponse.json(
         { error: 'Email service not configured' },
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     if (userTemplate) {
       await transporter.sendMail({
-        from: `"HybridX Training" <${process.env.GMAIL_USER}>`,
+        from: getFromAddress(),
         to: email,
         subject: 'Android Beta Testing Request Received',
         html: userTemplate,
@@ -79,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     if (adminTemplate) {
       await transporter.sendMail({
-        from: `"HybridX Beta Requests" <${process.env.GMAIL_USER}>`,
+        from: getFromAddress('HybridX Beta Requests'),
         to: 'training@hybridx.club',
         subject: `New Android Beta Tester Request: ${email}`,
         html: adminTemplate,

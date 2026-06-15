@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import * as nodemailer from "nodemailer";
-import { day1, day3, day7, day14, reEngagement } from "./generated-templates";
+import { day1, day3, day7, day14, reEngagement, nudge1, nudge2, nudge3 } from "./generated-templates";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -22,7 +22,10 @@ const EMAIL_TEMPLATES = {
   day3,
   day7,
   day14,
-  reEngagement
+  reEngagement,
+  nudge1,
+  nudge2,
+  nudge3,
 };
 
 // --- Helper: Send Email ---
@@ -64,7 +67,16 @@ export const dailyEmailCampaigns = functions.pubsub
     const wReEngage = getWindow(5);
 
     const usersRef = db.collection("users");
-    const sentCounts = { day1: 0, day3: 0, day7: 0, day14: 0, reEngage: 0 };
+    const sentCounts = { day1: 0, day3: 0, day7: 0, day14: 0, reEngage: 0, nudge1: 0, nudge2: 0, nudge3: 0 };
+
+    /** Check whether user has at least one completed (non-skipped) workout session. */
+    const hasCompletedWorkout = async (userId: string): Promise<boolean> => {
+      const snap = await db.collection("workoutSessions")
+        .where("userId", "==", userId)
+        .limit(5)
+        .get();
+      return snap.docs.some((d) => !!d.data().finishedAt && !d.data().skipped);
+    };
 
     // --- Process Day 1 (Welcome / First Workout) ---
     const usersDay1 = await usersRef
@@ -150,6 +162,73 @@ export const dailyEmailCampaigns = functions.pubsub
                 // Continue processing other users rather than aborting the whole campaign
             }
         }
+    }
+
+    // ── Nudge 1 (day 2): quick-start users with no completed workouts ─────────
+    const wNudge2 = getWindow(2);
+    const usersNudge2 = await usersRef
+      .where("trialStartDate", ">=", admin.firestore.Timestamp.fromDate(wNudge2.start))
+      .where("trialStartDate", "<=", admin.firestore.Timestamp.fromDate(wNudge2.end))
+      .where("onboardingSkipped", "==", true)
+      .get();
+
+    for (const doc of usersNudge2.docs) {
+      const u = doc.data();
+      if (!u.email) continue;
+      if (u.nudge1SentAt) continue;
+      try {
+        if (await hasCompletedWorkout(doc.id)) continue;
+        let html = EMAIL_TEMPLATES.nudge1.replace("{{name}}", u.firstName || "Athlete");
+        await sendEmail(u.email, `${u.firstName || "Athlete"}, your Hyrox starter workouts are ready to go`, html);
+        await doc.ref.update({ nudge1SentAt: admin.firestore.FieldValue.serverTimestamp() });
+        sentCounts.nudge1++;
+      } catch (err) {
+        console.error(`Nudge 1 failed for ${doc.id}:`, err);
+      }
+    }
+
+    // ── Nudge 2 (day 6): all users with no completed workouts ────────────────
+    const wNudge6 = getWindow(6);
+    const usersNudge6 = await usersRef
+      .where("trialStartDate", ">=", admin.firestore.Timestamp.fromDate(wNudge6.start))
+      .where("trialStartDate", "<=", admin.firestore.Timestamp.fromDate(wNudge6.end))
+      .get();
+
+    for (const doc of usersNudge6.docs) {
+      const u = doc.data();
+      if (!u.email) continue;
+      if (u.nudge2SentAt) continue;
+      try {
+        if (await hasCompletedWorkout(doc.id)) continue;
+        const html = EMAIL_TEMPLATES.nudge2.replace("{{name}}", u.firstName || "Athlete");
+        await sendEmail(u.email, `One workout changes everything, ${u.firstName || "Athlete"}`, html);
+        await doc.ref.update({ nudge2SentAt: admin.firestore.FieldValue.serverTimestamp() });
+        sentCounts.nudge2++;
+      } catch (err) {
+        console.error(`Nudge 2 failed for ${doc.id}:`, err);
+      }
+    }
+
+    // ── Nudge 3 (day 10): all users still with no completed workouts ──────────
+    const wNudge10 = getWindow(10);
+    const usersNudge10 = await usersRef
+      .where("trialStartDate", ">=", admin.firestore.Timestamp.fromDate(wNudge10.start))
+      .where("trialStartDate", "<=", admin.firestore.Timestamp.fromDate(wNudge10.end))
+      .get();
+
+    for (const doc of usersNudge10.docs) {
+      const u = doc.data();
+      if (!u.email) continue;
+      if (u.nudge3SentAt) continue;
+      try {
+        if (await hasCompletedWorkout(doc.id)) continue;
+        const html = EMAIL_TEMPLATES.nudge3.replace("{{name}}", u.firstName || "Athlete");
+        await sendEmail(u.email, `10 days in, ${u.firstName || "Athlete"} — don't let your free trial slip`, html);
+        await doc.ref.update({ nudge3SentAt: admin.firestore.FieldValue.serverTimestamp() });
+        sentCounts.nudge3++;
+      } catch (err) {
+        console.error(`Nudge 3 failed for ${doc.id}:`, err);
+      }
     }
 
     console.log(`Email Campaign Run:`, sentCounts);

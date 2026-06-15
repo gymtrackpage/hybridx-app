@@ -667,6 +667,21 @@ export default function TrainingPage() {
         </CardContent>
       </Card>
 
+      {/* ── VDOT Calculator promo ───────────────────────────────────────────── */}
+      <Card className="border-accent/30 bg-gradient-to-r from-accent/5 to-accent/10">
+        <CardContent className="flex items-center justify-between gap-4 py-4">
+          <div className="space-y-0.5">
+            <p className="text-sm font-semibold">Know your training paces?</p>
+            <p className="text-xs text-muted-foreground">Use our VDOT Calculator to get all five Daniels zones from a recent race.</p>
+          </div>
+          <Link href="/vdot">
+            <Button size="sm" variant="outline" className="shrink-0">
+              VDOT Calculator
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+
       {/* ── Form Zones Reference ────────────────────────────────────────────── */}
       <Card>
         <button onClick={() => setExplainerOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:text-primary transition-colors">

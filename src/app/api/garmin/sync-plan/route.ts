@@ -7,7 +7,7 @@ import { cookies } from 'next/headers';
 import { getAdminAuth, getAdminDb } from '@/lib/firebase-admin';
 import { getValidGarminToken } from '@/lib/garmin/token';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { workoutToDay } from '@/lib/garmin/program-adapter';
+import { workoutToDays } from '@/lib/garmin/program-adapter';
 import { mapWorkoutDay } from '@/lib/garmin/workout-mapper';
 import {
   createWorkout,
@@ -132,36 +132,53 @@ export async function POST(req: NextRequest) {
           } catch (e: any) {
             logger.warn(`Cleanup of stale workout day ${w.day} failed:`, e.message);
           }
+      const dayStr = String(w.day);
+
+      // Remove all stale Garmin workouts for this day. Supports both the
+      // old single-key format ("3") and the new session-indexed format ("3_0", "3_1").
+      const staleKeys = Object.keys(prevSync?.workouts ?? {}).filter(
+        (k) => k === dayStr || k.startsWith(`${dayStr}_`),
+      );
+      for (const key of staleKeys) {
+        try {
+          await deleteWorkout(accessToken, prevSync!.workouts[key].workoutId);
+        } catch (e: any) {
+          logger.warn(`Replace: delete day ${w.day} (key ${key}) failed:`, e.message);
         }
+      }
+
+      const sessions = workoutToDays(w);
+
+      if (sessions.length === 0) {
         results.push({ day: w.day, status: 'skipped' });
         continue;
       }
 
-      // If we previously pushed this day, delete and recreate (mapper
-      // is deterministic but easier than diffing the payload).
-      const stale = prevSync?.workouts[dayKey];
-      if (stale) {
-        try {
-          await deleteWorkout(accessToken, stale.workoutId);
-        } catch (e: any) {
-          logger.warn(`Replace: delete day ${w.day} failed:`, e.message);
-        }
-      }
+      const scheduledDate = isoDate(new Date(startMs + (w.day - 1) * 86400000));
 
-      try {
-        const { workoutId } = await createWorkout(accessToken, garminWorkout);
-        const scheduledDate = isoDate(
-          new Date(startMs + (w.day - 1) * 86400000),
-        );
-        const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
-        newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
-        results.push({ day: w.day, status: 'pushed', workoutId });
-      } catch (e: any) {
-        logger.error(`Garmin push failed for day ${w.day}:`, {
-          message: e.message,
-          response: e.response?.data,
-        });
-        results.push({ day: w.day, status: `failed: ${e.message}` });
+      for (const [sessionIdx, session] of sessions.entries()) {
+        const garminWorkout = mapWorkoutDay(session);
+
+        if (!garminWorkout) {
+          results.push({ day: w.day, status: 'skipped' });
+          continue;
+        }
+
+        // Single-session days keep the old key format for continuity with existing sync records.
+        const dayKey = sessions.length > 1 ? `${dayStr}_${sessionIdx}` : dayStr;
+
+        try {
+          const { workoutId } = await createWorkout(accessToken, garminWorkout);
+          const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
+          newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
+          results.push({ day: w.day, status: 'pushed', workoutId });
+        } catch (e: any) {
+          logger.error(`Garmin push failed for day ${w.day} session ${sessionIdx}:`, {
+            message: e.message,
+            response: e.response?.data,
+          });
+          results.push({ day: w.day, status: `failed: ${e.message}` });
+        }
       }
     }
 

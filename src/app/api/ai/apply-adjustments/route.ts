@@ -1,5 +1,6 @@
 // src/app/api/ai/apply-adjustments/route.ts
 import { NextResponse } from 'next/server';
+import { requireUser } from '@/lib/api-auth';
 import { getUser, updateUserAdmin } from '@/services/user-service';
 import { getProgram } from '@/services/program-service';
 import type { Workout, RunningWorkout } from '@/models/types';
@@ -14,13 +15,15 @@ interface Adjustment {
 
 export async function POST(request: Request) {
   try {
+    // Require a valid Firebase ID token; act only on the authenticated user's
+    // own program (userId comes from the token, not the request body).
+    const auth = await requireUser(request, { bucket: 'ai:apply-adjustments', windowMs: 60_000, max: 20 });
+    if ('response' in auth) return auth.response;
+    const userId = auth.uid;
+
     console.log('[Apply Adjustments] Starting...');
     const body = await request.json();
-    const { userId, adjustments } = body as { userId: string; adjustments: Adjustment[] };
-
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
-    }
+    const { adjustments } = body as { adjustments: Adjustment[] };
 
     if (!adjustments || adjustments.length === 0) {
       return NextResponse.json({ error: 'No adjustments provided' }, { status: 400 });

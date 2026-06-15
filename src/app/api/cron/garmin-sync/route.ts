@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { getValidGarminToken } from '@/lib/garmin/token';
-import { workoutToDay } from '@/lib/garmin/program-adapter';
+import { workoutToDays } from '@/lib/garmin/program-adapter';
 import { mapWorkoutDay } from '@/lib/garmin/workout-mapper';
 import {
   createWorkout,
@@ -124,22 +124,34 @@ export async function GET(request: Request) {
             try { await deleteWorkout(accessToken, stale.workoutId); } catch { /* ignore */ }
           }
           continue;
+        const dayStr = String(w.day);
+
+        // Clean up all stale entries for this day (supports old single-key and
+        // new session-indexed key formats).
+        const staleKeys = Object.keys(prevSync?.workouts ?? {}).filter(
+          (k) => k === dayStr || k.startsWith(`${dayStr}_`),
+        );
+        for (const key of staleKeys) {
+          try { await deleteWorkout(accessToken, prevSync!.workouts[key].workoutId); } catch { /* ignore */ }
         }
 
-        // Delete and recreate so the content is always fresh.
-        const stale = prevSync?.workouts[dayKey];
-        if (stale) {
-          try { await deleteWorkout(accessToken, stale.workoutId); } catch { /* ignore */ }
-        }
+        const sessions = workoutToDays(w);
+        const scheduledDate = isoDate(new Date(startMs + (w.day - 1) * 86400000));
 
-        try {
-          const { workoutId } = await createWorkout(accessToken, garminWorkout);
-          const scheduledDate = isoDate(new Date(startMs + (w.day - 1) * 86400000));
-          const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
-          newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
-          userPushed++;
-        } catch (e: any) {
-          logger.error(`Garmin cron: push failed day ${w.day} user ${userId}:`, e.message);
+        for (const [sessionIdx, session] of sessions.entries()) {
+          const garminWorkout = mapWorkoutDay(session);
+          if (!garminWorkout) continue;
+
+          const dayKey = sessions.length > 1 ? `${dayStr}_${sessionIdx}` : dayStr;
+
+          try {
+            const { workoutId } = await createWorkout(accessToken, garminWorkout);
+            const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
+            newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
+            userPushed++;
+          } catch (e: any) {
+            logger.error(`Garmin cron: push failed day ${w.day} session ${sessionIdx} user ${userId}:`, e.message);
+          }
         }
       }
 

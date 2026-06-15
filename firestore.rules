@@ -9,12 +9,34 @@ service cloud.firestore {
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
     }
 
-    // Fields the client is never allowed to write directly.
+    // Fields the client is never allowed to change via update.
     // These must only be set via Admin SDK (server-side).
+    // NOTE: trialStartDate / trialEndDate are included — the trial window is
+    // derived from trialStartDate, so allowing client updates would let a user
+    // extend their own trial indefinitely.
     function isWritingProtectedUserField() {
       let protected = ['isAdmin', 'subscriptionStatus', 'subscriptionTier',
-                       'stripeCustomerId', 'stripeSubscriptionId', 'trialEndsAt'];
+                       'stripeCustomerId', 'stripeSubscriptionId', 'subscriptionId',
+                       'trialEndsAt', 'trialEndDate', 'trialStartDate'];
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(protected);
+    }
+
+    // On create the client stamps trialStartDate (at signup) but must not
+    // self-grant admin or a paid/active subscription. trialStartDate is pinned
+    // to server time (±10m) so the trial cannot be future-dated.
+    function isValidUserCreate() {
+      let data = request.resource.data;
+      return (!('isAdmin' in data) || data.isAdmin == false)
+          && (!('subscriptionStatus' in data) || data.subscriptionStatus == 'trial')
+          && (!('subscriptionTier' in data))
+          && (!('stripeCustomerId' in data) || data.stripeCustomerId == null)
+          && (!('subscriptionId' in data) || data.subscriptionId == null)
+          && (!('trialEndsAt' in data))
+          && (!('trialEndDate' in data))
+          && (!('trialStartDate' in data) || (
+               data.trialStartDate >= request.time - duration.value(10, 'm')
+               && data.trialStartDate <= request.time + duration.value(10, 'm')
+             ));
     }
 
     match /users/{userId} {
@@ -25,8 +47,11 @@ service cloud.firestore {
                     && request.auth.uid == userId
                     && !isWritingProtectedUserField();
 
-      // On create, the document path must match the authenticated user's UID.
-      allow create: if request.auth != null && request.auth.uid == userId;
+      // On create, the document path must match the authenticated user's UID,
+      // and the client may not self-grant admin/subscription privileges.
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && isValidUserCreate();
 
       // Allow access to subcollections like personalPrograms
       match /personalPrograms/{document=**} {

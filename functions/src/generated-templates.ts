@@ -1502,3 +1502,213 @@ export const reEngagement = `<!DOCTYPE html>
 </html>
 `;
 
+// ── Onboarding Nudge Templates ─────────────────────────────────────────────
+// Design concepts:
+//   nudge1 — "Mission Brief"   : full dark theme, yellow accent, tactical tone
+//   nudge2 — "Coach's Letter"  : light editorial, teal accent, personal coach voice
+//   nudge3 — "Countdown"       : dark/red urgency, progress bar, FOMO-driven
+
+export const nudge1 = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Your Workouts Are Waiting — HybridX</title></head>
+<body style="margin:0;padding:0;background-color:#18181b;font-family:Arial,sans-serif;">
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#18181b;">
+  <tr><td align="center" style="padding:30px 16px;">
+    <table width="600" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#18181b;">
+      <tr><td style="padding:0 0 32px 0;border-bottom:1px solid #3f3f46;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
+          <td><img src="https://hybridx.club/Full%20Logo%20(2).png" alt="HybridX" style="height:36px;width:auto;display:block;"></td>
+          <td align="right"><span style="color:#E6B31E;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">Mission Update</span></td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:48px 0 32px 0;">
+        <p style="margin:0 0 8px 0;color:#E6B31E;font-size:12px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;">Day 2 of your trial</p>
+        <h1 style="margin:0 0 16px 0;color:#ffffff;font-family:Arial,sans-serif;font-size:40px;font-weight:bold;line-height:1.1;">Your workouts<br>are built.<br><span style="color:#E6B31E;">Ready to go.</span></h1>
+        <p style="margin:0;color:#a1a1aa;font-size:16px;line-height:1.6;">Hi {{name}} — we got straight to work after you joined yesterday.<br>Three Hyrox-style sessions. No setup. Just open the app and train.</p>
+      </td></tr>
+      <tr><td style="border-top:1px solid #3f3f46;padding-bottom:32px;"></td></tr>
+      <tr><td style="padding:0 0 32px 0;">
+        <p style="margin:0 0 20px 0;color:#71717a;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">What's waiting for you</p>
+        <table width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
+          <td style="background-color:#27272a;border-left:4px solid #E6B31E;padding:24px 28px;">
+            <p style="margin:0 0 16px 0;color:#ffffff;font-weight:bold;font-size:17px;">3 Hyrox starter sessions — built for you</p>
+            <p style="margin:0 0 20px 0;color:#a1a1aa;font-size:14px;line-height:1.6;">Your AI-generated plan covers strength, cardio conditioning, and a full hybrid circuit. Each session is 30–45 minutes and beginner-friendly — open the app and they're ready to go.</p>
+            <table width="100%" border="0" cellspacing="0" cellpadding="0">
+              <tr><td style="padding:4px 0;color:#71717a;font-size:13px;"><span style="color:#E6B31E;font-weight:bold;margin-right:8px;">&#10003;</span>No setup or equipment decisions</td></tr>
+              <tr><td style="padding:4px 0;color:#71717a;font-size:13px;"><span style="color:#E6B31E;font-weight:bold;margin-right:8px;">&#10003;</span>Full exercise instructions included</td></tr>
+              <tr><td style="padding:4px 0;color:#71717a;font-size:13px;"><span style="color:#E6B31E;font-weight:bold;margin-right:8px;">&#10003;</span>Tap to generate a fresh session any time</td></tr>
+            </table>
+          </td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:0 0 40px 0;">
+        <table border="0" cellspacing="0" cellpadding="0"><tr>
+          <td style="background-color:#E6B31E;border-radius:4px;">
+            <a href="https://hybridx.club/dashboard" style="display:inline-block;padding:16px 36px;color:#18181b;font-weight:bold;font-size:16px;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.5px;">Start Session 01 →</a>
+          </td>
+        </tr></table>
+        <p style="margin:12px 0 0 0;color:#52525b;font-size:13px;">Or open the app and tap <strong style="color:#a1a1aa;">Generate AI Workout</strong> for a fresh session on demand.</p>
+      </td></tr>
+      <tr><td style="border-top:1px solid #3f3f46;padding-bottom:32px;"></td></tr>
+      <tr><td style="padding-bottom:40px;">
+        <p style="margin:0 0 4px 0;color:#52525b;font-size:13px;">Want a structured 8–16 week program matched to your goals? Answer 3 quick questions on the dashboard.</p>
+        <p style="margin:16px 0 0 0;color:#71717a;font-size:13px;">Train hard,<br><span style="color:#a1a1aa;font-weight:bold;">The HybridX Team</span></p>
+      </td></tr>
+      <tr><td style="border-top:1px solid #27272a;padding-top:20px;padding-bottom:20px;">
+        <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">&copy; 2026 HybridX.club &nbsp;·&nbsp; You're receiving this because you signed up at hybridx.club</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
+`;
+
+export const nudge2 = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>One workout changes everything — HybridX</title></head>
+<body style="margin:0;padding:0;background-color:#fafaf9;font-family:Georgia,serif;">
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#fafaf9;">
+  <tr><td align="center" style="padding:40px 16px;">
+    <table width="600" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;">
+      <tr><td style="padding-bottom:40px;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
+          <td><img src="https://hybridx.club/Full%20Logo%20(2).png" alt="HybridX" style="height:32px;width:auto;display:block;"></td>
+          <td align="right"><span style="color:#0d9488;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">Day 6</span></td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding-bottom:32px;border-bottom:2px solid #e7e5e4;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
+          <td width="120" valign="top">
+            <p style="margin:0;font-family:Georgia,serif;font-size:120px;font-weight:bold;color:#e7e5e4;line-height:0.85;letter-spacing:-6px;">6</p>
+          </td>
+          <td valign="middle" style="padding-left:24px;">
+            <p style="margin:0 0 8px 0;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;color:#0d9488;">Six days since you joined</p>
+            <h1 style="margin:0;font-family:Georgia,serif;font-size:32px;color:#1c1917;line-height:1.2;font-weight:bold;">The first one<br>is always<br>the hardest.</h1>
+          </td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:36px 0 0 0;">
+        <p style="margin:0 0 20px 0;font-family:Georgia,serif;font-size:17px;color:#1c1917;line-height:1.75;">Hi {{name}},</p>
+        <p style="margin:0 0 20px 0;font-family:Georgia,serif;font-size:17px;color:#292524;line-height:1.75;">Six days ago you signed up to HybridX. We haven't seen you start a workout yet — and that's okay. Most people hesitate at exactly this point.</p>
+        <p style="margin:0 0 20px 0;font-family:Georgia,serif;font-size:17px;color:#292524;line-height:1.75;">But here's what coaches know that athletes often forget: the first session doesn't have to be great. It just has to happen. Everything else builds from there.</p>
+      </td></tr>
+      <tr><td style="padding:32px 0;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
+          <td style="border-left:4px solid #0d9488;padding:4px 0 4px 28px;">
+            <p style="margin:0;font-family:Georgia,serif;font-size:22px;color:#1c1917;line-height:1.5;font-style:italic;">"73% of athletes who complete their first HybridX workout come back within 48 hours."</p>
+          </td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding-bottom:32px;">
+        <p style="margin:0 0 20px 0;font-family:Georgia,serif;font-size:17px;color:#292524;line-height:1.75;">Your starter plan is already built. Three Hyrox-style sessions — 30 to 40 minutes each — sitting in your dashboard. No setup. No program selection needed. Just open the app and go.</p>
+        <p style="margin:0 0 20px 0;font-family:Georgia,serif;font-size:17px;color:#292524;line-height:1.75;">Or hit "Generate AI Workout" and get a fresh session in under 10 seconds — built to your level, ready to go.</p>
+      </td></tr>
+      <tr><td style="padding-bottom:40px;">
+        <table border="0" cellspacing="0" cellpadding="0"><tr>
+          <td style="background-color:#0d9488;border-radius:4px;">
+            <a href="https://hybridx.club/dashboard" style="display:inline-block;padding:16px 36px;color:#ffffff;font-weight:bold;font-size:15px;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.5px;">Open My Dashboard →</a>
+          </td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="border-top:1px solid #e7e5e4;padding-bottom:28px;"></td></tr>
+      <tr><td style="padding-bottom:48px;">
+        <p style="margin:0 0 4px 0;font-family:Georgia,serif;font-size:16px;color:#57534e;line-height:1.6;">See you on the platform,</p>
+        <p style="margin:0;font-family:Georgia,serif;font-size:16px;color:#1c1917;font-weight:bold;">The HybridX Team</p>
+        <p style="margin:16px 0 0 0;font-family:Georgia,serif;font-size:14px;color:#78716c;font-style:italic;">P.S. If something's not working or life got in the way, just reply. We read every one.</p>
+      </td></tr>
+      <tr><td style="border-top:1px solid #e7e5e4;padding-top:20px;padding-bottom:20px;">
+        <p style="margin:0;color:#a8a29e;font-family:Arial,sans-serif;font-size:11px;text-align:center;">&copy; 2026 HybridX.club &nbsp;·&nbsp; You're receiving this because you signed up at hybridx.club</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
+`;
+
+export const nudge3 = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>10 days in — don't let your trial slip — HybridX</title></head>
+<body style="margin:0;padding:0;background-color:#0f0f0f;font-family:Arial,sans-serif;">
+<table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#0f0f0f;">
+  <tr><td align="center" style="padding:30px 16px;">
+    <table width="600" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#0f0f0f;">
+      <tr><td style="padding:0 0 28px 0;border-bottom:1px solid #dc2626;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
+          <td><img src="https://hybridx.club/Full%20Logo%20(2).png" alt="HybridX" style="height:32px;width:auto;display:block;"></td>
+          <td align="right"><span style="color:#dc2626;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">Trial Alert</span></td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:44px 0 28px 0;">
+        <p style="margin:0 0 10px 0;color:#dc2626;font-size:12px;font-weight:bold;letter-spacing:3px;text-transform:uppercase;">Day 10 of your free trial</p>
+        <h1 style="margin:0 0 16px 0;color:#ffffff;font-size:42px;font-weight:bold;line-height:1.05;">{{name}}, the<br>clock is<br><span style="color:#dc2626;">ticking.</span></h1>
+        <p style="margin:0;color:#a1a1aa;font-size:16px;line-height:1.6;">You've had 10 days and haven't trained once.<br>You've got 20 left. Let's fix that today.</p>
+      </td></tr>
+      <tr><td style="padding:0 0 36px 0;">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0">
+          <tr><td style="padding-bottom:10px;">
+            <table width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
+              <td><span style="color:#71717a;font-size:12px;font-family:Arial,sans-serif;">Trial progress</span></td>
+              <td align="right"><span style="color:#dc2626;font-size:12px;font-weight:bold;font-family:Arial,sans-serif;">10 / 30 days used</span></td>
+            </tr></table>
+          </td></tr>
+          <tr><td style="background-color:#27272a;border-radius:3px;height:10px;overflow:hidden;">
+            <table width="33%" border="0" cellspacing="0" cellpadding="0"><tr>
+              <td style="background-color:#dc2626;height:10px;border-radius:3px 0 0 3px;"></td>
+            </tr></table>
+          </td></tr>
+          <tr><td style="padding-top:8px;">
+            <table width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
+              <td width="33%"><span style="color:#dc2626;font-size:11px;font-weight:bold;">&#9679; Used</span></td>
+              <td align="right"><span style="color:#3f3f46;font-size:11px;">20 days remaining &#9679;</span></td>
+            </tr></table>
+          </td></tr>
+        </table>
+      </td></tr>
+      <tr><td style="border-top:1px solid #27272a;padding-bottom:32px;"></td></tr>
+      <tr><td style="padding:0 0 32px 0;">
+        <p style="margin:0 0 20px 0;color:#e4e4e7;font-size:15px;line-height:1.7;">Hi {{name}} — ten days is a long time to leave a full training platform untouched. We're not going to pretend this isn't a nudge. It is.</p>
+        <p style="margin:0;color:#e4e4e7;font-size:15px;line-height:1.7;">Athletes who start in their first two weeks are <strong style="color:#ffffff;">4x more likely to complete a full training block.</strong> You've still got time. But not unlimited time.</p>
+      </td></tr>
+      <tr><td style="padding:0 0 32px 0;">
+        <p style="margin:0 0 16px 0;color:#71717a;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">Pick your path — right now</p>
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom:10px;"><tr>
+          <td style="background-color:#1a0a0a;border:1px solid #dc2626;padding:20px 24px;border-radius:4px;">
+            <p style="margin:0 0 6px 0;color:#dc2626;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">Fast track</p>
+            <p style="margin:0 0 4px 0;color:#ffffff;font-weight:bold;font-size:15px;">Generate an AI Workout now</p>
+            <p style="margin:0;color:#71717a;font-size:13px;">One tap. 30 seconds. A full Hyrox session built to your level — no setup needed.</p>
+          </td>
+        </tr></table>
+        <table width="100%" border="0" cellspacing="0" cellpadding="0"><tr>
+          <td style="background-color:#1c1917;border:1px solid #3f3f46;padding:20px 24px;border-radius:4px;">
+            <p style="margin:0 0 6px 0;color:#a1a1aa;font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">Structured</p>
+            <p style="margin:0 0 4px 0;color:#ffffff;font-weight:bold;font-size:15px;">Choose a program and commit</p>
+            <p style="margin:0;color:#71717a;font-size:13px;">Hyrox prep, strength blocks, running plans — 8 to 16 weeks. 3 questions, done in 2 minutes.</p>
+          </td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="padding:0 0 40px 0;">
+        <table border="0" cellspacing="0" cellpadding="0"><tr>
+          <td style="background-color:#dc2626;border-radius:4px;">
+            <a href="https://hybridx.club/dashboard" style="display:inline-block;padding:16px 36px;color:#ffffff;font-weight:bold;font-size:16px;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.5px;">Start Training Today →</a>
+          </td>
+        </tr></table>
+        <p style="margin:12px 0 0 0;color:#3f3f46;font-size:13px;">Or <a href="https://hybridx.club/programs" style="color:#71717a;text-decoration:underline;">browse programs</a> — takes 2 minutes, changes your next 16 weeks.</p>
+      </td></tr>
+      <tr><td style="border-top:1px solid #27272a;padding-bottom:28px;"></td></tr>
+      <tr><td style="padding-bottom:40px;">
+        <p style="margin:0 0 4px 0;color:#71717a;font-size:14px;line-height:1.6;">Still rooting for you,</p>
+        <p style="margin:0 0 16px 0;color:#a1a1aa;font-size:14px;font-weight:bold;">The HybridX Team</p>
+        <p style="margin:0;color:#52525b;font-size:13px;font-style:italic;">Questions or something not working? Reply to this email — we read every one.</p>
+      </td></tr>
+      <tr><td style="border-top:1px solid #1f1f1f;padding-top:20px;padding-bottom:20px;">
+        <p style="margin:0;color:#3f3f46;font-size:11px;text-align:center;">&copy; 2026 HybridX.club &nbsp;·&nbsp; You're receiving this because you signed up at hybridx.club</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
+`;
+

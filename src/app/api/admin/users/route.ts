@@ -1,6 +1,6 @@
 // src/app/api/admin/users/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllUsers, getUser } from '@/services/user-service';
+import { getAllUsers, getUser, deleteUser } from '@/services/user-service';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 
@@ -64,6 +64,47 @@ export async function GET(request: NextRequest) {
 
     } catch (error) {
         console.error('❌ Error in admin users API:', error);
+        return NextResponse.json({
+            error: 'Internal server error',
+            details: error instanceof Error ? error.message : 'Unknown error'
+        }, { status: 500 });
+    }
+}
+
+export async function DELETE(request: NextRequest) {
+    try {
+        const cookieStore = await cookies();
+        const sessionCookie = cookieStore.get('__session')?.value;
+
+        if (!sessionCookie) {
+            return NextResponse.json({ error: 'Unauthorized - No session cookie' }, { status: 401 });
+        }
+
+        const decodedToken = await getAdminAuth().verifySessionCookie(sessionCookie, true);
+        const adminUserId = decodedToken.uid;
+        const adminUser = await getUser(adminUserId);
+
+        if (!adminUser?.isAdmin) {
+            return NextResponse.json({ error: 'Forbidden - Admin access required' }, { status: 403 });
+        }
+
+        const { searchParams } = new URL(request.url);
+        const targetUserId = searchParams.get('userId');
+
+        if (!targetUserId) {
+            return NextResponse.json({ error: 'Missing userId parameter' }, { status: 400 });
+        }
+
+        if (targetUserId === adminUserId) {
+            return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 });
+        }
+
+        await deleteUser(targetUserId);
+
+        return NextResponse.json({ success: true });
+
+    } catch (error) {
+        console.error('❌ Error deleting user:', error);
         return NextResponse.json({
             error: 'Internal server error',
             details: error instanceof Error ? error.message : 'Unknown error'

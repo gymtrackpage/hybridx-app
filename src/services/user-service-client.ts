@@ -49,6 +49,7 @@ export async function getUserClient(userId: string): Promise<User | null> {
             cancellation_effective_date: data.cancellation_effective_date instanceof Timestamp ? data.cancellation_effective_date.toDate() : undefined,
             notificationTime: data.notificationTime ?? undefined,
             completedWorkouts: data.completedWorkouts ?? undefined,
+            onboardingSkipped: data.onboardingSkipped ?? false,
         };
         return user;
     }
@@ -80,6 +81,7 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'person
         stripeCustomerId: null,
         subscriptionId: null,
         trialStartDate: Timestamp.fromDate(trialStartDate),
+        onboardingSkipped: data.onboardingSkipped ?? false,
     };
     await setDoc(userRef, userDataToSet);
 
@@ -100,6 +102,7 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'person
         isAdmin: false,
         subscriptionStatus: 'trial',
         trialStartDate: trialStartDate,
+        onboardingSkipped: data.onboardingSkipped ?? false,
     };
     return createdUser;
 }

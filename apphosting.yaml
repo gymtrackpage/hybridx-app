@@ -13,6 +13,10 @@ env:
     value: "12008"
   - variable: STRIPE_PRICE_ID
     value: "price_1S3Ki6GKLIEfAkDGEKkK9IIN"
+  - variable: EMAIL_FROM
+    value: "training@hybridx.club"
+  - variable: EMAIL_FROM_NAME
+    value: "HybridX Training"
 
   # Secrets (stored in Google Secret Manager)
   - variable: FIREBASE_SERVICE_ACCOUNT_KEY
@@ -35,3 +39,7 @@ env:
     secret: GARMIN_CLIENT_ID
   - variable: GARMIN_CLIENT_SECRET
     secret: GARMIN_CLIENT_SECRET
+  - variable: BREVO_SMTP_USER
+    secret: BREVO_SMTP_USER
+  - variable: BREVO_SMTP_KEY
+    secret: BREVO_SMTP_KEY
