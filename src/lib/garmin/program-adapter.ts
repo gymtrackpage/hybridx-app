@@ -1,11 +1,9 @@
 /**
  * Adapt the app's Firestore program shapes (Workout / RunningWorkout) into
- * the WorkoutDay shape the mapper expects. Pure functions, no I/O.
+ * the WorkoutDay shape(s) the mapper expects. Pure functions, no I/O.
  */
-import type { Workout, RunningWorkout, PlannedRun } from '@/models/types';
-import type { WorkoutDay } from './workout-mapper';
-
-import type { WorkoutDayExercise } from './workout-mapper';
+import type { Workout, RunningWorkout, PlannedRun, Exercise } from '@/models/types';
+import type { WorkoutDay, WorkoutDayExercise } from './workout-mapper';
 
 function describePlannedRun(run: PlannedRun): WorkoutDayExercise {
   // Express distance in whole meters when < 1 km to avoid decimal ambiguity in
@@ -39,26 +37,96 @@ function describePlannedRun(run: PlannedRun): WorkoutDayExercise {
   return { name, details: detailsParts.join('. '), ...(targetPaceMps != null ? { targetPaceMps } : {}) };
 }
 
+function adaptExercise(e: Exercise): WorkoutDayExercise {
+  return {
+    name: e.name,
+    details: e.details,
+    ...(e.sessionType ? { sessionType: e.sessionType } : {}),
+    ...(e.garminSport ? { garminSport: e.garminSport } : {}),
+    ...(e.garminExerciseCategory ? { garminExerciseCategory: e.garminExerciseCategory } : {}),
+    ...(e.garminExerciseName ? { garminExerciseName: e.garminExerciseName } : {}),
+    ...(e.weightKg != null ? { weightKg: e.weightKg } : {}),
+    ...(e.restSeconds != null ? { restSeconds: e.restSeconds } : {}),
+    ...(e.sets != null ? { sets: e.sets } : {}),
+    ...(e.reps != null ? { reps: e.reps } : {}),
+  };
+}
+
+/**
+ * Converts one program day into one or more WorkoutDay sessions for Garmin.
+ *
+ * A hybrid day (e.g. treadmill run + lower-body strength) produces two
+ * WorkoutDay objects so the mapper creates two separate Garmin workouts.
+ * Exercise rows are grouped by their (sessionType, garminSport) pair so
+ * that e.g. strength and CrossFit conditioning on the same day get distinct
+ * sport types on the watch.
+ */
+export function workoutToDays(w: Workout | RunningWorkout): WorkoutDay[] {
+  const result: WorkoutDay[] = [];
+
+  // ── Run session ──────────────────────────────────────────────────────────
+  const runs: PlannedRun[] = (w as RunningWorkout).runs ?? [];
+  if (runs.length > 0) {
+    result.push({
+      day: w.day,
+      title: w.title,
+      exercises: runs.map(describePlannedRun),
+      sessionType: 'run',
+      garminSport: 'RUNNING',
+    });
+  }
+
+  // ── Exercise sessions ────────────────────────────────────────────────────
+  const rawExercises = (w.exercises as Exercise[]).filter(e => e.name || e.details);
+  if (rawExercises.length > 0) {
+    // Group by (sessionType, garminSport) to preserve session boundaries.
+    // Exercises without sessionType default to 'strength'.
+    const order: string[] = [];
+    const groups = new Map<string, Exercise[]>();
+
+    for (const ex of rawExercises) {
+      const st = ex.sessionType ?? 'strength';
+      const gs = ex.garminSport ?? (st === 'cardio' ? 'CARDIO_TRAINING' : 'STRENGTH_TRAINING');
+      const key = `${st}|${gs}`;
+      if (!groups.has(key)) {
+        groups.set(key, []);
+        order.push(key);
+      }
+      groups.get(key)!.push(ex);
+    }
+
+    for (const key of order) {
+      const [st, gs] = key.split('|') as ['strength' | 'cardio', string];
+      result.push({
+        day: w.day,
+        title: w.title,
+        exercises: groups.get(key)!.map(adaptExercise),
+        sessionType: st,
+        garminSport: gs,
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Legacy single-session adapter — kept for call sites that haven't migrated
+ * to workoutToDays yet. For hybrid days it only returns the exercise session.
+ */
 export function workoutToDay(w: Workout | RunningWorkout): WorkoutDay {
   if (w.programType === 'running') {
     return {
       day: w.day,
       title: w.title,
-      exercises: w.runs.map(describePlannedRun),
+      exercises: (w as RunningWorkout).runs.map(describePlannedRun),
+      sessionType: 'run',
+      garminSport: 'RUNNING',
     };
   }
   return {
     day: w.day,
     title: w.title,
-    exercises: w.exercises.map((e) => ({
-      name: e.name,
-      details: e.details,
-      ...(e.garminExerciseCategory ? { garminExerciseCategory: e.garminExerciseCategory } : {}),
-      ...(e.garminExerciseName ? { garminExerciseName: e.garminExerciseName } : {}),
-      ...(e.weightKg != null ? { weightKg: e.weightKg } : {}),
-      ...(e.restSeconds != null ? { restSeconds: e.restSeconds } : {}),
-      ...(e.sets != null ? { sets: e.sets } : {}),
-      ...(e.reps != null ? { reps: e.reps } : {}),
-    })),
+    exercises: w.exercises.map(adaptExercise),
   };
 }

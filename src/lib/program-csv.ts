@@ -7,10 +7,13 @@ import type {
   PlannedRun,
   PaceZone,
   ProgramType,
+  SessionType,
   WorkoutDay,
 } from '@/models/types';
 import { hasExercises, hasRuns } from '@/lib/type-guards';
 
+// New unified format uses `sessionType` as the per-row discriminator.
+// Legacy format used `rowType` ('exercise' | 'run') — still accepted on import.
 export const UNIFIED_CSV_HEADERS = [
   'id',
   'programName',
@@ -19,10 +22,11 @@ export const UNIFIED_CSV_HEADERS = [
   'targetRace',
   'workoutDay',
   'workoutTitle',
-  'rowType',
+  'sessionType',     // replaces legacy rowType; values: run | strength | cardio | rest
+  'garminSport',     // explicit Garmin sport string (e.g. STRENGTH_TRAINING)
   'exerciseName',
   'exerciseDetails',
-  // Optional Garmin-structured fields (exercise rows only — leave blank for run rows)
+  // Optional Garmin-structured fields (strength/cardio rows only — leave blank for run rows)
   'garminExerciseCategory',
   'garminExerciseName',
   'weightKg',
@@ -40,9 +44,16 @@ export const UNIFIED_CSV_HEADERS = [
 type UnifiedRow = Record<(typeof UNIFIED_CSV_HEADERS)[number], string>;
 
 const VALID_PROGRAM_TYPES: ProgramType[] = ['hyrox', 'running', 'hybrid'];
+const VALID_SESSION_TYPES: SessionType[] = ['run', 'strength', 'cardio', 'rest'];
 const VALID_RUN_TYPES: PlannedRun['type'][] = ['easy', 'tempo', 'intervals', 'long', 'recovery'];
 const VALID_PACE_ZONES: PaceZone[] = ['recovery', 'easy', 'marathon', 'threshold', 'interval', 'repetition'];
-const VALID_TARGET_RACES = ['mile', '5k', '10k', 'half-marathon', 'marathon'] as const;
+const VALID_TARGET_RACES = ['mile', '5k', '10k', 'half-marathon', 'marathon', 'ultra'] as const;
+// Single-segment sport types accepted by the Garmin Training API V2 (§3.2.1).
+// An invalid value here would be rejected by Garmin at sync time, so reject on import instead.
+const VALID_GARMIN_SPORTS = [
+  'RUNNING', 'CYCLING', 'LAP_SWIMMING', 'STRENGTH_TRAINING',
+  'CARDIO_TRAINING', 'GENERIC', 'YOGA', 'PILATES',
+] as const;
 
 function makeBaseRow(program: Program, workout: WorkoutDay): UnifiedRow {
   const targetRace =
@@ -57,7 +68,8 @@ function makeBaseRow(program: Program, workout: WorkoutDay): UnifiedRow {
     targetRace: String(targetRace ?? ''),
     workoutDay: String(workout.day),
     workoutTitle: workout.title,
-    rowType: '',
+    sessionType: '',
+    garminSport: '',
     exerciseName: '',
     exerciseDetails: '',
     garminExerciseCategory: '',
@@ -86,7 +98,8 @@ export function programToCsv(program: Program): string {
     if (hasExercises(workout)) {
       for (const exercise of workout.exercises) {
         const row = makeBaseRow(program, workout);
-        row.rowType = 'exercise';
+        row.sessionType = exercise.sessionType ?? 'strength';
+        row.garminSport = exercise.garminSport ?? '';
         row.exerciseName = exercise.name;
         row.exerciseDetails = exercise.details;
         row.garminExerciseCategory = exercise.garminExerciseCategory ?? '';
@@ -103,7 +116,8 @@ export function programToCsv(program: Program): string {
     if (hasRuns(workout)) {
       for (const run of workout.runs) {
         const row = makeBaseRow(program, workout);
-        row.rowType = 'run';
+        row.sessionType = 'run';
+        row.garminSport = 'RUNNING';
         row.runType = run.type;
         row.runDistance = String(run.distance);
         row.runPaceZone = run.paceZone;
@@ -116,9 +130,9 @@ export function programToCsv(program: Program): string {
     }
 
     if (!emitted) {
-      // Empty rest day — emit a placeholder row so the day round-trips.
+      // Rest day — emit a placeholder row so the day round-trips.
       const row = makeBaseRow(program, workout);
-      row.rowType = 'exercise';
+      row.sessionType = 'rest';
       rows.push(row);
     }
   }
@@ -134,8 +148,9 @@ export interface ParsedProgram {
   data: Omit<Program, 'id'>;
 }
 
+/** Returns true for both the new sessionType format and the legacy rowType format. */
 export function isUnifiedCsv(headers: string[]): boolean {
-  return headers.includes('rowType');
+  return headers.includes('sessionType') || headers.includes('rowType');
 }
 
 export function csvToProgram(csv: string): ParsedProgram {
@@ -180,6 +195,9 @@ export function rowsToProgram(rows: Record<string, string>[]): ParsedProgram {
 
   const id = (first.id ?? '').trim() || undefined;
 
+  // Detect format: new sessionType column vs legacy rowType column.
+  const useSessionType = Object.prototype.hasOwnProperty.call(first, 'sessionType');
+
   type Bucket = { day: number; title: string; exercises: Exercise[]; runs: PlannedRun[] };
   const buckets = new Map<number, Bucket>();
 
@@ -199,88 +217,11 @@ export function rowsToProgram(rows: Record<string, string>[]): ParsedProgram {
       buckets.set(day, bucket);
     }
 
-    const rowType = (row.rowType ?? '').trim().toLowerCase();
-    if (rowType !== 'exercise' && rowType !== 'run') {
-      throw new Error(`Row ${lineNum}: rowType must be "exercise" or "run".`);
+    if (useSessionType) {
+      parseSessionTypeRow(row, lineNum, bucket);
+    } else {
+      parseLegacyRowTypeRow(row, lineNum, bucket);
     }
-
-    if (rowType === 'exercise') {
-      const name = (row.exerciseName ?? '').trim();
-      const details = (row.exerciseDetails ?? '').trim();
-      if (!name && !details) {
-        // Allow empty placeholder rows for rest days so they round-trip without losing the day.
-        return;
-      }
-      if (!name) throw new Error(`Row ${lineNum}: exerciseName is required for an exercise row.`);
-      if (!details) throw new Error(`Row ${lineNum}: exerciseDetails is required for an exercise row.`);
-
-      const garminExerciseCategory = (row.garminExerciseCategory ?? '').trim() || undefined;
-      const garminExerciseName = (row.garminExerciseName ?? '').trim() || undefined;
-      const weightKgRaw = (row.weightKg ?? '').trim();
-      const weightKg = weightKgRaw ? parseFloat(weightKgRaw) : undefined;
-      const restSecondsRaw = (row.restSeconds ?? '').trim();
-      const restSeconds = restSecondsRaw ? parseInt(restSecondsRaw, 10) : undefined;
-      const setsRaw = (row.sets ?? '').trim();
-      const sets = setsRaw ? parseInt(setsRaw, 10) : undefined;
-      const repsRaw = (row.reps ?? '').trim();
-      const reps = repsRaw ? parseInt(repsRaw, 10) : undefined;
-
-      bucket.exercises.push({
-        name,
-        details,
-        ...(garminExerciseCategory ? { garminExerciseCategory } : {}),
-        ...(garminExerciseName ? { garminExerciseName } : {}),
-        ...(weightKg != null && !isNaN(weightKg) ? { weightKg } : {}),
-        ...(restSeconds != null && !isNaN(restSeconds) ? { restSeconds } : {}),
-        ...(sets != null && !isNaN(sets) ? { sets } : {}),
-        ...(reps != null && !isNaN(reps) ? { reps } : {}),
-      });
-      return;
-    }
-
-    // run row
-    const runTypeRaw = (row.runType ?? '').trim();
-    if (!runTypeRaw) throw new Error(`Row ${lineNum}: runType is required for a run row.`);
-    if (!VALID_RUN_TYPES.includes(runTypeRaw as PlannedRun['type'])) {
-      throw new Error(`Row ${lineNum}: invalid runType "${runTypeRaw}". Must be one of: ${VALID_RUN_TYPES.join(', ')}.`);
-    }
-
-    const distanceRaw = (row.runDistance ?? '').trim();
-    const distance = parseFloat(distanceRaw);
-    if (distanceRaw === '' || isNaN(distance)) {
-      throw new Error(`Row ${lineNum}: invalid runDistance "${distanceRaw}".`);
-    }
-
-    const paceZoneRaw = (row.runPaceZone ?? '').trim();
-    if (!VALID_PACE_ZONES.includes(paceZoneRaw as PaceZone)) {
-      throw new Error(`Row ${lineNum}: invalid runPaceZone "${paceZoneRaw}". Must be one of: ${VALID_PACE_ZONES.join(', ')}.`);
-    }
-
-    const description = (row.runDescription ?? '').trim();
-    if (!description) throw new Error(`Row ${lineNum}: runDescription is required for a run row.`);
-
-    const effortRaw = (row.runEffortLevel ?? '').trim();
-    const effort = parseInt(effortRaw, 10);
-    if (isNaN(effort) || effort < 1 || effort > 10) {
-      throw new Error(`Row ${lineNum}: runEffortLevel must be an integer 1-10, got "${effortRaw}".`);
-    }
-
-    const noIntervalsRaw = (row.noIntervals ?? '').trim();
-    let noIntervals: number | undefined;
-    if (noIntervalsRaw) {
-      const n = parseInt(noIntervalsRaw, 10);
-      if (isNaN(n)) throw new Error(`Row ${lineNum}: invalid noIntervals "${noIntervalsRaw}".`);
-      noIntervals = n;
-    }
-
-    bucket.runs.push({
-      type: runTypeRaw as PlannedRun['type'],
-      distance,
-      paceZone: paceZoneRaw as PaceZone,
-      description,
-      effortLevel: effort as PlannedRun['effortLevel'],
-      ...(noIntervals != null ? { noIntervals } : {}),
-    });
   });
 
   const workouts: WorkoutDay[] = Array.from(buckets.values())
@@ -306,7 +247,7 @@ export function rowsToProgram(rows: Record<string, string>[]): ParsedProgram {
         };
         return w;
       }
-      // Hybrid day or empty rest day — keep both arrays.
+      // Hybrid day (both runs and exercises) or empty rest day.
       return {
         day: b.day,
         title: b.title,
@@ -324,6 +265,169 @@ export function rowsToProgram(rows: Record<string, string>[]): ParsedProgram {
   };
 
   return { id, data };
+}
+
+// ── New sessionType-based row parser ─────────────────────────────────────────
+
+function parseSessionTypeRow(
+  row: Record<string, string>,
+  lineNum: number,
+  bucket: { exercises: Exercise[]; runs: PlannedRun[] },
+): void {
+  const sessionType = (row.sessionType ?? '').trim().toLowerCase() as SessionType;
+  if (!VALID_SESSION_TYPES.includes(sessionType)) {
+    throw new Error(
+      `Row ${lineNum}: sessionType must be one of: ${VALID_SESSION_TYPES.join(', ')}.`,
+    );
+  }
+
+  if (sessionType === 'rest') {
+    // Rest day — bucket already exists, no content added.
+    return;
+  }
+
+  if (sessionType === 'run') {
+    bucket.runs.push(parseRunColumns(row, lineNum));
+    return;
+  }
+
+  // strength | cardio
+  const name = (row.exerciseName ?? '').trim();
+  const details = (row.exerciseDetails ?? '').trim();
+  if (!name && !details) {
+    // Allow empty placeholder rows so rest days round-trip.
+    return;
+  }
+  if (!name) throw new Error(`Row ${lineNum}: exerciseName is required for a ${sessionType} row.`);
+  if (!details) throw new Error(`Row ${lineNum}: exerciseDetails is required for a ${sessionType} row.`);
+
+  const garminSport = (row.garminSport ?? '').trim() || undefined;
+  if (garminSport && !(VALID_GARMIN_SPORTS as readonly string[]).includes(garminSport)) {
+    throw new Error(
+      `Row ${lineNum}: invalid garminSport "${garminSport}". Must be one of: ${VALID_GARMIN_SPORTS.join(', ')}.`,
+    );
+  }
+  const garminExerciseCategory = (row.garminExerciseCategory ?? '').trim() || undefined;
+  const garminExerciseName = (row.garminExerciseName ?? '').trim() || undefined;
+
+  bucket.exercises.push({
+    name,
+    details,
+    sessionType,
+    ...(garminSport ? { garminSport } : {}),
+    ...(garminExerciseCategory ? { garminExerciseCategory } : {}),
+    ...(garminExerciseName ? { garminExerciseName } : {}),
+    ...parseOptionalExerciseNumbers(row),
+  });
+}
+
+// ── Legacy rowType-based row parser (backward compat) ─────────────────────────
+
+function parseLegacyRowTypeRow(
+  row: Record<string, string>,
+  lineNum: number,
+  bucket: { exercises: Exercise[]; runs: PlannedRun[] },
+): void {
+  const rowType = (row.rowType ?? '').trim().toLowerCase();
+  if (rowType !== 'exercise' && rowType !== 'run') {
+    throw new Error(`Row ${lineNum}: rowType must be "exercise" or "run".`);
+  }
+
+  if (rowType === 'run') {
+    bucket.runs.push(parseRunColumns(row, lineNum));
+    return;
+  }
+
+  // exercise
+  const name = (row.exerciseName ?? '').trim();
+  const details = (row.exerciseDetails ?? '').trim();
+  if (!name && !details) {
+    return; // rest-day placeholder
+  }
+  if (!name) throw new Error(`Row ${lineNum}: exerciseName is required for an exercise row.`);
+  if (!details) throw new Error(`Row ${lineNum}: exerciseDetails is required for an exercise row.`);
+
+  const garminExerciseCategory = (row.garminExerciseCategory ?? '').trim() || undefined;
+  const garminExerciseName = (row.garminExerciseName ?? '').trim() || undefined;
+
+  bucket.exercises.push({
+    name,
+    details,
+    ...(garminExerciseCategory ? { garminExerciseCategory } : {}),
+    ...(garminExerciseName ? { garminExerciseName } : {}),
+    ...parseOptionalExerciseNumbers(row),
+  });
+}
+
+// ── Shared column parsers ─────────────────────────────────────────────────────
+
+function parseRunColumns(row: Record<string, string>, lineNum: number): PlannedRun {
+  const runTypeRaw = (row.runType ?? '').trim();
+  if (!runTypeRaw) throw new Error(`Row ${lineNum}: runType is required for a run row.`);
+  if (!VALID_RUN_TYPES.includes(runTypeRaw as PlannedRun['type'])) {
+    throw new Error(
+      `Row ${lineNum}: invalid runType "${runTypeRaw}". Must be one of: ${VALID_RUN_TYPES.join(', ')}.`,
+    );
+  }
+
+  const distanceRaw = (row.runDistance ?? '').trim();
+  const distance = parseFloat(distanceRaw);
+  if (distanceRaw === '' || isNaN(distance)) {
+    throw new Error(`Row ${lineNum}: invalid runDistance "${distanceRaw}".`);
+  }
+
+  const paceZoneRaw = (row.runPaceZone ?? '').trim();
+  if (!VALID_PACE_ZONES.includes(paceZoneRaw as PaceZone)) {
+    throw new Error(
+      `Row ${lineNum}: invalid runPaceZone "${paceZoneRaw}". Must be one of: ${VALID_PACE_ZONES.join(', ')}.`,
+    );
+  }
+
+  const description = (row.runDescription ?? '').trim();
+  if (!description) throw new Error(`Row ${lineNum}: runDescription is required for a run row.`);
+
+  const effortRaw = (row.runEffortLevel ?? '').trim();
+  const effort = parseInt(effortRaw, 10);
+  if (isNaN(effort) || effort < 1 || effort > 10) {
+    throw new Error(`Row ${lineNum}: runEffortLevel must be an integer 1-10, got "${effortRaw}".`);
+  }
+
+  const noIntervalsRaw = (row.noIntervals ?? '').trim();
+  let noIntervals: number | undefined;
+  if (noIntervalsRaw) {
+    const n = parseInt(noIntervalsRaw, 10);
+    if (isNaN(n)) throw new Error(`Row ${lineNum}: invalid noIntervals "${noIntervalsRaw}".`);
+    noIntervals = n;
+  }
+
+  return {
+    type: runTypeRaw as PlannedRun['type'],
+    distance,
+    paceZone: paceZoneRaw as PaceZone,
+    description,
+    effortLevel: effort as PlannedRun['effortLevel'],
+    ...(noIntervals != null ? { noIntervals } : {}),
+  };
+}
+
+function parseOptionalExerciseNumbers(
+  row: Record<string, string>,
+): Pick<Exercise, 'weightKg' | 'restSeconds' | 'sets' | 'reps'> {
+  const weightKgRaw = (row.weightKg ?? '').trim();
+  const weightKg = weightKgRaw ? parseFloat(weightKgRaw) : undefined;
+  const restSecondsRaw = (row.restSeconds ?? '').trim();
+  const restSeconds = restSecondsRaw ? parseInt(restSecondsRaw, 10) : undefined;
+  const setsRaw = (row.sets ?? '').trim();
+  const sets = setsRaw ? parseInt(setsRaw, 10) : undefined;
+  const repsRaw = (row.reps ?? '').trim();
+  const reps = repsRaw ? parseInt(repsRaw, 10) : undefined;
+
+  return {
+    ...(weightKg != null && !isNaN(weightKg) ? { weightKg } : {}),
+    ...(restSeconds != null && !isNaN(restSeconds) ? { restSeconds } : {}),
+    ...(sets != null && !isNaN(sets) ? { sets } : {}),
+    ...(reps != null && !isNaN(reps) ? { reps } : {}),
+  };
 }
 
 export function programFilename(program: Program): string {
