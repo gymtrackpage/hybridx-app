@@ -1,102 +1,160 @@
 # CSV Training Program Import Guide
 
-This document outlines the precise CSV format required to successfully import training programs into the HYBRIDX.CLUB application. The system supports two distinct program types: **HYROX/Hybrid** and **Running**. The CSV parser will automatically detect the program type based on the column headers provided.
+This document describes the unified CSV format for importing training programs into HYBRIDX.CLUB. A single file format handles all program types (running, strength, hybrid). The type of each row is determined by the `sessionType` column, not the file's header set.
 
-## General Rules for All CSV Files
+## General Rules
 
--   The file **must** be a valid CSV (Comma-Separated Values) file.
--   The **first row must contain the exact column headers** as specified below. Headers are case-sensitive.
--   All rows must belong to a single training program.
--   There should be no empty rows between data rows.
--   The `programName` and `programDescription` values must be identical for every row in the file.
-
----
-
-## 1. HYROX / Hybrid Program Format
-
-This format is for strength, functional fitness, or hybrid training plans.
-
-### Required Columns
-
-The CSV file must contain these exact 6 columns:
-
-1.  `programName`
-2.  `programDescription`
-3.  `workoutDay`
-4.  `workoutTitle`
-5.  `exerciseName`
-6.  `exerciseDetails`
-
-### Column-by-Column Explanation
-
-| Column Name          | Type    | Description                                                                                                                              | Example                                 |
-| -------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `programName`        | String  | The name of the entire training program. Must be the same for all rows.                                                                  | `First Steps to Hyrox`                  |
-| `programDescription` | String  | A description of the program's goals and target audience. Must be the same for all rows.                                                 | `A 12-week plan for Hyrox beginners.`   |
-| `workoutDay`         | Integer | The day number for the workout (e.g., 1, 2, 3...). Workouts on the same day are grouped.                                                   | `1`                                     |
-| `workoutTitle`       | String  | The title for a specific day's workout. If a day has multiple exercises, this title must be the same for all rows corresponding to that day. | `Full Body Strength A`                  |
-| `exerciseName`       | String  | The name of a single exercise.                                                                                                           | `Back Squat`                            |
-| `exerciseDetails`    | String  | The prescription for the exercise (sets, reps, time, etc.).                                                                              | `5x5 reps @ 75% 1RM, rest 90s`          |
-
-### Example CSV Data (HYROX/Hybrid)
-
-```csv
-programName,programDescription,workoutDay,workoutTitle,exerciseName,exerciseDetails
-First Steps to Hyrox,"A 12-week plan for beginners.",1,Full Body Strength A,Back Squat,"5x5 reps, heavy"
-First Steps to Hyrox,"A 12-week plan for beginners.",1,Full Body Strength A,Bench Press,"5x5 reps, heavy"
-First Steps to Hyrox,"A 12-week plan for beginners.",1,Full Body Strength A,Core Finisher,"3 rounds: 30s plank, 15 leg raises"
-First Steps to Hyrox,"A 12-week plan for beginners.",2,Running Foundations,Run/Walk,"10 min warm-up, 5x (3 min run, 2 min walk), 5 min cool-down"
-First Steps to Hyrox,"A 12-week plan for beginners.",3,Rest,Rest Day,"Active recovery or complete rest"
-```
+- The file must be saved as **UTF-8** encoded CSV.
+- The **first row must contain the exact column headers** listed below. Headers are case-sensitive.
+- All rows must belong to a single training program (`programName`, `programDescription`, and `programType` must be identical on every row).
+- There should be no completely empty rows.
+- Multiple rows with the same `workoutDay` are grouped into one program day. The `workoutTitle` of the **first row for a given day** becomes that day's title.
+- A single day can contain both run rows and exercise rows — each session type produces a separate Garmin workout when synced.
 
 ---
 
-## 2. Running Program Format
+## Column Reference
 
-This format is for structured running plans. The presence of the `runType` and `runPaceZone` columns will trigger the running program parser.
+### Program-level columns (repeat on every row)
 
-### Required Columns
+| Column | Required | Type | Valid values | Description |
+|---|---|---|---|---|
+| `id` | No | String | Any | Leave blank to create a new program. Fill with an existing program ID to overwrite it. |
+| `programName` | Yes | String | Any | Name of the program. Must be identical on all rows. |
+| `programDescription` | Yes | String | Any | Short description of the program's goals. Must be identical on all rows. |
+| `programType` | Yes | Enum | `running` `hyrox` `hybrid` | Overall type of the program. Use `hybrid` for plans that mix running and strength work. |
+| `targetRace` | No | Enum | `mile` `5k` `10k` `half-marathon` `marathon` `ultra` | Target race distance (running programs). Leave blank for pure strength programs. |
 
-The CSV file must contain these exact 11 columns:
+### Day-level columns
 
-1.  `programName`
-2.  `programDescription`
-3.  `targetRace`
-4.  `workoutDay`
-5.  `workoutTitle`
-6.  `runType`
-7.  `noIntervals`
-8.  `runDistance`
-9.  `runPaceZone`
-10. `runDescription`
-11. `runEffortLevel`
+| Column | Required | Type | Description |
+|---|---|---|---|
+| `workoutDay` | Yes | Integer | The day number within the program (1-indexed). Rows sharing the same day number are grouped into one workout. |
+| `workoutTitle` | Yes | String | Title for this row's session. The first row to create a day sets that day's overall title. |
 
-### Column-by-Column Explanation
+### Row-type discriminator
 
-| Column Name          | Type                                            | Description                                                                                                                                     | Example                               |
-| -------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `programName`        | String                                          | The name of the entire training program. Must be the same for all rows.                                                                         | `Beginner 10k Plan`                   |
-| `programDescription` | String                                          | A description of the program's goals. Must be the same for all rows.                                                                            | `A 12-week plan to run your first 10k.` |
-| `targetRace`         | Enum: `5k`, `10k`, `half-marathon`, `marathon`    | The primary race distance this program is designed for. Must be the same for all rows.                                                          | `10k`                                 |
-| `workoutDay`         | Integer                                         | The day number for the workout (e.g., 1, 2, 3...).                                                                                               | `1`                                     |
-| `workoutTitle`       | String                                          | The title for a specific day's workout.                                                                                                         | `Tempo Run`                             |
-| `runType`            | Enum: `easy`, `tempo`, `intervals`, `long`, `recovery` | The type of run for this specific row.                                                                                                          | `tempo`                               |
-| `noIntervals`        | Integer (Optional)                              | The number of intervals to perform (e.g., for `4`x800m, this would be 4). Leave blank if not an interval run.                                   | `4`                                   |
-| `runDistance`        | Float                                           | The distance for this specific run or interval in **kilometers**.                                                                               | `1.2` (for 1.2km)                   |
-| `runPaceZone`        | Enum: `recovery`, `easy`, `marathon`, `threshold`, `interval`, `repetition` | The target pace zone for the run, which maps to the user's calculated training zones.                                                           | `threshold`                           |
-| `runDescription`     | String                                          | A detailed description of the run segment.                                                                                                      | `800m at Threshold pace`              |
-| `runEffortLevel`     | Integer (1-10)                                  | A subjective perceived effort level from 1 (very light) to 10 (max effort).                                                                     | `7`                                     |
+| Column | Required | Type | Valid values | Description |
+|---|---|---|---|---|
+| `sessionType` | Yes | Enum | `run` `strength` `cardio` `rest` | Determines which columns the parser reads for this row. |
+| `garminSport` | No | Enum | See below | Explicit Garmin sport type. If blank, a default is applied per `sessionType`. Invalid values are rejected on import. |
 
-### Example CSV Data (Running)
+**Accepted `garminSport` values** (single-segment sport types per Garmin Training API V2):
+
+`RUNNING` · `CYCLING` · `LAP_SWIMMING` · `STRENGTH_TRAINING` · `CARDIO_TRAINING` · `YOGA` · `PILATES` · `GENERIC`
+
+> **Note:** `FUNCTIONAL_STRENGTH_TRAINING` is **not** a valid Garmin sport type and will be rejected. Use `CARDIO_TRAINING` for CrossFit-style conditioning, circuits, plyometrics, and cross-training.
+
+**Default `garminSport` values by `sessionType`:**
+
+| `sessionType` | Default `garminSport` |
+|---|---|
+| `run` | `RUNNING` |
+| `strength` | `STRENGTH_TRAINING` |
+| `cardio` | `CARDIO_TRAINING` |
+| `rest` | *(no Garmin workout created)* |
+
+### Run columns (fill these for `sessionType: run` rows)
+
+| Column | Required | Type | Valid values | Description |
+|---|---|---|---|---|
+| `runType` | Yes | Enum | `easy` `tempo` `intervals` `long` `recovery` | The character of this run segment. |
+| `runDistance` | Yes | Float | Any ≥ 0 | Distance in **kilometres** for this segment. Use `0` only for genuine zero-distance steps (e.g. a recovery row that is time-based). |
+| `runPaceZone` | Yes | Enum | `recovery` `easy` `marathon` `threshold` `interval` `repetition` | Target pace zone mapped to the athlete's calculated training zones. |
+| `runDescription` | Yes | String | Any | Plain-text description of what to do in this segment. |
+| `runEffortLevel` | Yes | Integer 1–10 | 1–10 | Perceived effort (RPE) for this segment. |
+| `noIntervals` | No | Integer | Any | Number of repetitions for interval rows (e.g. `5` for 5×1km). Leave blank for non-interval rows. |
+
+### Exercise columns (fill these for `sessionType: strength` or `cardio` rows)
+
+| Column | Required | Type | Description |
+|---|---|---|---|
+| `exerciseName` | Yes* | String | Name of the exercise (e.g. `Back squat`). *Required unless both name and details are blank (blank rows are treated as rest-day placeholders). |
+| `exerciseDetails` | Yes* | String | Prescription for the exercise (e.g. `4×5 \| RPE 8`). Required whenever `exerciseName` is populated. |
+| `garminExerciseCategory` | No | String | Garmin exercise category string for structured Garmin sync. |
+| `garminExerciseName` | No | String | Garmin exercise name string for structured Garmin sync. |
+| `weightKg` | No | Float | Load in kilograms. |
+| `restSeconds` | No | Integer | Rest period in seconds. |
+| `sets` | No | Integer | Number of sets. |
+| `reps` | No | Integer | Number of reps per set. |
+
+---
+
+## Row Types in Detail
+
+### `sessionType: run`
+
+Each `run` row represents one **segment** of a run session. Complex workouts (warm-up → intervals → cool-down) use multiple rows, all sharing the same `workoutDay` and `sessionType: run`. Leave all exercise columns blank.
+
+### `sessionType: strength`
+
+Each `strength` row represents one **exercise** in a strength session. All rows for the same day with the same `sessionType` and `garminSport` are grouped into a single Garmin strength workout. Leave all run columns blank.
+
+### `sessionType: cardio`
+
+Same structure as `strength` rows but mapped to `CARDIO_TRAINING` in Garmin by default. Use for CrossFit-style conditioning, plyometrics, circuits, and cross-training. Leave all run columns blank.
+
+### `sessionType: rest`
+
+A rest-day placeholder. No run or exercise data is required — the row just ensures the day appears in the program. Garmin receives no workout for rest days.
+
+### Multi-session days
+
+A single `workoutDay` can contain a mix of session types. For example, day 1 might have one `run` row and several `strength` rows. The Garmin sync creates **separate workouts** for each distinct `(sessionType, garminSport)` pair within the day.
+
+---
+
+## Example: Hybrid Plan (first 3 days)
 
 ```csv
-programName,programDescription,targetRace,workoutDay,workoutTitle,runType,noIntervals,runDistance,runPaceZone,runDescription,runEffortLevel
-Beginner 10k Plan,"Prepare for your first 10k race.",10k,1,Interval Training,intervals,4,0.8,interval,"800m at Interval pace",8
-Beginner 10k Plan,"Prepare for your first 10k race.",10k,1,Interval Training,recovery,,0.4,recovery,"400m easy jog recovery",3
-Beginner 10k Plan,"Prepare for your first 10k race.",10k,2,Rest Day,recovery,,0,recovery,"Rest or light walk",1
-Beginner 10k Plan,"Prepare for your first 10k race.",10k,3,Tempo Run,easy,,1.5,easy,"1.5km warm-up",4
-Beginner 10k Plan,"Prepare for your first 10k race.",10k,3,Tempo Run,tempo,,5,threshold,"5km at Threshold pace",7
-Beginner 10k Plan,"Prepare for your first 10k race.",10k,3,Tempo Run,easy,,1.5,easy,"1.5km cool-down",3
+id,programName,programDescription,programType,targetRace,workoutDay,workoutTitle,sessionType,garminSport,exerciseName,exerciseDetails,garminExerciseCategory,garminExerciseName,weightKg,restSeconds,sets,reps,runType,runDistance,runPaceZone,runDescription,runEffortLevel,noIntervals
+,"My Hybrid Plan","12-week hybrid training plan.",hybrid,,1,Lower Body Strength,strength,STRENGTH_TRAINING,Back squat,"4×5 | RPE 8",,,,,,,,,,,,
+,"My Hybrid Plan","12-week hybrid training plan.",hybrid,,1,Lower Body Strength,strength,STRENGTH_TRAINING,Romanian deadlift,"3×6 | RPE 7",,,,,,,,,,,,
+,"My Hybrid Plan","12-week hybrid training plan.",hybrid,,1,Lower Body Strength,strength,STRENGTH_TRAINING,Nordic hamstring curl,"3×5 | RPE 8",,,,,,,,,,,,
+,"My Hybrid Plan","12-week hybrid training plan.",hybrid,,2,Tempo Run,run,RUNNING,,,,,,,,,tempo,5,threshold,"5km at threshold pace",7,
+,"My Hybrid Plan","12-week hybrid training plan.",hybrid,,3,Rest Day,rest,,,,,,,,,,,,,,,,
 ```
 
-This guide provides all the necessary details to construct a valid CSV file for either program type. Adhering to these specifications will ensure a smooth import process.
+## Example: Running Plan with Intervals
+
+```csv
+id,programName,programDescription,programType,targetRace,workoutDay,workoutTitle,sessionType,garminSport,exerciseName,exerciseDetails,garminExerciseCategory,garminExerciseName,weightKg,restSeconds,sets,reps,runType,runDistance,runPaceZone,runDescription,runEffortLevel,noIntervals
+,"10k Plan","12-week 10k plan.",running,10k,1,Interval Session,run,RUNNING,,,,,,,,,easy,1.5,easy,"Warm-up easy jog",4,
+,"10k Plan","12-week 10k plan.",running,10k,1,Interval Session,run,RUNNING,,,,,,,,,intervals,0.8,interval,"800m at interval pace",8,5
+,"10k Plan","12-week 10k plan.",running,10k,1,Interval Session,run,RUNNING,,,,,,,,,recovery,0.4,recovery,"400m easy jog recovery",3,
+,"10k Plan","12-week 10k plan.",running,10k,1,Interval Session,run,RUNNING,,,,,,,,,easy,1.5,easy,"Cool-down easy jog",3,
+,"10k Plan","12-week 10k plan.",running,10k,2,Rest Day,rest,,,,,,,,,,,,,,,,
+,"10k Plan","12-week 10k plan.",running,10k,3,Easy Run,run,RUNNING,,,,,,,,,easy,8,easy,"Comfortable easy effort",4,
+```
+
+## Example: Hybrid Day (run + strength on same day)
+
+```csv
+id,programName,programDescription,programType,targetRace,workoutDay,workoutTitle,sessionType,garminSport,exerciseName,exerciseDetails,garminExerciseCategory,garminExerciseName,weightKg,restSeconds,sets,reps,runType,runDistance,runPaceZone,runDescription,runEffortLevel,noIntervals
+,"Hybrid Plan","Hybrid training plan.",hybrid,,5,Morning Run + Lift,run,RUNNING,,,,,,,,,easy,8,easy,"Morning easy run",4,
+,"Hybrid Plan","Hybrid training plan.",hybrid,,5,Upper Body Strength,strength,STRENGTH_TRAINING,Push press,"4×4 | RPE 8",,,,,,,,,,,,
+,"Hybrid Plan","Hybrid training plan.",hybrid,,5,Upper Body Strength,strength,STRENGTH_TRAINING,Weighted pull-up,"4×5 | RPE 8",,,,,,,,,,,,
+,"Hybrid Plan","Hybrid training plan.",hybrid,,5,Upper Body Strength,strength,STRENGTH_TRAINING,Pendlay row,"3×6 | RPE 7",,,,,,,,,,,,
+```
+
+The run and the strength block share day 5. Garmin sync will schedule two separate workouts on that calendar date.
+
+---
+
+## Common Errors
+
+| Error message | Cause | Fix |
+|---|---|---|
+| `CSV must include programType` | The `programType` column is missing or blank on the first row. | Add the column and set it to `running`, `hyrox`, or `hybrid`. |
+| `sessionType must be one of: run, strength, cardio, rest` | A row has an unrecognised or misspelled `sessionType`. | Correct the value in that row. |
+| `exerciseDetails is required for a strength row` | `exerciseName` is populated but `exerciseDetails` is blank. | Both columns must be filled for every exercise row. |
+| `runType is required for a run row` | A `run` row is missing its `runType`. | Fill in `easy`, `tempo`, `intervals`, `long`, or `recovery`. |
+| `runEffortLevel must be an integer 1-10` | The effort level is blank, non-numeric, or out of range. | Enter a whole number between 1 and 10. |
+| `Invalid targetRace` | The `targetRace` value is not one of the accepted options. | Use `mile`, `5k`, `10k`, `half-marathon`, `marathon`, or `ultra`. |
+| `invalid garminSport` | The `garminSport` value is not a Garmin-supported sport type. | Use one of `RUNNING`, `CYCLING`, `LAP_SWIMMING`, `STRENGTH_TRAINING`, `CARDIO_TRAINING`, `YOGA`, `PILATES`, `GENERIC`. |
+
+---
+
+## File Encoding
+
+Save the file as **UTF-8** (not UTF-8 with BOM, not Windows-1252). If you export from Microsoft Excel, choose "CSV UTF-8 (comma delimited)" from the Save As format list. Incorrect encoding causes special characters (`×`, `·`, `—`) to appear as garbled sequences on import.
