@@ -53,8 +53,6 @@ const runSchema = z.object({
   effortLevel: z.coerce.number().min(1).max(10),
 });
 
-// A single workout row; exercises XOR runs are required depending on programType.
-// Using superRefine instead of discriminatedUnion for react-hook-form compatibility.
 const workoutSchema = z.object({
   day: z.coerce.number().min(1, 'Day must be a positive number.'),
   title: z.string().min(1, 'Workout title is required.'),
@@ -62,11 +60,13 @@ const workoutSchema = z.object({
   exercises: z.array(exerciseSchema).default([]),
   runs: z.array(runSchema).default([]),
 }).superRefine((data, ctx) => {
-  if (data.programType === 'hyrox' && data.exercises.length === 0) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['exercises'], message: 'At least one exercise is required.' });
-  }
-  if (data.programType === 'running' && data.runs.length === 0) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['runs'], message: 'At least one run segment is required.' });
+  // Require at least one exercise OR one run — a workout with neither is empty.
+  if (data.exercises.length === 0 && data.runs.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['exercises'],
+      message: 'Each workout needs at least one exercise or run segment.',
+    });
   }
 });
 
@@ -150,6 +150,8 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
   const form = useForm<ProgramFormData>({
     resolver: zodResolver(programSchema),
     defaultValues: buildDefaultValues(program),
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
   });
 
   const { fields: workoutFields, append: appendWorkout, remove: removeWorkout, replace: replaceWorkouts } = useFieldArray({
@@ -214,7 +216,9 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit, () => {
+              toast({ title: 'Validation error', description: 'Please check the highlighted fields and try again.', variant: 'destructive' });
+            })} className="space-y-6">
             <ScrollArea className="h-[60vh] pr-6">
               <div className="space-y-4">
 
