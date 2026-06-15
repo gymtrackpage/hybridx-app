@@ -2,6 +2,11 @@
  * Adapt the app's Firestore program shapes (Workout / RunningWorkout) into
  * the WorkoutDay shape(s) the mapper expects. Pure functions, no I/O.
  */
+import type { Workout, RunningWorkout, PlannedRun, PersonalRecords } from '@/models/types';
+import type { WorkoutDay } from './workout-mapper';
+
+import type { WorkoutDayExercise } from './workout-mapper';
+import { resolveWeightKg } from './program-enricher';
 import type { Workout, RunningWorkout, PlannedRun, Exercise } from '@/models/types';
 import type { WorkoutDay, WorkoutDayExercise } from './workout-mapper';
 

@@ -118,6 +118,20 @@ export async function POST(req: NextRequest) {
     const results: Array<{ day: number; status: string; workoutId?: string }> = [];
 
     for (const w of targetWorkouts) {
+      const dayKey = String(w.day);
+      const day = workoutToDay(w, user.personalRecords);
+      const garminWorkout = mapWorkoutDay(day);
+
+      // Skip rest / welcome / race-day. Also remove any prior push for
+      // this day in case it was previously a workout that's now rest.
+      if (!garminWorkout) {
+        const stale = prevSync?.workouts[dayKey];
+        if (stale) {
+          try {
+            await deleteWorkout(accessToken, stale.workoutId);
+          } catch (e: any) {
+            logger.warn(`Cleanup of stale workout day ${w.day} failed:`, e.message);
+          }
       const dayStr = String(w.day);
 
       // Remove all stale Garmin workouts for this day. Supports both the
