@@ -97,8 +97,9 @@ export default function ActivityFeedPage() {
             setPage(pageToFetch);
 
         } catch (err) {
-            setError(err.message || 'Failed to fetch activities.');
-            toast({ title: 'Error', description: err.message || 'Failed to load Strava activities', variant: 'destructive' });
+            const errorObj = err as any; // FIXED: Safely cast for TS compiler
+            setError(errorObj.message || 'Failed to fetch activities.');
+            toast({ title: 'Error', description: errorObj.message || 'Failed to load Strava activities', variant: 'destructive' });
         } finally {
             if (showSyncingIndicator) setSyncing(false);
             setLoading(false);
