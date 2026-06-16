@@ -308,7 +308,7 @@ export default function ProfilePage() {
         toast({ title: 'Success', description: 'Your running profile has been updated.' });
     } catch (error) {
         console.error("Detailed error updating running profile:", error);
-        toast({ title: 'Error', description: `Failed to update running profile: ${error.message}`, variant: 'destructive' });
+        toast({ title: 'Error', description: `Failed to update running profile: ${error instanceof Error ? error.message : String(error)
     }
   };
 
