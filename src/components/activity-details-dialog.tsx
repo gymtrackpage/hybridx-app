@@ -62,7 +62,7 @@ export function ActivityDetailsDialog({ activityId, isOpen, setIsOpen }: Activit
       } catch (error) {
         toast({
           title: 'Error',
-          description: error.message,
+          description: error instanceof Error ? error.message : String(error),
           variant: 'destructive',
         });
         setIsOpen(false); // Close dialog on error

@@ -100,7 +100,7 @@ export function WeeklyAnalysisDialog({ userId, trigger }: WeeklyAnalysisDialogPr
       console.error('Error applying adjustments:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to apply adjustments. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to apply adjustments. Please try again.',
         variant: 'destructive',
       });
     } finally {

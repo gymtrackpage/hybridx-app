@@ -150,7 +150,7 @@ export default function SubscriptionPage() {
             }
         } catch (error) {
             console.error('Subscription error:', error);
-            toast({ title: 'Error', description: error.message || 'Could not redirect to payment page.', variant: 'destructive' });
+            toast({ title: 'Error', description: error instanceof Error ? error.message : 'Could not redirect to payment page.', variant: 'destructive' });
             setIsRedirecting(false);
         }
     };
@@ -163,7 +163,7 @@ export default function SubscriptionPage() {
             toast({ title: 'Success', description: 'Your subscription has been paused.'});
             if (firebaseUser) await fetchUserData(firebaseUser);
         } catch (error) {
-            toast({ title: 'Error', description: error.message, variant: 'destructive' });
+            toast({ title: 'Error', description: error instanceof Error ? error.message : String(error), variant: 'destructive' });
         } finally {
             setIsManaging(false);
         }
@@ -177,7 +177,7 @@ export default function SubscriptionPage() {
             toast({ title: 'Success', description: 'Your subscription will be cancelled at the end of the current billing period.'});
             if (firebaseUser) await fetchUserData(firebaseUser);
         } catch (error) {
-            toast({ title: 'Error', description: error.message, variant: 'destructive' });
+            toast({ title: 'Error', description: error instanceof Error ? error.message : String(error), variant: 'destructive' });
         } finally {
             setIsManaging(false);
         }

@@ -81,7 +81,7 @@ export function StravaUploadButton({
       logger.error('Upload error:', error);
       toast({
         title: 'Upload Failed',
-        description: error.message || 'Failed to upload activity to Strava.',
+        description: error instanceof Error ? error.message : 'Failed to upload activity to Strava.',
         variant: 'destructive'
       });
     } finally {

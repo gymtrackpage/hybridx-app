@@ -309,7 +309,8 @@ export default function ProfilePage() {
     } catch (error) {
         console.error("Detailed error updating running profile:", error);
         toast({ description: `Failed to update running profile: ${error instanceof Error ? error.message : String(error)}`})
-  }
+    }
+  };
 
   const handleNotificationSubmit = async (data: NotificationFormData) => {
     if (!user) return;

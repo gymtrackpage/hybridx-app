@@ -135,7 +135,7 @@ export function LinkStravaActivityDialog({
         if (best && isGoodMatch(best, session)) setSelectedActivity(best);
       } catch (error) {
         logger.error('Error fetching Strava activities:', error);
-        toast({ title: 'Error Loading Activities', description: error.message, variant: 'destructive' });
+        toast({ title: 'Error Loading Activities', description: error instanceof Error ? error.message : String(error), variant: 'destructive' });
         setIsOpen(false);
       } finally {
         setLoading(false);
@@ -158,7 +158,7 @@ export function LinkStravaActivityDialog({
       toast({ title: 'Linked!', description: `"${session.workoutTitle}" linked to "${selectedActivity.name}".` });
       onLinkSuccess();
     } catch (error) {
-      toast({ title: 'Error', description: error.message || 'Failed to link.', variant: 'destructive' });
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to link.', variant: 'destructive' });
     } finally {
       setLinking(false);
     }
