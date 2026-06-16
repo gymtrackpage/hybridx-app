@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     console.error('[Apply Adjustments] Error stack:', error instanceof Error ? error.stack : undefined);
     return NextResponse.json({
       error: error instanceof Error ? error.message : 'Failed to apply adjustments',
-      details: error.toString(),
+      details: String(error),
     }, { status: 500 });
   }
 }

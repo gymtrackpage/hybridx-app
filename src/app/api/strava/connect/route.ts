@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('Error creating Strava connect URL:', error);
-    if (error.code === 'auth/session-cookie-expired' || error.code === 'auth/session-cookie-revoked') {
+    if ((error as any).code === 'auth/session-cookie-expired' || (error as any).code === 'auth/session-cookie-revoked') {
       return NextResponse.json({ error: 'Your session has expired. Please log in again.' }, { status: 401 });
     }
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to initiate Strava connection.' }, { status: 500 });

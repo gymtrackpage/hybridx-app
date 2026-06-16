@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
     if (axios.isAxiosError(error)) {
       status = error.response?.status ?? 500;
       message = error.response?.data?.message || message;
-    } else if (error.code === 'auth/session-cookie-expired') {
+    } else if ((error as any).code === 'auth/session-cookie-expired') {
       status = 401;
       message = 'Session expired. Please log in again.';
     }

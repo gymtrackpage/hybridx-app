@@ -82,7 +82,7 @@ export async function GET(request: Request) {
         accessToken = await getValidGarminToken(userId);
       } catch (e) {
         const error = e as any;
-        logger.warn(`Garmin cron: token refresh failed for ${userId}:`, error.code);
+        logger.warn(`Garmin cron: token refresh failed for ${userId}:`, (error as any).code);
         results.skipped++;
         continue;
       }

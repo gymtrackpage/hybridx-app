@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       accessToken = await getValidGarminToken(userId);
     } catch (e) {
       const error = e as any;
-      if (error.code === 'GARMIN_NOT_CONNECTED') {
+      if ((error as any).code === 'GARMIN_NOT_CONNECTED') {
         return NextResponse.json(
           { error: 'Garmin account not connected.' },
           { status: 400 },

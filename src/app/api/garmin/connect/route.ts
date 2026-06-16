@@ -64,8 +64,8 @@ export async function POST(_req: NextRequest) {
   } catch (err) {
     logger.error('Garmin connect error:', err instanceof Error ? err.message : String(err));
     if (
-      err.code === 'auth/session-cookie-expired' ||
-      err.code === 'auth/session-cookie-revoked'
+      (err as any).code === 'auth/session-cookie-expired' ||
+      (err as any).code === 'auth/session-cookie-revoked'
     ) {
       return NextResponse.json(
         { error: 'Your session has expired. Please log in again.' },

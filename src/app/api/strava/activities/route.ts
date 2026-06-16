@@ -64,12 +64,12 @@ export async function GET(req: NextRequest) {
             status = error.response.status;
             message = error.response.data?.message || message;
         }
-    } else if (error.code === 'auth/session-cookie-expired' || error.code === 'auth/argument-error') {
+    } else if ((error as any).code === 'auth/session-cookie-expired' || (error as any).code === 'auth/argument-error') {
         status = 401;
         message = 'Your session has expired. Please log in again.';
     }
 
-    logger.error('Strava activities fetch error:', { message: error.message, code: error.code });
+    logger.error('Strava activities fetch error:', { message: error.message, code: (error as any).code });
     return NextResponse.json({ error: message }, { status });
   }
 }

@@ -141,7 +141,7 @@ export function LoginForm() {
     } catch (error) {
       logger.error('Login error:', error);
       let description = 'An unexpected error occurred. Please try again.';
-      if (error.code === AuthErrorCodes.INVALID_LOGIN_CREDENTIALS) {
+      if ((error as any).code === AuthErrorCodes.INVALID_LOGIN_CREDENTIALS) {
         description = 'Invalid email or password. Please try again.';
       }
       toast({
@@ -418,9 +418,9 @@ export function SignupForm() {
     } catch (error) {
         logger.error('Signup error:', error);
         let description = "An unexpected error occurred. Please try again.";
-        if (error.code === AuthErrorCodes.EMAIL_EXISTS) {
+        if ((error as any).code === AuthErrorCodes.EMAIL_EXISTS) {
             description = "This email address is already in use.";
-        } else if (error.code === AuthErrorCodes.WEAK_PASSWORD) {
+        } else if ((error as any).code === AuthErrorCodes.WEAK_PASSWORD) {
             description = "The password is too weak. Please choose a stronger password.";
         }
         toast({
