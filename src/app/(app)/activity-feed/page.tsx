@@ -96,7 +96,7 @@ export default function ActivityFeedPage() {
             setHasMore(more);
             setPage(pageToFetch);
 
-        } catch (err: any) {
+        } catch (err) {
             setError(err.message || 'Failed to fetch activities.');
             toast({ title: 'Error', description: err.message || 'Failed to load Strava activities', variant: 'destructive' });
         } finally {

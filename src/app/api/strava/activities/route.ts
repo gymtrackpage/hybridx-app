@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ activities, hasMore: activities.length === 30 });
 
-  } catch (error: any) {
+  } catch (error) {
     let status = 500;
     let message = 'Failed to fetch activities from Strava.';
     

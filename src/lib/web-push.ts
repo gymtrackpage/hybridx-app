@@ -47,7 +47,7 @@ export async function sendPushToSubscription(
       })
     );
     return true;
-  } catch (err: any) {
+  } catch (err) {
     // 410 Gone = subscription expired/unsubscribed
     if (err?.statusCode === 410 || err?.statusCode === 404) {
       return false; // caller should clean up the subscription

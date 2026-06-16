@@ -443,7 +443,7 @@ export async function POST(request: NextRequest) {
       message: `Added ${totalAdditions} new components across ${results.length} programs`
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Phase 2 enhancement error:', error);
     return NextResponse.json(
       { success: false, error: error.message },

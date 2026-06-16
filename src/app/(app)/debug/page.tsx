@@ -88,7 +88,7 @@ export default function DebugPage() {
         };
       }
 
-    } catch (error: any) {
+    } catch (error) {
       results.error = {
         message: error.message,
         stack: error.stack

@@ -306,7 +306,7 @@ export default function ProfilePage() {
         
         await updateUser(user.id, { runningProfile: profileToUpdate });
         toast({ title: 'Success', description: 'Your running profile has been updated.' });
-    } catch (error: any) {
+    } catch (error) {
         console.error("Detailed error updating running profile:", error);
         toast({ title: 'Error', description: `Failed to update running profile: ${error.message}`, variant: 'destructive' });
     }
@@ -321,7 +321,7 @@ export default function ProfilePage() {
         };
         await updateUser(user.id, { notificationTime });
         toast({ title: 'Success', description: 'Your notification time has been updated.' });
-    } catch (error: any) {
+    } catch (error) {
         console.error("Error updating notification time:", error);
         toast({ title: 'Error', description: `Failed to update notification time: ${error.message}`, variant: 'destructive' });
     }
@@ -368,7 +368,7 @@ export default function ProfilePage() {
 
       window.location.href = data.url;
 
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error initiating Strava auth:', error);
       toast({
         title: 'Connection Error',

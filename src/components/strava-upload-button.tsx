@@ -77,7 +77,7 @@ export function StravaUploadButton({
         description: `"${activityName || 'Activity'}" uploaded to Strava successfully.`,
       });
 
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Upload error:', error);
       toast({
         title: 'Upload Failed',

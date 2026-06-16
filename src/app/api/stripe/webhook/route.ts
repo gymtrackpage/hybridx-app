@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(buf, sig, webhookSecret);
     console.log(`[Stripe Webhook] Received event: ${event.type}`);
-  } catch (err: any) {
+  } catch (err) {
     console.error(`[Stripe Webhook] Signature verification failed: ${err.message}`);
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
   }
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     }
 
     return new NextResponse(JSON.stringify({ received: true }), { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error(`[Stripe Webhook] Error processing webhook for event ${event.type}:`, error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }

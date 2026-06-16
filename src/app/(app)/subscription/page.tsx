@@ -148,7 +148,7 @@ export default function SubscriptionPage() {
             } else {
                 throw new Error('Could not create checkout session.');
             }
-        } catch (error: any) {
+        } catch (error) {
             console.error('Subscription error:', error);
             toast({ title: 'Error', description: error.message || 'Could not redirect to payment page.', variant: 'destructive' });
             setIsRedirecting(false);
@@ -162,7 +162,7 @@ export default function SubscriptionPage() {
             await pauseSubscription(user.id);
             toast({ title: 'Success', description: 'Your subscription has been paused.'});
             if (firebaseUser) await fetchUserData(firebaseUser);
-        } catch (error: any) {
+        } catch (error) {
             toast({ title: 'Error', description: error.message, variant: 'destructive' });
         } finally {
             setIsManaging(false);
@@ -176,7 +176,7 @@ export default function SubscriptionPage() {
             await cancelSubscription(user.id);
             toast({ title: 'Success', description: 'Your subscription will be cancelled at the end of the current billing period.'});
             if (firebaseUser) await fetchUserData(firebaseUser);
-        } catch (error: any) {
+        } catch (error) {
             toast({ title: 'Error', description: error.message, variant: 'destructive' });
         } finally {
             setIsManaging(false);

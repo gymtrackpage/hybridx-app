@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
     const summary = computeTrainingSummary(activities);
 
     return NextResponse.json(summary);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Training summary API error:', error.message);
     let status = 500;
     let message = 'Failed to compute training summary.';

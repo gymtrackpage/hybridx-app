@@ -31,7 +31,7 @@ export default function ArticlesPage() {
             if (results.length === 0 && query.length > 5) {
                 await handleGenerateArticle(query);
             }
-        } catch (err: any) {
+        } catch (err) {
             console.error('Error searching articles:', err);
             setError('Failed to fetch articles. Please try again.');
         } finally {
@@ -75,7 +75,7 @@ export default function ArticlesPage() {
                 description: 'Your new article is now available.',
             });
 
-        } catch (err: any)
+        } catch (err)
         {
             console.error('Error generating article:', err);
             setError('Failed to generate a new article. The AI may be busy, please try again later.');

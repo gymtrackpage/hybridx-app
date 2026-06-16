@@ -12,7 +12,7 @@ import html2canvas from 'html2canvas';
 
 import { auth } from '@/lib/firebase';
 import type { Program, User, PaceZone, WorkoutDay } from '@/models/types';
-import { getProgramClient } from '@/services/program-service-client';
+import { getProgramClient, getPersonalProgram } from '@/services/program-service-client'; // IMPORTED getPersonalProgram
 import { getUserClient, updateUser } from '@/services/user-service-client';
 import { useToast } from '@/hooks/use-toast';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
@@ -56,20 +56,29 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
       }
 
       try {
-        const fetchedProgram = await getProgramClient(id);
-        
-        if (!fetchedProgram) {
-          toast({ title: 'Error', description: 'Program not found.', variant: 'destructive' });
-          router.push('/programs');
-          return;
-        }
-        setProgram(fetchedProgram);
+        // CHANGED: Try global, then personal program view support
+        let fetchedProgram = await getProgramClient(id);
         
         const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
               const currentUser = await getUserClient(firebaseUser.uid);
               setUser(currentUser);
-              if (currentUser && fetchedProgram.programType === 'running') {
+
+              // If global fetch failed, try personal since we have the userId now
+              if (!fetchedProgram) {
+                  fetchedProgram = await getPersonalProgram(firebaseUser.uid, id);
+              }
+
+              if (!fetchedProgram) {
+                toast({ title: 'Error', description: 'Program not found.', variant: 'destructive' });
+                router.push('/programs');
+                return;
+              }
+              setProgram(fetchedProgram);
+
+              // CHANGED: ALWAYS calculate paces if user has benchmark profile, 
+              // regardless of programType. This is safer and avoids mapping bugs.
+              if (currentUser) {
                   const paces = calculateTrainingPaces(currentUser);
                   setTrainingPaces(paces);
               }
@@ -357,7 +366,8 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
     return null; // Should be redirected by useEffect
   }
   
-  const programNeedsRunningPaces = program.programType === 'running' || program.programType === 'hybrid';
+  // CHANGED: Enable pace rendering if program has runs, regardless of programType tag
+  const programHasRuns = program.workouts.some(w => hasRuns(w));
 
   return (
     <>
@@ -386,7 +396,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
               <CardDescription>{program.description}</CardDescription>
           </CardHeader>
           <CardContent>
-            {programNeedsRunningPaces && !trainingPaces && (
+            {programHasRuns && !trainingPaces && (
                  <div className="mb-4 p-4 border border-yellow-400 bg-yellow-50 rounded-md text-yellow-800 flex items-start gap-3">
                     <AlertTriangle className="h-5 w-5 mt-0.5" />
                     <div>

@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         { merge: true },
       );
       stored++;
-    } catch (e: any) {
+    } catch (e) {
       logger.error('Garmin webhook: failed to store activity', {
         activityId: act.activityId,
         err: e.message,

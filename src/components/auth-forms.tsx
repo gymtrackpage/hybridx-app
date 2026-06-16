@@ -138,7 +138,7 @@ export function LoginForm() {
           // in proxy environments (e.g. Firebase Studio dev preview).
           window.location.href = '/dashboard';
       }
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Login error:', error);
       let description = 'An unexpected error occurred. Please try again.';
       if (error.code === AuthErrorCodes.INVALID_LOGIN_CREDENTIALS) {
@@ -415,7 +415,7 @@ export function SignupForm() {
       // Send to setup page to install PWA + enable notifications before dashboard
       router.push('/setup');
 
-    } catch (error: any) {
+    } catch (error) {
         logger.error('Signup error:', error);
         let description = "An unexpected error occurred. Please try again.";
         if (error.code === AuthErrorCodes.EMAIL_EXISTS) {

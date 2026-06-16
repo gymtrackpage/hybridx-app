@@ -28,7 +28,7 @@ export async function POST(_req: NextRequest) {
       await axios.delete(`${GARMIN_API_BASE}/wellness-api/rest/user/registration`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-    } catch (err: any) {
+    } catch (err) {
       logger.warn('Garmin de-registration failed (continuing):', err.message);
     }
 
@@ -39,7 +39,7 @@ export async function POST(_req: NextRequest) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     logger.error('Garmin disconnect error:', err.message);
     return NextResponse.json(
       { error: err.message || 'Failed to disconnect Garmin.' },

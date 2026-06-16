@@ -129,7 +129,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
             // Even legacy CSVs may carry an `id` column from a hand edit.
             await resolveTargetProgram(rows[0]?.id);
           }
-        } catch (e: any) {
+        } catch (e) {
           setError(e.message);
         } finally {
           setIsLoading(false);

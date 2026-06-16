@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
       message: `Added ${totalGrip} grip strength sessions across ${results.length} programs`
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Grip work enhancement error:', error);
     return NextResponse.json(
       { success: false, error: error.message },

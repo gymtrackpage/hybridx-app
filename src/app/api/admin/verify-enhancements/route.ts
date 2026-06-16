@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       sampleWorkout: firstWorkout
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Verification error:', error);
     return NextResponse.json(
       { success: false, error: error.message },

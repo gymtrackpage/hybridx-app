@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
                 message: `Found ${basicSnapshot.docs.length} documents`
             });
             console.log('✅ Basic access successful:', basicSnapshot.docs.length, 'documents');
-        } catch (error: any) {
+        } catch (error) {
             results.tests.push({
                 test: 'Basic Collection Access',
                 status: 'error',
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
                 message: `Successfully ordered by email: ${emailOrderSnapshot.docs.length} documents`
             });
             console.log('✅ Email ordering successful:', emailOrderSnapshot.docs.length, 'documents');
-        } catch (error: any) {
+        } catch (error) {
             results.tests.push({
                 test: 'Order by Email',
                 status: 'error',
@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
             }
 
             console.log(`📊 Email field analysis: ${docsWithEmail} with email, ${docsWithoutEmail} without`);
-        } catch (error: any) {
+        } catch (error) {
             results.tests.push({
                 test: 'Email Field Analysis',
                 status: 'error',
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
                 documentCount: idOrderSnapshot.docs.length,
                 message: 'Document ID ordering works as fallback'
             });
-        } catch (error: any) {
+        } catch (error) {
             results.tests.push({
                 test: 'Order by Document ID',
                 status: 'error',
@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
                     status: 'success',
                     message: `${field} field is indexed and can be used for ordering`
                 });
-            } catch (error: any) {
+            } catch (error) {
                 results.tests.push({
                     test: `Order by ${field}`,
                     status: 'error',

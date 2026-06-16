@@ -104,7 +104,7 @@ export function TrainingLoadCard() {
 
       const data: TrainingSummary = await res.json();
       setSummary(data);
-    } catch (err: any) {
+    } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);

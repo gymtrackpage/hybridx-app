@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       }
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('View workout error:', error);
     return NextResponse.json(
       { success: false, error: error.message },

@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
       workouts: analysis
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Analysis error:', error);
     return NextResponse.json(
       { success: false, error: error.message },

@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
     const summary = computeTrainingFormSummary(activities);
 
     return NextResponse.json(summary);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Training form API error:', error.message);
     let status = 500;
     let message = 'Failed to compute training form data.';

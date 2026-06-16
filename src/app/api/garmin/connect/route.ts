@@ -61,7 +61,7 @@ export async function POST(_req: NextRequest) {
     });
 
     return NextResponse.json({ url: authUrl });
-  } catch (err: any) {
+  } catch (err) {
     logger.error('Garmin connect error:', err.message);
     if (
       err.code === 'auth/session-cookie-expired' ||
