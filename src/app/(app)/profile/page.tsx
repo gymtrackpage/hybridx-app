@@ -308,9 +308,8 @@ export default function ProfilePage() {
         toast({ title: 'Success', description: 'Your running profile has been updated.' });
     } catch (error) {
         console.error("Detailed error updating running profile:", error);
-        toast({ title: 'Error', description: `Failed to update running profile: ${error instanceof Error ? error.message : String(error)}'
-    }
-  };
+        toast({ description: `Failed to update running profile: ${error instanceof Error ? error.message : String(error)}`})
+  }
 
   const handleNotificationSubmit = async (data: NotificationFormData) => {
     if (!user) return;
@@ -323,7 +322,7 @@ export default function ProfilePage() {
         toast({ title: 'Success', description: 'Your notification time has been updated.' });
     } catch (error) {
         console.error("Error updating notification time:", error);
-        toast({ title: 'Error', description: `Failed to update notification time: ${error.message}`, variant: 'destructive' });
+        toast({ title: 'Error', description: `Failed to update notification time: ${error instanceof Error ? error.message : String(error)}`})
     }
   };
 
@@ -372,7 +371,7 @@ export default function ProfilePage() {
       console.error('Error initiating Strava auth:', error);
       toast({
         title: 'Connection Error',
-        description: error.message,
+        description: error instanceof Error ? error.message : String(error),
         variant: 'destructive',
       });
     }
