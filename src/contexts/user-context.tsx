@@ -8,7 +8,7 @@ import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
 import { getTodaysOneOffSession, getTodaysProgramSession, getOrCreateWorkoutSession, getAllUserSessions, type WorkoutSession } from '@/services/session-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
-import type { User, Program, Workout, RunningWorkout } from '@/models/types';
+import type { User, Program, Workout, RunningWorkout, WorkoutDay } from '@/models/types';
 import { calculateTrainingPaces } from '@/lib/pace-utils';
 import { calculateStreakData, type StreakData } from '@/utils/streak-calculator';
 import { OfflineCache } from '@/utils/offline-cache';
@@ -17,7 +17,7 @@ import { logger } from '@/lib/logger';
 interface UserContextType {
     user: User | null;
     program: Program | null;
-    todaysWorkout: { day: number; workout: Workout | RunningWorkout | null } | null;
+    todaysWorkout: { day: number; workout: Workout | RunningWorkout | null; sessions: WorkoutDay[] } | null;
     todaysSession: WorkoutSession | null;
     allSessions: WorkoutSession[];
     streakData: StreakData;
@@ -31,7 +31,7 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export function UserProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [program, setProgram] = useState<Program | null>(null);
-    const [todaysWorkout, setTodaysWorkout] = useState<{ day: number; workout: Workout | RunningWorkout | null } | null>(null);
+    const [todaysWorkout, setTodaysWorkout] = useState<{ day: number; workout: Workout | RunningWorkout | null; sessions: WorkoutDay[] } | null>(null);
     const [todaysSession, setTodaysSession] = useState<WorkoutSession | null>(null);
     const [allSessions, setAllSessions] = useState<WorkoutSession[]>([]);
     const [streakData, setStreakData] = useState<StreakData>({ currentStreak: 0, longestStreak: 0, totalWorkouts: 0, thisWeekWorkouts: 0, thisMonthWorkouts: 0 });
@@ -97,6 +97,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 currentWorkoutInfo = {
                     day: 0,
                     workout: oneOffSession.workoutDetails as Workout,
+                    sessions: oneOffSession.workoutDetails ? [oneOffSession.workoutDetails as Workout] : [],
                 };
             } else if (currentUser.programId && currentUser.startDate) {
                 if (currentUser.customProgram) {
@@ -112,16 +113,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                     // Priority 2: Check for an existing program session (which could be swapped)
                     const programSession = await getTodaysProgramSession(userId, today);
 
+                    const scheduledWorkoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, today);
+
                     if (programSession && programSession.workoutDetails) {
                         workoutSession = programSession;
                         // Use the details from the session itself, which will reflect any swaps
                         currentWorkoutInfo = {
-                            day: getWorkoutForDay(currentProgram, currentUser.startDate, today).day,
+                            day: scheduledWorkoutInfo.day,
                             workout: programSession.workoutDetails,
+                            sessions: scheduledWorkoutInfo.sessions,
                         };
                     } else {
                         // Priority 3: No session exists, so create one based on the original program schedule
-                        const scheduledWorkoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, today);
                         if (scheduledWorkoutInfo.workout) {
                             // Create the session so Workout page has it immediately
                             workoutSession = await getOrCreateWorkoutSession(userId, currentProgram.id, today, scheduledWorkoutInfo.workout);

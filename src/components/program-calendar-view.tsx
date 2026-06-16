@@ -11,7 +11,12 @@ interface ProgramCalendarViewProps {
 
 export function ProgramCalendarView({ program }: ProgramCalendarViewProps) {
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const workoutsByDay = new Map(program.workouts.map(w => [w.day, w]));
+  const workoutsByDay = program.workouts.reduce((map, w) => {
+    const list = map.get(w.day) ?? [];
+    list.push(w);
+    map.set(w.day, list);
+    return map;
+  }, new Map<number, typeof program.workouts>());
   const maxDay = program.workouts.reduce((max, w) => Math.max(max, w.day), 0);
   const totalWeeks = Math.ceil(maxDay / 7);
 
@@ -99,9 +104,12 @@ export function ProgramCalendarView({ program }: ProgramCalendarViewProps) {
             <div className="grid grid-cols-7 gap-2">
               {Array.from({ length: 7 }).map((_, dayIndex) => {
                 const dayNumberInGrid = weekIndex * 7 + dayIndex + 1;
-                const workout = dayNumberInGrid <= maxDay ? workoutsByDay.get(dayNumberInGrid) : null;
-                const isRestDay = workout?.title.toLowerCase().includes('rest') || workout?.title.toLowerCase().includes('recovery');
-                
+                const daySessions = dayNumberInGrid <= maxDay ? (workoutsByDay.get(dayNumberInGrid) ?? null) : null;
+                const isRestDay = daySessions?.length === 1 && (
+                  daySessions[0].title.toLowerCase().includes('rest') ||
+                  daySessions[0].title.toLowerCase().includes('recovery')
+                );
+
                 return (
                   <div
                     key={`day-${dayNumberInGrid}`}
@@ -114,26 +122,30 @@ export function ProgramCalendarView({ program }: ProgramCalendarViewProps) {
                       )}
                     </div>
 
-                    {workout ? (
+                    {daySessions ? (
                       isRestDay ? (
                         <div className="flex-grow flex items-center justify-center">
-                          <p className="text-sm font-medium text-muted-foreground">{workout.title}</p>
+                          <p className="text-sm font-medium text-muted-foreground">{daySessions[0].title}</p>
                         </div>
                       ) : (
-                        <div className="flex-grow space-y-2">
-                          <h3 className="text-sm font-semibold text-primary">{workout.title}</h3>
-                          <ul className="space-y-1.5 text-xs text-muted-foreground">
-                            {hasRuns(workout) && workout.runs.map((run, i) => (
-                              <li key={`run-${i}`}>
-                                <strong className="text-foreground/90">{run.type}:</strong> {run.distance}km — {run.description}
-                              </li>
-                            ))}
-                            {hasExercises(workout) && workout.exercises.map((exercise, i) => (
-                              <li key={`ex-${i}`}>
-                                <strong className="text-foreground/90">{exercise.name}:</strong> {exercise.details}
-                              </li>
-                            ))}
-                          </ul>
+                        <div className="flex-grow space-y-3">
+                          {daySessions.map((workout, si) => (
+                            <div key={`session-${si}`} className={si > 0 ? 'pt-2 border-t border-border/60' : ''}>
+                              <h3 className="text-sm font-semibold text-primary mb-1">{workout.title}</h3>
+                              <ul className="space-y-1.5 text-xs text-muted-foreground">
+                                {hasRuns(workout) && workout.runs.map((run, i) => (
+                                  <li key={`run-${i}`}>
+                                    <strong className="text-foreground/90">{run.type}:</strong> {run.distance}km — {run.description}
+                                  </li>
+                                ))}
+                                {hasExercises(workout) && workout.exercises.map((exercise, i) => (
+                                  <li key={`ex-${i}`}>
+                                    <strong className="text-foreground/90">{exercise.name}:</strong> {exercise.details}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
                         </div>
                       )
                     ) : (

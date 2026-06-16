@@ -13,32 +13,33 @@ import { collection, query, where, getDocs, orderBy, limit } from 'firebase/fire
  * @returns An object containing the day number of the program and the workout object, or null if no workout is scheduled.
  */
 export function getWorkoutForDay(
-    program: Pick<Program, 'workouts'>, 
-    startDate: Date, 
+    program: Pick<Program, 'workouts'>,
+    startDate: Date,
     targetDate: Date
-): { day: number; workout: WorkoutDay | null; } {
+): { day: number; workout: WorkoutDay | null; sessions: WorkoutDay[] } {
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const target = new Date(targetDate);
     target.setHours(0, 0, 0, 0);
 
     const dayOfProgram = differenceInDays(target, start) + 1;
-    
+
     if (dayOfProgram < 1) {
-        return { day: dayOfProgram, workout: null };
+        return { day: dayOfProgram, workout: null, sessions: [] };
     }
 
     const workouts = program.workouts;
     const cycleLength = Math.max(...workouts.map(w => w.day), 0);
 
     if (cycleLength === 0) {
-        return { day: dayOfProgram, workout: null };
+        return { day: dayOfProgram, workout: null, sessions: [] };
     }
-    
-    const dayInCycle = ((dayOfProgram - 1) % cycleLength) + 1;
-    const workoutForDay = workouts.find(w => w.day === dayInCycle);
 
-    return { day: dayOfProgram, workout: workoutForDay || null };
+    const dayInCycle = ((dayOfProgram - 1) % cycleLength) + 1;
+    const sessions = workouts.filter(w => w.day === dayInCycle);
+    const workoutForDay = sessions[0] ?? null;
+
+    return { day: dayOfProgram, workout: workoutForDay, sessions };
 }
 
 /**

@@ -96,8 +96,8 @@ export function ProgramPreviewDialog({ programId, programName }: ProgramPreviewD
                   <div className="grid gap-3 sm:grid-cols-2">
                     {workoutsByWeek[week]
                       .sort((a, b) => a.day - b.day)
-                      .map((workout) => (
-                      <div key={workout.day} className="bg-muted/50 p-3 rounded-lg border text-sm">
+                      .map((workout, wi) => (
+                      <div key={`${workout.day}-${wi}`} className="bg-muted/50 p-3 rounded-lg border text-sm">
                         <div className="font-semibold mb-1 flex justify-between">
                             <span>Day {workout.day}</span>
                             <span className="text-xs text-muted-foreground uppercase tracking-wider">

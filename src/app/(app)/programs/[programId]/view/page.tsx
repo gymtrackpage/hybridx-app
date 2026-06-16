@@ -119,7 +119,12 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
         const margin = 10;
         const contentWidth = pageWidth - (margin * 2);
 
-        const workoutsByDay = new Map(program.workouts.map(w => [w.day, w]));
+        const workoutsByDay = program.workouts.reduce((map, w) => {
+            const list = map.get(w.day) ?? [];
+            list.push(w);
+            map.set(w.day, list);
+            return map;
+        }, new Map<number, typeof program.workouts>());
         const maxDay = program.workouts.reduce((max, w) => Math.max(max, w.day), 0);
         const totalWeeks = Math.ceil(maxDay / 7);
 
@@ -180,7 +185,7 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
 
                 for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
                     const currentDay = weekIndex * 7 + dayIndex + 1;
-                    const workout = currentDay <= maxDay ? workoutsByDay.get(currentDay) : null;
+                    const daySessions = currentDay <= maxDay ? (workoutsByDay.get(currentDay) ?? null) : null;
 
                     const dayCell = document.createElement('div');
                     dayCell.style.cssText = `
@@ -208,13 +213,15 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                     `;
                     dayCell.appendChild(dayNumber);
 
-                    if (workout) {
-                        const isRestDay = workout.title.toLowerCase().includes('rest') || 
-                                        workout.title.toLowerCase().includes('recovery');
+                    if (daySessions) {
+                        const isRestDay = daySessions.length === 1 && (
+                            daySessions[0].title.toLowerCase().includes('rest') ||
+                            daySessions[0].title.toLowerCase().includes('recovery')
+                        );
 
                         if (isRestDay) {
                             const restText = document.createElement('div');
-                            restText.textContent = workout.title;
+                            restText.textContent = daySessions[0].title;
                             restText.style.cssText = `
                                 display: flex;
                                 align-items: center;
@@ -227,41 +234,47 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
                             `;
                             dayCell.appendChild(restText);
                         } else {
-                            const workoutTitle = document.createElement('div');
-                            workoutTitle.textContent = workout.title;
-                            workoutTitle.style.cssText = `
-                                font-size: 9px;
-                                font-weight: bold;
-                                margin-bottom: 4px;
-                                color: #008080;
-                            `;
-                            dayCell.appendChild(workoutTitle);
-
-                            const exerciseList = document.createElement('ul');
-                            exerciseList.style.cssText = `
-                                margin: 0;
-                                padding: 0;
-                                list-style-position: inside;
-                            `;
-                            // Render run segments first, then exercises
-                            (hasRuns(workout) ? workout.runs : []).forEach(run => {
-                                const item = document.createElement('li');
-                                item.innerHTML = `<strong style="color: #2563eb;">${run.type}:</strong> ${run.distance}km`;
-                                item.style.cssText = `font-size: 8px; line-height: 1.3; margin-bottom: 2px; color: #52525b;`;
-                                exerciseList.appendChild(item);
-                            });
-                            (workout.exercises ?? []).forEach(exercise => {
-                                const exerciseItem = document.createElement('li');
-                                exerciseItem.innerHTML = `<strong style="color: #18181b;">${exercise.name}:</strong> ${exercise.details}`;
-                                exerciseItem.style.cssText = `
-                                font-size: 8px;
-                                line-height: 1.3;
-                                margin-bottom: 2px;
-                                color: #52525b;
+                            daySessions.forEach((workout, si) => {
+                                if (si > 0) {
+                                    const divider = document.createElement('div');
+                                    divider.style.cssText = `border-top: 1px solid #e4e4e7; margin: 4px 0;`;
+                                    dayCell.appendChild(divider);
+                                }
+                                const workoutTitle = document.createElement('div');
+                                workoutTitle.textContent = workout.title;
+                                workoutTitle.style.cssText = `
+                                    font-size: 9px;
+                                    font-weight: bold;
+                                    margin-bottom: 4px;
+                                    color: #008080;
                                 `;
-                                exerciseList.appendChild(exerciseItem);
+                                dayCell.appendChild(workoutTitle);
+
+                                const exerciseList = document.createElement('ul');
+                                exerciseList.style.cssText = `
+                                    margin: 0;
+                                    padding: 0;
+                                    list-style-position: inside;
+                                `;
+                                (hasRuns(workout) ? workout.runs : []).forEach(run => {
+                                    const item = document.createElement('li');
+                                    item.innerHTML = `<strong style="color: #2563eb;">${run.type}:</strong> ${run.distance}km`;
+                                    item.style.cssText = `font-size: 8px; line-height: 1.3; margin-bottom: 2px; color: #52525b;`;
+                                    exerciseList.appendChild(item);
+                                });
+                                (workout.exercises ?? []).forEach(exercise => {
+                                    const exerciseItem = document.createElement('li');
+                                    exerciseItem.innerHTML = `<strong style="color: #18181b;">${exercise.name}:</strong> ${exercise.details}`;
+                                    exerciseItem.style.cssText = `
+                                    font-size: 8px;
+                                    line-height: 1.3;
+                                    margin-bottom: 2px;
+                                    color: #52525b;
+                                    `;
+                                    exerciseList.appendChild(exerciseItem);
+                                });
+                                dayCell.appendChild(exerciseList);
                             });
-                            dayCell.appendChild(exerciseList);
                         }
                     }
                     gridDiv.appendChild(dayCell);

@@ -199,7 +199,10 @@ export function rowsToProgram(rows: Record<string, string>[]): ParsedProgram {
   const useSessionType = Object.prototype.hasOwnProperty.call(first, 'sessionType');
 
   type Bucket = { day: number; title: string; exercises: Exercise[]; runs: PlannedRun[] };
-  const buckets = new Map<number, Bucket>();
+  // Key is `${day}::${title}` so multiple titled sessions on the same day stay separate.
+  const buckets = new Map<string, Bucket>();
+  // Preserve insertion order so sessions within a day appear in CSV order.
+  const bucketKeys: string[] = [];
 
   rows.forEach((row, idx) => {
     const lineNum = idx + 2; // +1 for header, +1 for 1-indexed
@@ -211,10 +214,12 @@ export function rowsToProgram(rows: Record<string, string>[]): ParsedProgram {
     const title = (row.workoutTitle ?? '').trim();
     if (!title) throw new Error(`Row ${lineNum}: workoutTitle is required.`);
 
-    let bucket = buckets.get(day);
+    const bucketKey = `${day}::${title}`;
+    let bucket = buckets.get(bucketKey);
     if (!bucket) {
       bucket = { day, title, exercises: [], runs: [] };
-      buckets.set(day, bucket);
+      buckets.set(bucketKey, bucket);
+      bucketKeys.push(bucketKey);
     }
 
     if (useSessionType) {
@@ -224,7 +229,7 @@ export function rowsToProgram(rows: Record<string, string>[]): ParsedProgram {
     }
   });
 
-  const workouts: WorkoutDay[] = Array.from(buckets.values())
+  const workouts: WorkoutDay[] = bucketKeys.map(k => buckets.get(k)!)
     .sort((a, b) => a.day - b.day)
     .map((b) => {
       if (b.runs.length > 0 && b.exercises.length === 0) {
