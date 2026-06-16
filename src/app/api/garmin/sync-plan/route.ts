@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     let accessToken: string;
     try {
       accessToken = await getValidGarminToken(userId);
-    } catch (e) { // FIXED: Removed ': any'
+    } catch (e) {
       const error = e as any;
       if (error.code === 'GARMIN_NOT_CONNECTED') {
         return NextResponse.json(
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
       for (const entry of Object.values(prevSync.workouts)) {
         try {
           await deleteWorkout(accessToken, entry.workoutId);
-        } catch (e) { // FIXED: Removed ': any'
+        } catch (e) {
           const error = e as any;
           logger.warn('Cleanup of old Garmin workout failed:', error.message);
         }
@@ -116,20 +116,6 @@ export async function POST(req: NextRequest) {
     const results: Array<{ day: number; status: string; workoutId?: string }> = [];
 
     for (const w of targetWorkouts) {
-      const dayKey = String(w.day);
-      const day = workoutToDay(w, user.personalRecords);
-      const garminWorkout = mapWorkoutDay(day);
-
-      // Skip rest / welcome / race-day. Also remove any prior push for
-      // this day in case it was previously a workout that's now rest.
-      if (!garminWorkout) {
-        const stale = prevSync?.workouts[dayKey];
-        if (stale) {
-          try {
-            await deleteWorkout(accessToken, stale.workoutId);
-          } catch (e: any) {
-            logger.warn(`Cleanup of stale workout day ${w.day} failed:`, e.message);
-          }
       const dayStr = String(w.day);
 
       // Remove all stale Garmin workouts for this day. Supports both the
@@ -140,7 +126,7 @@ export async function POST(req: NextRequest) {
       for (const key of staleKeys) {
         try {
           await deleteWorkout(accessToken, prevSync!.workouts[key].workoutId);
-        } catch (e) { // FIXED: Removed ': any'
+        } catch (e) {
           const error = e as any;
           logger.warn(`Replace: delete day ${w.day} (key ${key}) failed:`, error.message);
         }
@@ -171,7 +157,7 @@ export async function POST(req: NextRequest) {
           const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
           newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
           results.push({ day: w.day, status: 'pushed', workoutId });
-        } catch (e) { // FIXED: Removed ': any'
+        } catch (e) {
           const error = e as any;
           logger.error(`Garmin push failed for day ${w.day} session ${sessionIdx}:`, {
             message: error.message,

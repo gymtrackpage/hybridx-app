@@ -19,7 +19,7 @@ import {
 } from '@/lib/garmin/training-api';
 import { getProgram } from '@/services/program-service';
 import { logger } from '@/lib/logger';
-import type { GarminPlanSync, PersonalRecords } from '@/models/types';
+import type { GarminPlanSync } from '@/models/types';
 import { Timestamp } from 'firebase-admin/firestore';
 
 export const maxDuration = 300;
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
       let accessToken: string;
       try {
         accessToken = await getValidGarminToken(userId);
-      } catch (e) { // FIXED: Removed ': any'
+      } catch (e) {
         const error = e as any;
         logger.warn(`Garmin cron: token refresh failed for ${userId}:`, error.code);
         results.skipped++;
@@ -113,19 +113,7 @@ export async function GET(request: Request) {
 
       let userPushed = 0;
 
-      const personalRecords = data.personalRecords as PersonalRecords | undefined;
-
       for (const w of targetWorkouts) {
-        const dayKey = String(w.day);
-        const garminWorkout = mapWorkoutDay(workoutToDay(w, personalRecords));
-
-        if (!garminWorkout) {
-          // Remove stale push for this day if it was previously a workout.
-          const stale = prevSync?.workouts[dayKey];
-          if (stale) {
-            try { await deleteWorkout(accessToken, stale.workoutId); } catch { /* ignore */ }
-          }
-          continue;
         const dayStr = String(w.day);
 
         // Clean up all stale entries for this day (supports old single-key and
@@ -151,7 +139,7 @@ export async function GET(request: Request) {
             const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
             newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
             userPushed++;
-          } catch (e) { // FIXED: Removed ': any'
+          } catch (e) {
             const error = e as any;
             logger.error(`Garmin cron: push failed day ${w.day} session ${sessionIdx} user ${userId}:`, error.message);
           }
@@ -162,7 +150,7 @@ export async function GET(request: Request) {
       results.synced++;
       logger.log(`Garmin cron: synced ${userPushed} workouts for user ${userId}`);
 
-    } catch (err) { // FIXED: Removed ': any'
+    } catch (err) {
       const error = err as any;
       logger.error(`Garmin cron: error for user ${userId}:`, error.message);
       results.errors++;
