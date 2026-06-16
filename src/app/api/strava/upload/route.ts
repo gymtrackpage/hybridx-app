@@ -166,16 +166,16 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     logger.error('Strava upload error:', {
       message: error instanceof Error ? error.message : String(error),
-      response: error.response?.data,
-      status: error.response?.status
+      response: (error as any).response?.data,
+      status: (error as any).response?.status
     });
 
-    if (error.response?.status === 401) {
+    if ((error as any).response?.status === 401) {
       return NextResponse.json({ error: 'Strava authorization expired' }, { status: 401 });
     } else {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Failed to upload to Strava',
-        details: error.response?.data?.message || error instanceof Error ? error.message : String(error)
+        details: (error as any).response?.data?.message || (error instanceof Error ? error.message : String(error))
       }, { status: 500 });
     }
   }

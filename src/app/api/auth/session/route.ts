@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
         return response;
 
     } catch (error) {
-        logger.error('Session cookie creation failed:', (error as any).code, error.message);
+        logger.error('Session cookie creation failed:', (error as any).code, error instanceof Error ? error.message : String(error));
         return NextResponse.json({ error: 'Failed to create session' }, { status: 401 });
     }
 }

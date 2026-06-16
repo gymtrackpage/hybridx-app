@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
         message = 'Your session has expired. Please log in again.';
     }
 
-    logger.error('Strava activities fetch error:', { message: error.message, code: (error as any).code });
+    logger.error('Strava activities fetch error:', { message: error instanceof Error ? error.message : String(error), code: (error as any).code });
     return NextResponse.json({ error: message }, { status });
   }
 }

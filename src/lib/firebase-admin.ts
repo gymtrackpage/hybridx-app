@@ -22,7 +22,7 @@ function initializeFirebaseAdmin(): App {
         });
         console.log('Firebase Admin SDK initialized successfully.');
     } catch (e) {
-        throw new Error(`Failed to parse or use FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
+        throw new Error(`Failed to parse or use FIREBASE_SERVICE_ACCOUNT_KEY: ${e instanceof Error ? e.message : String(e)}`);
     }
 
   } else {

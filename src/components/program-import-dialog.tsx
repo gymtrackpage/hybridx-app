@@ -130,7 +130,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
             await resolveTargetProgram(rows[0]?.id);
           }
         } catch (e) {
-          setError(e.message);
+          setError(e instanceof Error ? e.message : String(e));
         } finally {
           setIsLoading(false);
         }

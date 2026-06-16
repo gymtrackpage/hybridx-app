@@ -63,7 +63,7 @@ export async function getValidStravaToken(userId: string): Promise<string> {
       console.log(`✅ Strava token for user ${userId} refreshed successfully`);
       return newTokens.accessToken;
     } catch (err) {
-      console.error(`❌ Strava token refresh failed for user ${userId}:`, err.response?.data || err.message);
+      console.error(`❌ Strava token refresh failed for user ${userId}:`, (err as any).response?.data || (err instanceof Error ? err.message : String(err)));
       throw Object.assign(
         new Error('Strava token refresh failed.'),
         { code: 'STRAVA_REFRESH_FAILED', cause: err },

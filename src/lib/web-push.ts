@@ -49,10 +49,10 @@ export async function sendPushToSubscription(
     return true;
   } catch (err) {
     // 410 Gone = subscription expired/unsubscribed
-    if (err?.statusCode === 410 || err?.statusCode === 404) {
+    if ((err as any)?.statusCode === 410 || (err as any)?.statusCode === 404) {
       return false; // caller should clean up the subscription
     }
-    console.error('Push send error:', err?.statusCode, err?.body);
+    console.error('Push send error:', (err as any)?.statusCode, (err as any)?.body);
     return false;
   }
 }

@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       logger.error('Garmin deregistration: clear failed', {
         garminUserId: entry.userId,
-        err: e.message,
+        err: e instanceof Error ? e.message : String(e),
       });
     }
   }

@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
       const garminUserId = await fetchGarminUserId(tokens.accessToken);
       if (garminUserId) tokens.garminUserId = garminUserId;
     } catch (e) {
-      logger.warn('Garmin user-id fetch failed (continuing):', e.message);
+      logger.warn('Garmin user-id fetch failed (continuing):', e instanceof Error ? e.message : String(e));
     }
 
     await userRef.update({
@@ -117,12 +117,12 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     logger.error('Garmin token exchange failed:', {
       message: err instanceof Error ? err.message : String(err),
-      response: err.response?.data,
+      response: (err as any).response?.data,
     });
     const msg =
-      err.response?.data?.error_description ||
-      err.response?.data?.error ||
-      err instanceof Error ? err.message : String(err) ||
+      (err as any).response?.data?.error_description ||
+      (err as any).response?.data?.error ||
+      (err instanceof Error ? err.message : String(err)) ||
       'Failed to connect Garmin.';
     return back({ 'garmin-error': msg });
   }

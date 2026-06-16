@@ -77,12 +77,12 @@ export async function GET(
   } catch (error) {
     console.error(`❌ Error fetching Strava activity ${activityId}:`, {
       message: error instanceof Error ? error.message : String(error),
-      status: error.response?.status,
-      data: error.response?.data,
+      status: (error as any).response?.status,
+      data: (error as any).response?.data,
     });
-    
-    const status = error.response?.status || 500;
-    const message = error.response?.data?.message || 'Failed to fetch activity details from Strava.';
+
+    const status = (error as any).response?.status || 500;
+    const message = (error as any).response?.data?.message || 'Failed to fetch activity details from Strava.';
     
     return NextResponse.json({ error: message }, { status });
   }
