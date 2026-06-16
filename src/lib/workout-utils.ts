@@ -35,8 +35,11 @@ export function getWorkoutForDay(
         return { day: dayOfProgram, workout: null, sessions: [] };
     }
 
-    const dayInCycle = ((dayOfProgram - 1) % cycleLength) + 1;
-    const sessions = workouts.filter(w => w.day === dayInCycle);
+    if (dayOfProgram > cycleLength) {
+        return { day: dayOfProgram, workout: null, sessions: [] };
+    }
+
+    const sessions = workouts.filter(w => w.day === dayOfProgram);
     const workoutForDay = sessions[0] ?? null;
 
     return { day: dayOfProgram, workout: workoutForDay, sessions };
