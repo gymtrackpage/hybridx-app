@@ -77,7 +77,7 @@ export async function getValidGarminToken(userId: string): Promise<string> {
 
     await updateUserAdmin(userId, { garmin: newTokens });
     return newTokens.accessToken;
-  } catch (err: any) {
+  } catch (err) {
     logger.error('Garmin token refresh failed:', {
       userId,
       err: err.response?.data || err.message,

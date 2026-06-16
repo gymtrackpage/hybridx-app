@@ -138,7 +138,7 @@ export async function diagnoseAuth() {
                 allCookies: typeof document !== 'undefined' ? document.cookie : 'N/A (server-side)',
             },
         };
-    } catch (error: any) {
+    } catch (error) {
         console.error('Auth diagnosis failed:', error);
         return {
             error: true,

@@ -133,7 +133,7 @@ export function LinkStravaActivityDialog({
         // Auto-select the best match if it's clearly from the same day
         const best = sorted[0];
         if (best && isGoodMatch(best, session)) setSelectedActivity(best);
-      } catch (error: any) {
+      } catch (error) {
         logger.error('Error fetching Strava activities:', error);
         toast({ title: 'Error Loading Activities', description: error.message, variant: 'destructive' });
         setIsOpen(false);
@@ -157,7 +157,7 @@ export function LinkStravaActivityDialog({
       await linkStravaActivityToSession(session.id, selectedActivity);
       toast({ title: 'Linked!', description: `"${session.workoutTitle}" linked to "${selectedActivity.name}".` });
       onLinkSuccess();
-    } catch (error: any) {
+    } catch (error) {
       toast({ title: 'Error', description: error.message || 'Failed to link.', variant: 'destructive' });
     } finally {
       setLinking(false);

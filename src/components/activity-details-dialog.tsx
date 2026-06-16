@@ -59,7 +59,7 @@ export function ActivityDetailsDialog({ activityId, isOpen, setIsOpen }: Activit
 
         const data = await response.json();
         setActivity(data);
-      } catch (error: any) {
+      } catch (error) {
         toast({
           title: 'Error',
           description: error.message,

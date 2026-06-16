@@ -22,7 +22,7 @@ export async function GET() {
       totalPrograms: programs.length
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('List programs error:', error);
     return NextResponse.json(
       { success: false, error: error.message },

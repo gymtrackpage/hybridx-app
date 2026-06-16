@@ -96,7 +96,7 @@ export function WeeklyAnalysisDialog({ userId, trigger }: WeeklyAnalysisDialogPr
 
       // Refresh the page to show updated workouts
       window.location.reload();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error applying adjustments:', error);
       toast({
         title: 'Error',

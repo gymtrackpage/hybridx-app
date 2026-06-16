@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
     try {
       const garminUserId = await fetchGarminUserId(tokens.accessToken);
       if (garminUserId) tokens.garminUserId = garminUserId;
-    } catch (e: any) {
+    } catch (e) {
       logger.warn('Garmin user-id fetch failed (continuing):', e.message);
     }
 
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
     });
 
     return back({ garmin: 'success' });
-  } catch (err: any) {
+  } catch (err) {
     logger.error('Garmin token exchange failed:', {
       message: err.message,
       response: err.response?.data,

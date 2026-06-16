@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
       stravaUrl: `https://www.strava.com/activities/${stravaActivityId}`
     });
 
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Strava upload error:', {
       message: error.message,
       response: error.response?.data,

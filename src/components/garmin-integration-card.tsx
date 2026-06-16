@@ -55,7 +55,7 @@ export function GarminIntegrationCard({ isConnected, onChange }: Props) {
         description: 'Please approve the connection in Garmin Connect.',
       });
       window.location.href = data.url;
-    } catch (e: any) {
+    } catch (e) {
       toast({ title: 'Connection error', description: e.message, variant: 'destructive' });
       setConnecting(false);
     }
@@ -73,7 +73,7 @@ export function GarminIntegrationCard({ isConnected, onChange }: Props) {
       if (!res.ok) throw new Error(data.error || 'Failed to disconnect.');
       toast({ title: 'Disconnected', description: 'Garmin account unlinked.' });
       onChange?.();
-    } catch (e: any) {
+    } catch (e) {
       toast({ title: 'Disconnect failed', description: e.message, variant: 'destructive' });
     } finally {
       setDisconnecting(false);
@@ -96,7 +96,7 @@ export function GarminIntegrationCard({ isConnected, onChange }: Props) {
         title: 'Synced to Garmin',
         description: `Pushed ${data.pushed}, skipped ${data.skipped}, failed ${data.failed}.`,
       });
-    } catch (e: any) {
+    } catch (e) {
       toast({ title: 'Sync failed', description: e.message, variant: 'destructive' });
     } finally {
       setSyncing(false);

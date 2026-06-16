@@ -101,7 +101,7 @@ async function getValidAccessToken(userId: string): Promise<string> {
             logger.log(`Successfully refreshed Strava token for user ${userId}`);
             return newTokens.accessToken;
             
-        } catch (error: any) {
+        } catch (error) {
             logger.error('Failed to refresh Strava token:', {
                 userId,
                 error: error.response?.data || error.message,

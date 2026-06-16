@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
             response.cookies.delete('__session');
             return response;
         }
-    } catch (error: any) {
+    } catch (error) {
         logger.error('Session verification error:', error);
         return NextResponse.json({
             authenticated: false,
@@ -46,7 +46,7 @@ export async function DELETE(req: NextRequest) {
         const response = NextResponse.json({ success: true }, { status: 200 });
         response.cookies.delete('__session');
         return response;
-    } catch (error: any) {
+    } catch (error) {
         logger.error('Session cookie deletion failed:', error);
         return NextResponse.json({ error: 'Failed to clear session' }, { status: 500 });
     }
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
 
         return response;
 
-    } catch (error: any) {
+    } catch (error) {
         logger.error('Session cookie creation failed:', error.code, error.message);
         return NextResponse.json({ error: 'Failed to create session' }, { status: 401 });
     }

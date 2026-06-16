@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.redirect(new URL('/profile?strava=success', appUrl));
 
-    } catch (error: any) {
+    } catch (error) {
         logger.error('Strava token exchange error:', error.message);
         const errorMessage = error.response?.data?.message || error.message || 'Failed to connect Strava.';
         return NextResponse.redirect(new URL(`/profile?strava-error=${encodeURIComponent(errorMessage)}`, appUrl));

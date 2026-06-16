@@ -295,7 +295,7 @@ export default function TrainingPage() {
       }
 
       setData(await res.json());
-    } catch (err: any) {
+    } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
@@ -315,7 +315,7 @@ export default function TrainingPage() {
         trainingSummaryText: formatTrainingSummaryForAI(data),
       });
       setAiAnalysis(result);
-    } catch (err: any) {
+    } catch (err) {
       setAiError('Analysis failed. Please try again.');
     } finally {
       setAiLoading(false);

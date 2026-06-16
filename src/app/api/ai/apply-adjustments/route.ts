@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       adjustmentsApplied: adjustments.length,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Apply Adjustments] Error:', error);
     console.error('[Apply Adjustments] Error stack:', error.stack);
     return NextResponse.json({

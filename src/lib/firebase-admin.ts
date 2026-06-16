@@ -21,7 +21,7 @@ function initializeFirebaseAdmin(): App {
             credential: cert(serviceAccount)
         });
         console.log('Firebase Admin SDK initialized successfully.');
-    } catch (e: any) {
+    } catch (e) {
         throw new Error(`Failed to parse or use FIREBASE_SERVICE_ACCOUNT_KEY: ${e.message}`);
     }
 

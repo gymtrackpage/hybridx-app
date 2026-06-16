@@ -148,7 +148,8 @@ export async function GET(request: Request) {
       logger.log(`Garmin cron: synced ${userPushed} workouts for user ${userId}`);
 
     } catch (err: any) {
-      logger.error(`Garmin cron: error for user ${userId}:`, err.message);
+      const error = err as any;
+      logger.error(`Garmin cron: error for user ${userId}:`, error.message);
       results.errors++;
     }
   }

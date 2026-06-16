@@ -360,7 +360,7 @@ export async function POST(request: NextRequest) {
       message: `Enhanced ${totalEnhancements} exercises across ${results.length} programs`
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Enhancement error:', error);
     return NextResponse.json(
       { success: false, error: error.message },

@@ -44,7 +44,7 @@ export async function requireUser(
     const decoded = await getAdminAuth().verifyIdToken(token);
     uid = decoded.uid;
     email = decoded.email;
-  } catch (err: any) {
+  } catch (err) {
     logger.error(`[api-auth] Token verification failed (${opts.bucket}):`, err?.message);
     return { response: NextResponse.json({ error: 'Invalid token' }, { status: 401 }) };
   }

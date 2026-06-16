@@ -152,7 +152,7 @@ export async function POST(request: Request) {
         console.log('[Analyze Week] AI analysis complete, needsAdjustment:', aiResult.needsAdjustment);
         return NextResponse.json(aiResult);
 
-    } catch (error: any) {
+    } catch (error) {
         console.error("Analysis error:", error);
         console.error("Error stack:", error.stack);
         console.error("Error details:", JSON.stringify(error, null, 2));

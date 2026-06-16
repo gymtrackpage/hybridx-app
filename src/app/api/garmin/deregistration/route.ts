@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
         garminPlanSync: FieldValue.delete(),
       });
       cleared++;
-    } catch (e: any) {
+    } catch (e) {
       logger.error('Garmin deregistration: clear failed', {
         garminUserId: entry.userId,
         err: e.message,

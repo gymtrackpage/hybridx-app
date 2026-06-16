@@ -78,10 +78,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Compute today's day-number in the program (1-indexed).
-    // Snap startDate to UTC midnight of the intended calendar day — the browser
-    // stores local midnight (e.g. April 19 00:00 AEST = April 18 14:00 UTC) so
-    // the raw timestamp is off by the user's UTC offset. Math.round to the
-    // nearest day boundary recovers the correct date for any ±14h timezone.
     const startMs = Math.round(user.startDate.getTime() / 86400000) * 86400000;
     const today = new Date();
     const todayMs = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
@@ -177,10 +173,11 @@ export async function POST(req: NextRequest) {
       failed: results.filter((r) => r.status.startsWith('failed')).length,
       results,
     });
-  } catch (err: any) {
-    logger.error('Garmin sync-plan error:', err.message);
+  } catch (err) {
+    const error = err as any;
+    logger.error('Garmin sync-plan error:', error.message);
     return NextResponse.json(
-      { error: err.message || 'Failed to sync plan to Garmin.' },
+      { error: error.message || 'Failed to sync plan to Garmin.' },
       { status: 500 },
     );
   }
