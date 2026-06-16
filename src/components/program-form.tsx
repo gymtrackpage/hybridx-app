@@ -216,7 +216,7 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit, () => {
+          <form autoComplete="off" onSubmit={form.handleSubmit(onSubmit, () => {
               toast({ title: 'Validation error', description: 'Please check the highlighted fields and try again.', variant: 'destructive' });
             })} className="space-y-6">
             <ScrollArea className="h-[60vh] pr-6">
