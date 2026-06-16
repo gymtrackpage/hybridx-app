@@ -90,8 +90,8 @@ export default function DebugPage() {
 
     } catch (error) {
       results.error = {
-        message: error.message,
-        stack: error.stack
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       };
     }
 
