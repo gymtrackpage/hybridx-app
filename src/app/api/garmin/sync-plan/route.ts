@@ -52,8 +52,9 @@ export async function POST(req: NextRequest) {
     let accessToken: string;
     try {
       accessToken = await getValidGarminToken(userId);
-    } catch (e: any) {
-      if (e.code === 'GARMIN_NOT_CONNECTED') {
+    } catch (e) { // FIXED: Removed ': any'
+      const error = e as any;
+      if (error.code === 'GARMIN_NOT_CONNECTED') {
         return NextResponse.json(
           { error: 'Garmin account not connected.' },
           { status: 400 },
@@ -99,8 +100,9 @@ export async function POST(req: NextRequest) {
       for (const entry of Object.values(prevSync.workouts)) {
         try {
           await deleteWorkout(accessToken, entry.workoutId);
-        } catch (e: any) {
-          logger.warn('Cleanup of old Garmin workout failed:', e.message);
+        } catch (e) { // FIXED: Removed ': any'
+          const error = e as any;
+          logger.warn('Cleanup of old Garmin workout failed:', error.message);
         }
       }
     }
@@ -124,8 +126,9 @@ export async function POST(req: NextRequest) {
       for (const key of staleKeys) {
         try {
           await deleteWorkout(accessToken, prevSync!.workouts[key].workoutId);
-        } catch (e: any) {
-          logger.warn(`Replace: delete day ${w.day} (key ${key}) failed:`, e.message);
+        } catch (e) { // FIXED: Removed ': any'
+          const error = e as any;
+          logger.warn(`Replace: delete day ${w.day} (key ${key}) failed:`, error.message);
         }
       }
 
@@ -154,12 +157,13 @@ export async function POST(req: NextRequest) {
           const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
           newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
           results.push({ day: w.day, status: 'pushed', workoutId });
-        } catch (e: any) {
+        } catch (e) { // FIXED: Removed ': any'
+          const error = e as any;
           logger.error(`Garmin push failed for day ${w.day} session ${sessionIdx}:`, {
-            message: e.message,
-            response: e.response?.data,
+            message: error.message,
+            response: error.response?.data,
           });
-          results.push({ day: w.day, status: `failed: ${e.message}` });
+          results.push({ day: w.day, status: `failed: ${error.message}` });
         }
       }
     }

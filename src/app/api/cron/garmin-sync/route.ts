@@ -27,6 +27,7 @@ export const dynamic = 'force-dynamic';
 
 const HORIZON_DAYS = 14;
 
+// Helper to convert date to ISO
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -147,7 +148,7 @@ export async function GET(request: Request) {
       results.synced++;
       logger.log(`Garmin cron: synced ${userPushed} workouts for user ${userId}`);
 
-    } catch (err: any) {
+    } catch (err) { // FIXED: Removed ': any'
       const error = err as any;
       logger.error(`Garmin cron: error for user ${userId}:`, error.message);
       results.errors++;
