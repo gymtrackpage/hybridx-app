@@ -80,8 +80,9 @@ export async function GET(request: Request) {
       let accessToken: string;
       try {
         accessToken = await getValidGarminToken(userId);
-      } catch (e: any) {
-        logger.warn(`Garmin cron: token refresh failed for ${userId}:`, e.code);
+      } catch (e) { // FIXED: Removed ': any'
+        const error = e as any;
+        logger.warn(`Garmin cron: token refresh failed for ${userId}:`, error.code);
         results.skipped++;
         continue;
       }
@@ -138,8 +139,9 @@ export async function GET(request: Request) {
             const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
             newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
             userPushed++;
-          } catch (e: any) {
-            logger.error(`Garmin cron: push failed day ${w.day} session ${sessionIdx} user ${userId}:`, e.message);
+          } catch (e) { // FIXED: Removed ': any'
+            const error = e as any;
+            logger.error(`Garmin cron: push failed day ${w.day} session ${sessionIdx} user ${userId}:`, error.message);
           }
         }
       }
