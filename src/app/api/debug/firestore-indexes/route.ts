@@ -177,7 +177,7 @@ export async function GET(request: NextRequest) {
     } catch (error) {
         console.error('❌ Firestore index debug error:', error);
         return NextResponse.json({
-            error: error instanceof Error ? error instanceof Error ? error.message : String(error) : 'Unknown error',
+            error: error instanceof Error ? error.message : 'Unknown error',
             success: false,
             tests: results.tests
         }, { status: 500 });

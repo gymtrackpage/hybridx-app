@@ -154,11 +154,11 @@ export async function POST(request: Request) {
 
     } catch (error) {
         console.error("Analysis error:", error);
-        console.error("Error stack:", error.stack);
+        console.error("Error stack:", error instanceof Error ? error.stack : undefined);
         console.error("Error details:", JSON.stringify(error, null, 2));
         return NextResponse.json({
-            error: error instanceof Error ? error instanceof Error ? error.message : String(error) : 'Unknown error occurred',
-            details: error.toString()
+            error: error instanceof Error ? error.message : 'Unknown error occurred',
+            details: String(error)
         }, { status: 500 });
     }
 }

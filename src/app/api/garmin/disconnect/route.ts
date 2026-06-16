@@ -42,7 +42,7 @@ export async function POST(_req: NextRequest) {
   } catch (err) {
     logger.error('Garmin disconnect error:', err instanceof Error ? err.message : String(err));
     return NextResponse.json(
-      { error: err instanceof Error ? err instanceof Error ? err.message : String(err) : 'Failed to disconnect Garmin.' },
+      { error: err instanceof Error ? err.message : 'Failed to disconnect Garmin.' },
       { status: 500 },
     );
   }

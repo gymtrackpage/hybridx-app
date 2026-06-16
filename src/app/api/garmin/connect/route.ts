@@ -73,7 +73,7 @@ export async function POST(_req: NextRequest) {
       );
     }
     return NextResponse.json(
-      { error: err instanceof Error ? err instanceof Error ? err.message : String(err) : 'Failed to initiate Garmin connection.' },
+      { error: err instanceof Error ? err.message : 'Failed to initiate Garmin connection.' },
       { status: 500 },
     );
   }

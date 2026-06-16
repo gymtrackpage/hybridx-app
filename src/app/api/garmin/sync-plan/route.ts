@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
     const error = err as any;
     logger.error('Garmin sync-plan error:', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
-      { error: error instanceof Error ? error instanceof Error ? error.message : String(error) : 'Failed to sync plan to Garmin.' },
+      { error: error instanceof Error ? error.message : 'Failed to sync plan to Garmin.' },
       { status: 500 },
     );
   }

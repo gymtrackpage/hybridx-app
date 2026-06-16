@@ -84,9 +84,9 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error('[Apply Adjustments] Error:', error);
-    console.error('[Apply Adjustments] Error stack:', error.stack);
+    console.error('[Apply Adjustments] Error stack:', error instanceof Error ? error.stack : undefined);
     return NextResponse.json({
-      error: error instanceof Error ? error instanceof Error ? error.message : String(error) : 'Failed to apply adjustments',
+      error: error instanceof Error ? error.message : 'Failed to apply adjustments',
       details: error.toString(),
     }, { status: 500 });
   }
