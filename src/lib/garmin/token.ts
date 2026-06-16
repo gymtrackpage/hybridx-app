@@ -80,7 +80,7 @@ export async function getValidGarminToken(userId: string): Promise<string> {
   } catch (err) {
     logger.error('Garmin token refresh failed:', {
       userId,
-      err: err.response?.data || err.message,
+      err: (err as any).response?.data || (err instanceof Error ? err.message : String(err)),
     });
     throw Object.assign(new Error('Garmin token refresh failed.'), {
       code: 'GARMIN_REFRESH_FAILED',

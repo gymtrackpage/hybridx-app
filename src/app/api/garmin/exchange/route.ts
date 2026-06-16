@@ -116,13 +116,13 @@ export async function GET(req: NextRequest) {
     return back({ garmin: 'success' });
   } catch (err) {
     logger.error('Garmin token exchange failed:', {
-      message: err.message,
+      message: err instanceof Error ? err.message : String(err),
       response: err.response?.data,
     });
     const msg =
       err.response?.data?.error_description ||
       err.response?.data?.error ||
-      err.message ||
+      err instanceof Error ? err.message : String(err) ||
       'Failed to connect Garmin.';
     return back({ 'garmin-error': msg });
   }

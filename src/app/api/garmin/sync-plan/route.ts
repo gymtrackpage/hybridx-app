@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
           await deleteWorkout(accessToken, entry.workoutId);
         } catch (e) {
           const error = e as any;
-          logger.warn('Cleanup of old Garmin workout failed:', error.message);
+          logger.warn('Cleanup of old Garmin workout failed:', error instanceof Error ? error.message : String(error));
         }
       }
     }
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
           await deleteWorkout(accessToken, prevSync!.workouts[key].workoutId);
         } catch (e) {
           const error = e as any;
-          logger.warn(`Replace: delete day ${w.day} (key ${key}) failed:`, error.message);
+          logger.warn(`Replace: delete day ${w.day} (key ${key}) failed:`, error instanceof Error ? error.message : String(error));
         }
       }
 
@@ -160,10 +160,10 @@ export async function POST(req: NextRequest) {
         } catch (e) {
           const error = e as any;
           logger.error(`Garmin push failed for day ${w.day} session ${sessionIdx}:`, {
-            message: error.message,
+            message: error instanceof Error ? error.message : String(error),
             response: error.response?.data,
           });
-          results.push({ day: w.day, status: `failed: ${error.message}` });
+          results.push({ day: w.day, status: `failed: ${error instanceof Error ? error.message : String(error)}` });
         }
       }
     }
@@ -179,9 +179,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     const error = err as any;
-    logger.error('Garmin sync-plan error:', error.message);
+    logger.error('Garmin sync-plan error:', error instanceof Error ? error.message : String(error));
     return NextResponse.json(
-      { error: error.message || 'Failed to sync plan to Garmin.' },
+      { error: error instanceof Error ? error instanceof Error ? error.message : String(error) : 'Failed to sync plan to Garmin.' },
       { status: 500 },
     );
   }

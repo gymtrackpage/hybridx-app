@@ -62,7 +62,7 @@ export async function POST(_req: NextRequest) {
 
     return NextResponse.json({ url: authUrl });
   } catch (err) {
-    logger.error('Garmin connect error:', err.message);
+    logger.error('Garmin connect error:', err instanceof Error ? err.message : String(err));
     if (
       err.code === 'auth/session-cookie-expired' ||
       err.code === 'auth/session-cookie-revoked'
@@ -73,7 +73,7 @@ export async function POST(_req: NextRequest) {
       );
     }
     return NextResponse.json(
-      { error: err.message || 'Failed to initiate Garmin connection.' },
+      { error: err instanceof Error ? err instanceof Error ? err.message : String(err) : 'Failed to initiate Garmin connection.' },
       { status: 500 },
     );
   }

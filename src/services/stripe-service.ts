@@ -104,7 +104,7 @@ export async function createCheckoutSession(
                 await updateUserAdmin(userId, { stripeCustomerId: customerId });
             } catch (err) {
                 logger.error('Error creating Stripe customer:', err);
-                throw new Error(`Failed to create Stripe customer: ${err.message}`);
+                throw new Error(`Failed to create Stripe customer: ${err instanceof Error ? err.message : String(err)}`);
             }
         }
         
@@ -128,17 +128,18 @@ export async function createCheckoutSession(
             return { url: session.url };
         } catch (err) {
             logger.error('Error creating Stripe checkout session:', err);
-            throw new Error(`Failed to create Stripe checkout session: ${err.message}`);
+            throw new Error(`Failed to create Stripe checkout session: ${err instanceof Error ? err.message : String(err)}`);
         }
 
     } catch (error) {
         logger.error('An error occurred in createCheckoutSession:', error);
         
-        if (error.message && error.message.includes('Could not refresh access token')) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes('Could not refresh access token')) {
             throw new Error('Could not authenticate with Firebase. Please check server permissions.');
         }
 
-        throw new Error(error.message);
+        throw new Error(msg);
     }
 }
 

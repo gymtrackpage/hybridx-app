@@ -157,7 +157,7 @@ export async function POST(request: Request) {
         console.error("Error stack:", error.stack);
         console.error("Error details:", JSON.stringify(error, null, 2));
         return NextResponse.json({
-            error: error.message || 'Unknown error occurred',
+            error: error instanceof Error ? error instanceof Error ? error.message : String(error) : 'Unknown error occurred',
             details: error.toString()
         }, { status: 500 });
     }

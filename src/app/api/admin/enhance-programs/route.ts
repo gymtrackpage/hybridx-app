@@ -363,7 +363,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Enhancement error:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

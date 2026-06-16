@@ -49,9 +49,9 @@ export async function GET(request: NextRequest) {
             results.tests.push({
                 test: 'Basic Collection Access',
                 status: 'error',
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
-            results.errors.push(`Basic collection access failed: ${error.message}`);
+            results.errors.push(`Basic collection access failed: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Test 2: Order by email (the problematic query)
@@ -69,12 +69,12 @@ export async function GET(request: NextRequest) {
             results.tests.push({
                 test: 'Order by Email',
                 status: 'error',
-                error: error.message,
+                error: error instanceof Error ? error.message : String(error),
                 indexRequired: true
             });
-            results.errors.push(`Email ordering failed: ${error.message}`);
+            results.errors.push(`Email ordering failed: ${error instanceof Error ? error.message : String(error)}`);
 
-            if (error.message.includes('index')) {
+            if (error instanceof Error ? error.message : String(error).includes('index')) {
                 results.recommendations.push({
                     type: 'index',
                     message: 'Create a single-field index on the "email" field',
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
             results.tests.push({
                 test: 'Email Field Analysis',
                 status: 'error',
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
         }
 
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
             results.tests.push({
                 test: 'Order by Document ID',
                 status: 'error',
-                error: error.message
+                error: error instanceof Error ? error.message : String(error)
             });
         }
 
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
                 results.tests.push({
                     test: `Order by ${field}`,
                     status: 'error',
-                    error: error.message
+                    error: error instanceof Error ? error.message : String(error)
                 });
             }
         }
@@ -177,7 +177,7 @@ export async function GET(request: NextRequest) {
     } catch (error) {
         console.error('❌ Firestore index debug error:', error);
         return NextResponse.json({
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: error instanceof Error ? error instanceof Error ? error.message : String(error) : 'Unknown error',
             success: false,
             tests: results.tests
         }, { status: 500 });

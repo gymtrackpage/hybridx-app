@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     logger.error('Strava upload error:', {
-      message: error.message,
+      message: error instanceof Error ? error.message : String(error),
       response: error.response?.data,
       status: error.response?.status
     });
@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
     } else {
       return NextResponse.json({ 
         error: 'Failed to upload to Strava',
-        details: error.response?.data?.message || error.message
+        details: error.response?.data?.message || error instanceof Error ? error.message : String(error)
       }, { status: 500 });
     }
   }

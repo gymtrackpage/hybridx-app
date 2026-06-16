@@ -29,7 +29,7 @@ export async function POST(_req: NextRequest) {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
     } catch (err) {
-      logger.warn('Garmin de-registration failed (continuing):', err.message);
+      logger.warn('Garmin de-registration failed (continuing):', err instanceof Error ? err.message : String(err));
     }
 
     await getAdminDb().collection('users').doc(userId).update({
@@ -40,9 +40,9 @@ export async function POST(_req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    logger.error('Garmin disconnect error:', err.message);
+    logger.error('Garmin disconnect error:', err instanceof Error ? err.message : String(err));
     return NextResponse.json(
-      { error: err.message || 'Failed to disconnect Garmin.' },
+      { error: err instanceof Error ? err instanceof Error ? err.message : String(err) : 'Failed to disconnect Garmin.' },
       { status: 500 },
     );
   }

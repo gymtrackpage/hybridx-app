@@ -25,7 +25,7 @@ export async function GET() {
   } catch (error) {
     console.error('List programs error:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

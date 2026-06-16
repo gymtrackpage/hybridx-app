@@ -142,8 +142,8 @@ export async function diagnoseAuth() {
         console.error('Auth diagnosis failed:', error);
         return {
             error: true,
-            errorMessage: error.message,
-            stack: error.stack,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
         };
     }
 }

@@ -76,7 +76,7 @@ export async function GET(
 
   } catch (error) {
     console.error(`❌ Error fetching Strava activity ${activityId}:`, {
-      message: error.message,
+      message: error instanceof Error ? error.message : String(error),
       status: error.response?.status,
       data: error.response?.data,
     });
