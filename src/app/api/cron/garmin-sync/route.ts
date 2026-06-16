@@ -141,7 +141,7 @@ export async function GET(request: Request) {
             userPushed++;
           } catch (e) {
             const error = e as any;
-            logger.error(`Garmin cron: push failed day ${w.day} session ${sessionIdx} user ${userId}:`, error.message);
+            logger.error(`Garmin cron: push failed day ${w.day} session ${sessionIdx} user ${userId}:`, error instanceof Error ? error.message : String(error));
           }
         }
       }
@@ -152,7 +152,7 @@ export async function GET(request: Request) {
 
     } catch (err) {
       const error = err as any;
-      logger.error(`Garmin cron: error for user ${userId}:`, error.message);
+      logger.error(`Garmin cron: error for user ${userId}:`, error instanceof Error ? error.message : String(error));
       results.errors++;
     }
   }

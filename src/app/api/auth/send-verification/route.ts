@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    logger.error('[send-verification] failed:', err?.message);
+    logger.error('[send-verification] failed:', err instanceof Error ? err.message : String(err));
     return NextResponse.json({ error: 'Could not send verification email' }, { status: 500 });
   }
 }

@@ -45,7 +45,7 @@ export async function requireUser(
     uid = decoded.uid;
     email = decoded.email;
   } catch (err) {
-    logger.error(`[api-auth] Token verification failed (${opts.bucket}):`, err?.message);
+    logger.error(`[api-auth] Token verification failed (${opts.bucket}):`, err instanceof Error ? err.message : String(err));
     return { response: NextResponse.json({ error: 'Invalid token' }, { status: 401 }) };
   }
 

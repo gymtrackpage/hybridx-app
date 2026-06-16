@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(summary);
   } catch (error) {
-    console.error('Training form API error:', error.message);
+    console.error('Training form API error:', error instanceof Error ? error.message : String(error));
     let status = 500;
     let message = 'Failed to compute training form data.';
 

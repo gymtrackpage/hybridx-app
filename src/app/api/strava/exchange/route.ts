@@ -79,8 +79,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.redirect(new URL('/profile?strava=success', appUrl));
 
     } catch (error) {
-        logger.error('Strava token exchange error:', error.message);
-        const errorMessage = error.response?.data?.message || error.message || 'Failed to connect Strava.';
+        logger.error('Strava token exchange error:', error instanceof Error ? error.message : String(error));
+        const errorMessage = error.response?.data?.message || (error instanceof Error ? error.message : String(error)) || 'Failed to connect Strava.';
         return NextResponse.redirect(new URL(`/profile?strava-error=${encodeURIComponent(errorMessage)}`, appUrl));
     }
 }
