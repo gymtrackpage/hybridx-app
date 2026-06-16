@@ -13,7 +13,7 @@ import { getProgramClient } from '@/services/program-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
 import { getAllUserSessions, getOrCreateWorkoutSession, updateWorkoutSession } from '@/services/session-service-client';
 import { swapWorkouts } from '@/services/session-service'; // Import the new server action
-import type { User, Program, WorkoutDay, WorkoutSession } from '@/models/types';
+import type { User, Program, WorkoutDay, WorkoutSession, RunningWorkout, Workout } from '@/models/types';
 import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { addDays, format, isSameDay, parseISO, isValid, isToday, isPast, startOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -122,20 +122,33 @@ export default function CalendarPage() {
         if (isCompleted) return 'bg-green-500';
         if (isMissed) return 'bg-red-400';
 
-        // Colour by primary run type when the session has running
-        if (hasRuns(workout)) {
-            const primaryRunType = workout.runs[0]?.type;
+        const hasR = hasRuns(workout);
+        const hasE = hasExercises(workout);
+
+        // Hybrid day (run + strength/cardio)
+        if (hasR && hasE) return 'bg-teal-500';
+
+        // Running — shade by intensity
+        if (hasR) {
+            const primaryRunType = (workout as RunningWorkout).runs[0]?.type;
             switch (primaryRunType) {
-                case 'intervals': return 'bg-red-500';
-                case 'tempo': return 'bg-orange-500';
+                case 'intervals': return 'bg-orange-500';
+                case 'tempo':     return 'bg-yellow-500';
+                case 'long':      return 'bg-blue-600';
                 case 'easy':
-                case 'long':
-                    return 'bg-blue-500';
-                default: return 'bg-gray-400';
+                case 'recovery':  return 'bg-blue-400';
+                default:          return 'bg-blue-500';
             }
         }
 
-        return 'bg-purple-500';
+        // Strength or cardio — check the sessionType on exercises
+        if (hasE) {
+            const firstSessionType = (workout as Workout).exercises[0]?.sessionType;
+            if (firstSessionType === 'cardio') return 'bg-pink-500';
+            return 'bg-purple-500'; // strength (default)
+        }
+
+        return 'bg-gray-400';
     };
 
   const generateWorkoutEvents = (program: Program | null, startDate: Date | undefined, sessions: WorkoutSession[]) => {
@@ -451,8 +464,13 @@ export default function CalendarPage() {
           <div className="flex flex-wrap justify-center gap-4 pt-2 pb-1 text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-green-500 inline-block" /> Completed</span>
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-400 inline-block" /> Missed</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-purple-500 inline-block" /> Planned (HYROX)</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-500 inline-block" /> Planned (Run)</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-400 inline-block" /> Easy / Recovery Run</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-yellow-500 inline-block" /> Tempo Run</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-orange-500 inline-block" /> Intervals</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-600 inline-block" /> Long Run</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-purple-500 inline-block" /> Strength</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-pink-500 inline-block" /> Conditioning</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-teal-500 inline-block" /> Hybrid</span>
           </div>
         </CardContent>
       </Card>
@@ -489,9 +507,22 @@ export default function CalendarPage() {
               </div>
             ) : (
                <div className="mt-2">
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 w-fit">
-                    Planned
-                </Badge>
+                {(() => {
+                  if (!selectedWorkout) return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 w-fit">Planned</Badge>;
+                  const hasR = hasRuns(selectedWorkout);
+                  const hasE = hasExercises(selectedWorkout);
+                  if (hasR && hasE) return <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 w-fit">Hybrid</Badge>;
+                  if (hasR) {
+                    const t = (selectedWorkout as RunningWorkout).runs[0]?.type;
+                    if (t === 'intervals') return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 w-fit">Intervals</Badge>;
+                    if (t === 'tempo') return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 w-fit">Tempo Run</Badge>;
+                    if (t === 'long') return <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200 w-fit">Long Run</Badge>;
+                    return <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 w-fit">Easy Run</Badge>;
+                  }
+                  const firstSessionType = hasE ? (selectedWorkout as Workout).exercises[0]?.sessionType : undefined;
+                  if (firstSessionType === 'cardio') return <Badge variant="outline" className="bg-pink-50 text-pink-700 border-pink-200 w-fit">Conditioning</Badge>;
+                  return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 w-fit">Strength</Badge>;
+                })()}
                </div>
             )}
           </CardHeader>
