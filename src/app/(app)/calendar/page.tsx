@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
-import { getWorkoutForDay } from '@/lib/workout-utils';
+import { getWorkoutForDay, formatPlannedRun } from '@/lib/workout-utils';
 import { getAllUserSessions, getOrCreateWorkoutSession, updateWorkoutSession } from '@/services/session-service-client';
 import { swapWorkouts } from '@/services/session-service'; // Import the new server action
 import type { User, Program, WorkoutDay, WorkoutSession, RunningWorkout, Workout } from '@/models/types';
@@ -563,7 +563,7 @@ export default function CalendarPage() {
                 <div className="space-y-4">
                   {hasRuns(selectedWorkout) && selectedWorkout.runs.map((run, index) => (
                       <div key={index} className="space-y-1">
-                        <p className="font-medium text-foreground">{run.description}</p>
+                        <p className="font-medium text-foreground">{formatPlannedRun(run)}</p>
                       </div>
                   ))}
                   {hasExercises(selectedWorkout) && (selectedWorkout.exercises ?? []).map((exercise, index) => {

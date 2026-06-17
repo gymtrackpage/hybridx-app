@@ -30,6 +30,7 @@ import type { StravaActivity } from '@/services/strava-service';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { formatPace } from '@/lib/pace-utils';
+import { formatPlannedRun } from '@/lib/workout-utils';
 import { useToast } from '@/hooks/use-toast';
 import { checkAndScheduleNotification } from '@/utils/notification-scheduler';
 import { useNotificationPermission } from '@/hooks/use-notification-permission';
@@ -609,7 +610,7 @@ export default function DashboardPage() {
                       <ul className="space-y-4 pt-4">
                         {workoutHasRuns && (todaysWorkout.workout as RunningWorkout).runs.map((run: PlannedRun) => (
                             <li key={run.description}>
-                              <p className="font-medium">{run.description}</p>
+                              <p className="font-medium">{formatPlannedRun(run)}</p>
                               {trainingPaces ? (
                                   <p className="text-sm text-muted-foreground">
                                       Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km

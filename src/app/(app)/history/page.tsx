@@ -21,6 +21,7 @@ import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import Link from 'next/link';
 import { formatExerciseDetails } from '@/utils/text-formatter';
 import type { Exercise, PlannedRun } from '@/models/types';
+import { formatPlannedRun } from '@/lib/workout-utils';
 import { hasRuns, hasExercises } from '@/lib/type-guards';
 
 // Lazy load heavy dialogs
@@ -486,7 +487,7 @@ export default function WorkoutHistoryPage() {
                                               {idx + 1}
                                             </div>
                                             <div className="flex-1">
-                                              <p className="font-medium text-sm">{run.description}</p>
+                                              <p className="font-medium text-sm">{formatPlannedRun(run)}</p>
                                               <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
                                                 <span>{run.distance}km</span>
                                                 <span className="capitalize">{run.paceZone} pace</span>

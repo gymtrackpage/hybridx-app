@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
 import type { Workout, RunningWorkout, Exercise, PlannedRun, TimerRecord, WorkoutDay } from '@/models/types';
 import { formatPace } from '@/lib/pace-utils';
+import { formatPlannedRun } from '@/lib/workout-utils';
 import Link from 'next/link';
 import { Separator } from '@/components/ui/separator';
 import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
@@ -316,7 +317,8 @@ export default function ActiveWorkoutPage() {
                           {(sess as RunningWorkout).runs.map((run: PlannedRun, index) => {
                             const key = `${prefix}run-${index}`;
                             const isDone = !!exerciseChecklist[key];
-                            const description = user?.unitSystem === 'imperial' ? convertDistanceInText(run.description, 'imperial') : run.description;
+                            const rawLabel = formatPlannedRun(run);
+                            const description = user?.unitSystem === 'imperial' ? convertDistanceInText(rawLabel, 'imperial') : rawLabel;
                             return (
                               <Card key={`${run.description}-${index}`} className={isDone ? 'opacity-60' : ''}>
                                 <CardContent className="py-4 px-2 flex items-center gap-4">

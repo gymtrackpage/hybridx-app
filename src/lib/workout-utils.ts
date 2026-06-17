@@ -1,5 +1,5 @@
 // src/lib/workout-utils.ts
-import type { Program, WorkoutDay, Exercise } from '@/models/types';
+import type { Program, WorkoutDay, Exercise, PlannedRun } from '@/models/types';
 import { differenceInDays, subDays, isSameDay } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
@@ -12,6 +12,16 @@ import { collection, query, where, getDocs, orderBy, limit } from 'firebase/fire
  * @param targetDate The date for which to find the workout.
  * @returns An object containing the day number of the program and the workout object, or null if no workout is scheduled.
  */
+/**
+ * Formats a PlannedRun into a human-readable label that includes interval count and effort.
+ * e.g. "2×15 min at threshold effort (RPE 7)" or "15 min easy warm-up (RPE 3)"
+ */
+export function formatPlannedRun(run: PlannedRun): string {
+  const prefix = run.noIntervals && run.noIntervals > 1 ? `${run.noIntervals}×` : '';
+  const rpe = ` (RPE ${run.effortLevel})`;
+  return `${prefix}${run.description}${rpe}`;
+}
+
 export function getWorkoutForDay(
     program: Pick<Program, 'workouts'>,
     startDate: Date,
