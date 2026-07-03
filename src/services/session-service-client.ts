@@ -129,27 +129,14 @@ export async function getTodaysProgramSession(userId: string, workoutDate: Date)
 }
 
 /**
- * All program (non one-off/custom) sessions persisted for a given day, ordered by sessionIndex.
- * A day with e.g. a Run + a Weight Training session returns both as separate docs.
- */
-export async function getTodaysProgramSessions(userId: string, workoutDate: Date): Promise<WorkoutSession[]> {
-    const q = query(
-        sessionsCollection,
-        where('userId', '==', userId),
-        where('workoutDate', '==', Timestamp.fromDate(workoutDate)),
-        where('programId', 'not-in', ['one-off-ai', 'custom-workout']),
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs
-        .map(fromFirestore)
-        .sort((a, b) => (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0));
-}
-
-/**
  * Ensures one WorkoutSession doc exists per sub-workout scheduled for a day, so e.g. a Run and a
  * Weight Training session on the same day can be started/finished/linked to Strava independently.
- * Existing docs (including ones whose workoutDetails were overwritten by a workout swap) are left
- * untouched; missing slots are created seeded from the corresponding entry in `daySessions`.
+ *
+ * If ANY session doc already exists for the date, it is treated as fully authoritative and returned
+ * as-is (filtered to slots that still have workoutDetails) — this is what lets a day be dragged empty
+ * via the training-calendar rearranger: the persisted (possibly content-less) doc for that date wins
+ * over the program's default schedule rather than partially falling back to it. Only when NO doc
+ * exists yet for the date do we seed one per entry in `daySessions` from the program's default.
  */
 export async function getOrCreateProgramSessionsForDay(
     userId: string,
@@ -164,21 +151,16 @@ export async function getOrCreateProgramSessionsForDay(
         where('programId', 'not-in', ['one-off-ai', 'custom-workout']),
     );
     const snapshot = await getDocs(q);
-    const bySessionIndex = new Map<number, WorkoutSession>();
-    snapshot.docs.forEach(doc => {
-        const session = fromFirestore(doc);
-        const idx = session.sessionIndex ?? 0;
-        if (!bySessionIndex.has(idx)) bySessionIndex.set(idx, session);
-    });
+
+    if (!snapshot.empty) {
+        return snapshot.docs
+            .map(fromFirestore)
+            .filter(s => !!s.workoutDetails)
+            .sort((a, b) => (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0));
+    }
 
     const results: WorkoutSession[] = [];
     for (let i = 0; i < daySessions.length; i++) {
-        const existing = bySessionIndex.get(i);
-        if (existing) {
-            results.push(existing);
-            continue;
-        }
-
         const workout = daySessions[i];
         const newSessionData = {
             userId,

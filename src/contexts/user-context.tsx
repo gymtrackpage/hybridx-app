@@ -118,21 +118,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                     setProgram(currentProgram);
 
                     const scheduledWorkoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, today);
-                    const daySessions = scheduledWorkoutInfo.sessions.length > 0
-                        ? scheduledWorkoutInfo.sessions
-                        : (scheduledWorkoutInfo.workout ? [scheduledWorkoutInfo.workout] : []);
 
-                    if (daySessions.length > 0) {
-                        // Priority 2/3: One persisted session per scheduled sub-workout for the day
-                        // (existing docs — which may reflect a swap — are kept as-is; missing ones are created).
-                        workoutSessions = await getOrCreateProgramSessionsForDay(userId, currentProgram.id, today, daySessions);
-                        currentWorkoutInfo = {
-                            day: scheduledWorkoutInfo.day,
-                            // Keep back-compat: `workout` reflects the (possibly swapped) first sub-session.
-                            workout: workoutSessions[0]?.workoutDetails ?? scheduledWorkoutInfo.workout,
-                            sessions: workoutSessions.map((s, i) => s.workoutDetails ?? daySessions[i]),
-                        };
-                    }
+                    // Always resolve via the persisted layer, even when the program's default schedule
+                    // has nothing for today — a training-calendar rearrangement may have moved a workout
+                    // INTO today from another day, which only shows up as a persisted session, not as
+                    // anything from getWorkoutForDay's program-default lookup.
+                    workoutSessions = await getOrCreateProgramSessionsForDay(userId, currentProgram.id, today, scheduledWorkoutInfo.sessions);
+                    currentWorkoutInfo = {
+                        day: scheduledWorkoutInfo.day,
+                        workout: workoutSessions[0]?.workoutDetails ?? null,
+                        sessions: workoutSessions.map(s => s.workoutDetails).filter((w): w is WorkoutDay => !!w),
+                    };
                 }
             }
 
