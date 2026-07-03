@@ -6,7 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
-import { getTodaysOneOffSession, getTodaysProgramSession, getOrCreateWorkoutSession, getAllUserSessions, type WorkoutSession } from '@/services/session-service-client';
+import { getTodaysOneOffSession, getOrCreateProgramSessionsForDay, getAllUserSessions, type WorkoutSession } from '@/services/session-service-client';
 import { getWorkoutForDay } from '@/lib/workout-utils';
 import type { User, Program, Workout, RunningWorkout, WorkoutDay } from '@/models/types';
 import { calculateTrainingPaces } from '@/lib/pace-utils';
@@ -19,6 +19,8 @@ interface UserContextType {
     program: Program | null;
     todaysWorkout: { day: number; workout: Workout | RunningWorkout | null; sessions: WorkoutDay[] } | null;
     todaysSession: WorkoutSession | null;
+    /** One persisted WorkoutSession per entry in todaysWorkout.sessions, so multi-type days (e.g. Run + Weight Training) can be started/finished/linked to Strava independently. */
+    todaysWorkoutSessions: WorkoutSession[];
     allSessions: WorkoutSession[];
     streakData: StreakData;
     trainingPaces: Record<string, number> | null;
@@ -33,6 +35,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     const [program, setProgram] = useState<Program | null>(null);
     const [todaysWorkout, setTodaysWorkout] = useState<{ day: number; workout: Workout | RunningWorkout | null; sessions: WorkoutDay[] } | null>(null);
     const [todaysSession, setTodaysSession] = useState<WorkoutSession | null>(null);
+    const [todaysWorkoutSessions, setTodaysWorkoutSessions] = useState<WorkoutSession[]>([]);
     const [allSessions, setAllSessions] = useState<WorkoutSession[]>([]);
     const [streakData, setStreakData] = useState<StreakData>({ currentStreak: 0, longestStreak: 0, totalWorkouts: 0, thisWeekWorkouts: 0, thisMonthWorkouts: 0 });
     const [trainingPaces, setTrainingPaces] = useState<Record<string, number> | null>(null);
@@ -55,12 +58,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         // Try to load cached data first for offline-first experience
         const cachedWorkout = OfflineCache.getTodaysWorkout();
         const cachedSession = OfflineCache.getTodaysSession();
+        const cachedSessions = OfflineCache.getTodaysSessions();
 
         if (cachedWorkout) {
             setTodaysWorkout(cachedWorkout);
         }
         if (cachedSession) {
             setTodaysSession(cachedSession);
+        }
+        if (cachedSessions) {
+            setTodaysWorkoutSessions(cachedSessions);
         }
 
         try {
@@ -83,7 +90,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             // Update sync time
             OfflineCache.updateSyncTime();
 
-            let workoutSession;
+            let workoutSessions: WorkoutSession[] = [];
             let currentWorkoutInfo;
             let currentProgram: Program | null = null;
             const today = new Date();
@@ -93,7 +100,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             const oneOffSession = await getTodaysOneOffSession(userId, today);
 
             if (oneOffSession) {
-                workoutSession = oneOffSession;
+                workoutSessions = [oneOffSession];
                 currentWorkoutInfo = {
                     day: 0,
                     workout: oneOffSession.workoutDetails as Workout,
@@ -105,31 +112,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 } else {
                     currentProgram = await getProgramClient(currentUser.programId);
                 }
-                
+
                 // Only proceed if a program was found
                 if (currentProgram) {
                     setProgram(currentProgram);
 
-                    // Priority 2: Check for an existing program session (which could be swapped)
-                    const programSession = await getTodaysProgramSession(userId, today);
-
                     const scheduledWorkoutInfo = getWorkoutForDay(currentProgram, currentUser.startDate, today);
+                    const daySessions = scheduledWorkoutInfo.sessions.length > 0
+                        ? scheduledWorkoutInfo.sessions
+                        : (scheduledWorkoutInfo.workout ? [scheduledWorkoutInfo.workout] : []);
 
-                    if (programSession && programSession.workoutDetails) {
-                        workoutSession = programSession;
-                        // Use the details from the session itself, which will reflect any swaps
+                    if (daySessions.length > 0) {
+                        // Priority 2/3: One persisted session per scheduled sub-workout for the day
+                        // (existing docs — which may reflect a swap — are kept as-is; missing ones are created).
+                        workoutSessions = await getOrCreateProgramSessionsForDay(userId, currentProgram.id, today, daySessions);
                         currentWorkoutInfo = {
                             day: scheduledWorkoutInfo.day,
-                            workout: programSession.workoutDetails,
-                            sessions: scheduledWorkoutInfo.sessions,
+                            // Keep back-compat: `workout` reflects the (possibly swapped) first sub-session.
+                            workout: workoutSessions[0]?.workoutDetails ?? scheduledWorkoutInfo.workout,
+                            sessions: workoutSessions.map((s, i) => s.workoutDetails ?? daySessions[i]),
                         };
-                    } else {
-                        // Priority 3: No session exists, so create one based on the original program schedule
-                        if (scheduledWorkoutInfo.workout) {
-                            // Create the session so Workout page has it immediately
-                            workoutSession = await getOrCreateWorkoutSession(userId, currentProgram.id, today, scheduledWorkoutInfo.workout);
-                            currentWorkoutInfo = scheduledWorkoutInfo;
-                        }
                     }
                 }
             }
@@ -141,10 +143,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             } else {
                 setTodaysWorkout(null);
             }
-            if (workoutSession) {
-                setTodaysSession(workoutSession);
+            setTodaysWorkoutSessions(workoutSessions);
+            OfflineCache.saveTodaysSessions(workoutSessions);
+            if (workoutSessions.length > 0) {
+                setTodaysSession(workoutSessions[0]);
                 // Cache today's session for offline access
-                OfflineCache.saveTodaysSession(workoutSession);
+                OfflineCache.saveTodaysSession(workoutSessions[0]);
             } else {
                 setTodaysSession(null);
             }
@@ -168,6 +172,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                     setProgram(null);
                     setTodaysWorkout(null);
                     setTodaysSession(null);
+                    setTodaysWorkoutSessions([]);
                     setAllSessions([]);
                     setStreakData({ currentStreak: 0, longestStreak: 0, totalWorkouts: 0, thisWeekWorkouts: 0, thisMonthWorkouts: 0 });
                     setTrainingPaces(null);
@@ -192,12 +197,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         program,
         todaysWorkout,
         todaysSession,
+        todaysWorkoutSessions,
         allSessions,
         streakData,
         trainingPaces,
         loading,
         refreshData
-    }), [user, program, todaysWorkout, todaysSession, allSessions, streakData, trainingPaces, loading]);
+    }), [user, program, todaysWorkout, todaysSession, todaysWorkoutSessions, allSessions, streakData, trainingPaces, loading]);
 
     return (
         <UserContext.Provider value={value}>
@@ -248,9 +254,10 @@ export function useTodaysWorkout() {
         program: context.program,
         todaysWorkout: context.todaysWorkout,
         todaysSession: context.todaysSession,
+        todaysWorkoutSessions: context.todaysWorkoutSessions,
         loading: context.loading,
         refreshData: context.refreshData
-    }), [context.program, context.todaysWorkout, context.todaysSession, context.loading, context.refreshData]);
+    }), [context.program, context.todaysWorkout, context.todaysSession, context.todaysWorkoutSessions, context.loading, context.refreshData]);
 }
 
 /**

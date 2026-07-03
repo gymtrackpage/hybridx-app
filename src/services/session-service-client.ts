@@ -39,6 +39,8 @@ function fromFirestore(doc: any): WorkoutSession {
         uploadedToStrava: data.uploadedToStrava,
         stravaUploadedAt: data.stravaUploadedAt ? data.stravaUploadedAt.toDate() : undefined,
         stravaActivity: data.stravaActivity,
+        sessionIndex: data.sessionIndex,
+        sessionCount: data.sessionCount,
     };
 }
 
@@ -126,6 +128,91 @@ export async function getTodaysProgramSession(userId: string, workoutDate: Date)
     return null;
 }
 
+/**
+ * All program (non one-off/custom) sessions persisted for a given day, ordered by sessionIndex.
+ * A day with e.g. a Run + a Weight Training session returns both as separate docs.
+ */
+export async function getTodaysProgramSessions(userId: string, workoutDate: Date): Promise<WorkoutSession[]> {
+    const q = query(
+        sessionsCollection,
+        where('userId', '==', userId),
+        where('workoutDate', '==', Timestamp.fromDate(workoutDate)),
+        where('programId', 'not-in', ['one-off-ai', 'custom-workout']),
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+        .map(fromFirestore)
+        .sort((a, b) => (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0));
+}
+
+/**
+ * Ensures one WorkoutSession doc exists per sub-workout scheduled for a day, so e.g. a Run and a
+ * Weight Training session on the same day can be started/finished/linked to Strava independently.
+ * Existing docs (including ones whose workoutDetails were overwritten by a workout swap) are left
+ * untouched; missing slots are created seeded from the corresponding entry in `daySessions`.
+ */
+export async function getOrCreateProgramSessionsForDay(
+    userId: string,
+    programId: string,
+    workoutDate: Date,
+    daySessions: WorkoutDay[]
+): Promise<WorkoutSession[]> {
+    const q = query(
+        sessionsCollection,
+        where('userId', '==', userId),
+        where('workoutDate', '==', Timestamp.fromDate(workoutDate)),
+        where('programId', 'not-in', ['one-off-ai', 'custom-workout']),
+    );
+    const snapshot = await getDocs(q);
+    const bySessionIndex = new Map<number, WorkoutSession>();
+    snapshot.docs.forEach(doc => {
+        const session = fromFirestore(doc);
+        const idx = session.sessionIndex ?? 0;
+        if (!bySessionIndex.has(idx)) bySessionIndex.set(idx, session);
+    });
+
+    const results: WorkoutSession[] = [];
+    for (let i = 0; i < daySessions.length; i++) {
+        const existing = bySessionIndex.get(i);
+        if (existing) {
+            results.push(existing);
+            continue;
+        }
+
+        const workout = daySessions[i];
+        const newSessionData = {
+            userId,
+            programId,
+            workoutDate: Timestamp.fromDate(workoutDate),
+            workoutTitle: workout.title,
+            programType: deriveSessionProgramType(workout),
+            startedAt: Timestamp.now(),
+            finishedAt: null,
+            notes: '',
+            workoutDetails: workout,
+            skipped: false,
+            sessionIndex: i,
+            sessionCount: daySessions.length,
+        };
+        const docRef = await addDoc(sessionsCollection, newSessionData);
+        results.push({
+            id: docRef.id,
+            userId,
+            programId,
+            workoutDate,
+            workoutTitle: workout.title,
+            programType: newSessionData.programType,
+            startedAt: new Date(),
+            notes: '',
+            workoutDetails: workout,
+            skipped: false,
+            sessionIndex: i,
+            sessionCount: daySessions.length,
+        });
+    }
+    return results;
+}
+
 export async function createCustomWorkoutSession(userId: string, title: string, type: ProgramType, description: string, duration?: string): Promise<void> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -157,26 +244,33 @@ function deriveSessionProgramType(workout: WorkoutDay): ProgramType {
     return 'hyrox';
 }
 
-export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: WorkoutDay, overwrite: boolean = false, duration?: string): Promise<any> {
+/**
+ * Finds or creates a single WorkoutSession doc for a date/slot.
+ *
+ * A day can now have multiple sibling docs (one per sub-workout, e.g. Run + Weight Training), so
+ * this only ever targets ONE specific slot: the one-off/custom-workout doc for the day (there's at
+ * most one), or — for program workouts — the doc whose `sessionIndex` matches `sessionIndex`
+ * (defaults to 0, i.e. the day's first/only session). It never touches sibling sub-workout docs.
+ */
+export async function getOrCreateWorkoutSession(userId: string, programId: string, workoutDate: Date, workout: WorkoutDay, overwrite: boolean = false, duration?: string, sessionIndex: number = 0, sessionCount: number = 1): Promise<WorkoutSession> {
+    const isOneOff = ['one-off-ai', 'custom-workout'].includes(programId);
+
     const q = query(
         sessionsCollection,
         where('userId', '==', userId),
         where('workoutDate', '==', Timestamp.fromDate(workoutDate)),
-        limit(1)
     );
-
     const snapshot = await getDocs(q);
 
-    if (!snapshot.empty && !overwrite) {
-        const existingSession = fromFirestore(snapshot.docs[0]);
-        if (['one-off-ai', 'custom-workout'].includes(existingSession.programId) && !['one-off-ai', 'custom-workout'].includes(programId)) {
-             // Program session takes precedence
-        } else {
-            return existingSession;
-        }
+    const existingDoc = isOneOff
+        ? snapshot.docs.find(d => ['one-off-ai', 'custom-workout'].includes(d.data().programId))
+        : snapshot.docs.find(d => !['one-off-ai', 'custom-workout'].includes(d.data().programId) && ((d.data().sessionIndex ?? 0) === sessionIndex));
+
+    if (existingDoc && !overwrite) {
+        return fromFirestore(existingDoc);
     }
 
-    if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai' && programId !== 'custom-workout' ))) {
+    if (existingDoc) {
         logger.log(`Overwriting existing workout session for date: ${workoutDate.toISOString()}`);
     }
 
@@ -190,16 +284,17 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         finishedAt: null,
         notes: '',
         duration: duration || null,
-        extendedExercises: ['one-off-ai', 'custom-workout'].includes(programId) ? workout.exercises : [],
+        extendedExercises: isOneOff ? workout.exercises : [],
         workoutDetails: workout,
         skipped: false,
+        sessionIndex,
+        sessionCount,
     };
 
-    if (!snapshot.empty && (overwrite || (programId !== 'one-off-ai' && programId !== 'custom-workout'))) {
-        const docToUpdate = snapshot.docs[0];
-        await updateDoc(docToUpdate.ref, newSessionData);
-        const updatedDocData = { ...docToUpdate.data(), ...newSessionData };
-        return { ...fromFirestore({ id: docToUpdate.id, data: () => updatedDocData }) };
+    if (existingDoc) {
+        await updateDoc(existingDoc.ref, newSessionData);
+        const updatedDocData = { ...existingDoc.data(), ...newSessionData };
+        return fromFirestore({ id: existingDoc.id, data: () => updatedDocData });
     }
 
     const docRef = await addDoc(sessionsCollection, newSessionData);
@@ -213,10 +308,12 @@ export async function getOrCreateWorkoutSession(userId: string, programId: strin
         programType: deriveSessionProgramType(workout),
         startedAt: new Date(),
         notes: '',
-        duration: newSessionData.duration,
+        duration: newSessionData.duration ?? undefined,
         extendedExercises: newSessionData.extendedExercises,
         workoutDetails: newSessionData.workoutDetails,
         skipped: false,
+        sessionIndex,
+        sessionCount,
     };
 }
 

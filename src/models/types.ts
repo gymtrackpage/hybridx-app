@@ -208,6 +208,10 @@ export interface WorkoutSession {
     finishedAt?: Date;
     notes?: string;
     duration?: string;
+    /** Position of this session among sibling sessions scheduled for the same day (e.g. a Run + a Weight Training session both on day 5). Undefined/0 = the day's only (or first) session. */
+    sessionIndex?: number;
+    /** Total number of sibling sessions scheduled for this day, as of session creation. */
+    sessionCount?: number;
     extendedExercises?: Exercise[];
     skipped?: boolean;
     workoutDetails?: Workout | RunningWorkout;

@@ -409,6 +409,11 @@ export default function WorkoutHistoryPage() {
                                   Strava
                                 </Badge>
                               )}
+                              {!!session.sessionCount && session.sessionCount > 1 && (
+                                <Badge variant="outline" className="text-muted-foreground">
+                                  Session {(session.sessionIndex ?? 0) + 1} of {session.sessionCount}
+                                </Badge>
+                              )}
                             </div>
                             <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
                               <span className="flex items-center gap-1">

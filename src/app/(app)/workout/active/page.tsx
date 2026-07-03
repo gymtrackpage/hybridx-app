@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, lazy, Suspense, useCallback } from 'react';
+import { useEffect, useState, lazy, Suspense, useCallback } from 'react';
 import { Flag, Loader2, CalendarDays, AlertTriangle, Timer, X, Share2, Sparkles, Clock, Link as LinkIcon, CheckSquare, Square, WifiOff } from 'lucide-react';
 import { useDebouncedCallback } from 'use-debounce';
 
@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
-import type { Workout, RunningWorkout, Exercise, PlannedRun, TimerRecord, WorkoutDay } from '@/models/types';
+import type { User, Workout, RunningWorkout, Exercise, PlannedRun, TimerRecord, WorkoutDay } from '@/models/types';
 import { formatPace } from '@/lib/pace-utils';
 import { formatPlannedRun } from '@/lib/workout-utils';
 import Link from 'next/link';
@@ -21,7 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { LinkStravaActivityDialog } from '@/components/link-strava-activity-dialog';
 import { useUser } from '@/contexts/user-context';
 import { useToast } from '@/hooks/use-toast';
-import { isRunningWorkout, hasRuns, hasExercises } from '@/lib/type-guards';
+import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { ExerciseHistory } from '@/components/exercise-history';
 import { convertDistanceInText, convertTextWithUnits } from '@/lib/unit-conversion';
 import { WorkoutTimer } from '@/components/workout-timer';
@@ -29,20 +29,8 @@ import { WorkoutTimer } from '@/components/workout-timer';
 const WorkoutCompleteModal = lazy(() => import('@/components/workout-complete-modal'));
 
 export default function ActiveWorkoutPage() {
-  const { user, todaysWorkout, todaysSession, trainingPaces, loading, refreshData } = useUser();
-  const { toast } = useToast();
-  const [session, setSession] = useState<WorkoutSession | null>(null);
-  const [workoutInfo, setWorkoutInfo] = useState<{ day: number; workout: Workout | RunningWorkout | null; sessions?: WorkoutDay[] } | null>(null);
-  const [extendedExercises, setExtendedExercises] = useState<Exercise[]>([]);
-  const [isExtending, setIsExtending] = useState(false);
-  const [notes, setNotes] = useState('');
-  const [summaryText, setSummaryText] = useState('');
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
-  const [isLinkerOpen, setIsLinkerOpen] = useState(false);
-  const [exerciseChecklist, setExerciseChecklist] = useState<Record<string, boolean>>({});
+  const { user, todaysWorkout, todaysWorkoutSessions, trainingPaces, loading, refreshData } = useUser();
   const [isOnline, setIsOnline] = useState(true);
-  const [showTimer, setShowTimer] = useState(false);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -56,52 +44,135 @@ export default function ActiveWorkoutPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!loading) {
-      setWorkoutInfo(todaysWorkout);
-      setSession(todaysSession);
-      if (todaysSession) {
-        setNotes(todaysSession.notes || '');
-        setExerciseChecklist(todaysSession.exerciseChecklist || {});
-        if (!['one-off-ai', 'custom-workout'].includes(todaysSession.programId)) {
-          setExtendedExercises(todaysSession.extendedExercises || []);
-        }
-      }
-    }
-  }, [todaysWorkout, todaysSession, loading]);
+  if (loading) {
+    return (
+      <div className="space-y-4 max-w-2xl mx-auto">
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
 
-  const loadWorkoutSummary = async () => {
-    if (!user || !workoutInfo?.workout || summaryText || summaryLoading) return;
+  const daySessions: WorkoutDay[] = todaysWorkout?.sessions && todaysWorkout.sessions.length > 0
+    ? todaysWorkout.sessions
+    : (todaysWorkout?.workout ? [todaysWorkout.workout] : []);
+
+  if (daySessions.length === 0 || todaysWorkoutSessions.length === 0) {
+    return (
+      <div className="text-center max-w-2xl mx-auto">
+        <Card>
+          <CardHeader><CardTitle>No Workout Today</CardTitle></CardHeader>
+          <CardContent><p className="text-muted-foreground">Enjoy your rest day or check your program schedule.</p></CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const isMultiSession = daySessions.length > 1;
+
+  return (
+    <div className="space-y-6 max-w-2xl mx-auto">
+      {!isOnline && (
+        <div className="flex items-center gap-2 rounded-md border border-yellow-400 bg-yellow-50 px-4 py-2 text-sm text-yellow-800">
+          <WifiOff className="h-4 w-4 shrink-0" />
+          <span>You&apos;re offline — your progress is saved locally and will sync when reconnected.</span>
+        </div>
+      )}
+      {daySessions.map((planned, index) => {
+        const persisted = todaysWorkoutSessions[index] ?? todaysWorkoutSessions[0];
+        if (!persisted) return null;
+        return (
+          <WorkoutSessionCard
+            key={persisted.id}
+            planned={planned}
+            initialSession={persisted}
+            day={todaysWorkout?.day ?? 0}
+            isMultiSession={isMultiSession}
+            sessionNumber={index + 1}
+            sessionTotal={daySessions.length}
+            user={user}
+            trainingPaces={trainingPaces}
+            refreshData={refreshData}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+interface WorkoutSessionCardProps {
+  planned: WorkoutDay;
+  initialSession: WorkoutSession;
+  day: number;
+  isMultiSession: boolean;
+  sessionNumber: number;
+  sessionTotal: number;
+  user: User | null;
+  trainingPaces: Record<string, number> | null;
+  refreshData: () => Promise<void>;
+}
+
+function WorkoutSessionCard({ planned, initialSession, day, isMultiSession, sessionNumber, sessionTotal, user, trainingPaces, refreshData }: WorkoutSessionCardProps) {
+  const { toast } = useToast();
+  const [session, setSession] = useState<WorkoutSession>(initialSession);
+  const [extendedExercises, setExtendedExercises] = useState<Exercise[]>(initialSession.extendedExercises || []);
+  const [isExtending, setIsExtending] = useState(false);
+  const [notes, setNotes] = useState(initialSession.notes || '');
+  const [summaryText, setSummaryText] = useState('');
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
+  const [isLinkerOpen, setIsLinkerOpen] = useState(false);
+  const [exerciseChecklist, setExerciseChecklist] = useState<Record<string, boolean>>(initialSession.exerciseChecklist || {});
+  const [showTimer, setShowTimer] = useState(false);
+
+  useEffect(() => {
+    setSession(initialSession);
+    setNotes(initialSession.notes || '');
+    setExerciseChecklist(initialSession.exerciseChecklist || {});
+    if (!['one-off-ai', 'custom-workout'].includes(initialSession.programId)) {
+      setExtendedExercises(initialSession.extendedExercises || []);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSession.id]);
+
+  const week = day > 0 ? Math.ceil(day / 7) : 0;
+  const dayOfWeek = day > 0 ? (day % 7 === 0 ? 7 : day % 7) : 0;
+  const isRunning = hasRuns(planned);
+  const isHybrid = hasRuns(planned) && hasExercises(planned);
+  const isOneOffWorkout = ['one-off-ai', 'custom-workout'].includes(session.programId);
+  const canExtendWorkout = planned.programType === 'hyrox' || isHybrid || isOneOffWorkout;
+
+  const loadWorkoutSummary = useCallback(async () => {
+    if (!user || summaryText || summaryLoading) return;
     setSummaryLoading(true);
     try {
-      const allDaySessions = (workoutInfo.sessions && workoutInfo.sessions.length > 1)
-        ? workoutInfo.sessions
-        : [workoutInfo.workout as WorkoutDay];
-      const exercisesForSummary = allDaySessions.flatMap(s => [
-        ...(hasRuns(s) ? (s as RunningWorkout).runs.map(r => r.type) : []),
-        ...(hasExercises(s) ? [...(s as Workout).exercises, ...extendedExercises].map(e => e.name) : []),
-      ]).join(', ');
-      const summaryPromise = workoutSummary({ userName: user.firstName, workoutTitle: workoutInfo.workout.title, exercises: exercisesForSummary });
+      const exercisesForSummary = [
+        ...(hasRuns(planned) ? (planned as RunningWorkout).runs.map(r => r.type) : []),
+        ...(hasExercises(planned) ? [...(planned as Workout).exercises, ...extendedExercises].map(e => e.name) : []),
+      ].join(', ');
+      const summaryPromise = workoutSummary({ userName: user.firstName, workoutTitle: planned.title, exercises: exercisesForSummary });
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('AI summary timeout')), 15000));
       const summaryResult = await Promise.race([summaryPromise, timeoutPromise]) as any;
       setSummaryText(summaryResult.summary);
     } catch (error) {
       console.error('Failed to generate AI workout summary:', error);
-      setSummaryText(workoutInfo?.workout?.title ?? '');
+      setSummaryText(planned.title);
     } finally {
       setSummaryLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, planned, extendedExercises, summaryText, summaryLoading]);
 
   useEffect(() => {
-    if (user && workoutInfo && session && !loading) {
+    if (user) {
       const timer = setTimeout(() => { loadWorkoutSummary(); }, 100);
       return () => clearTimeout(timer);
     }
-  }, [user, workoutInfo, session, loading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, planned]);
 
   const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
-    if (!session) return;
     await updateWorkoutSession(session.id, { notes: value });
   }, 1500);
 
@@ -111,33 +182,31 @@ export default function ActiveWorkoutPage() {
   };
 
   const debouncedSaveChecklist = useDebouncedCallback(async (checklist: Record<string, boolean>) => {
-    if (!session) return;
     await updateWorkoutSession(session.id, { exerciseChecklist: checklist });
   }, 800);
 
   const handleToggleExercise = (key: string) => {
-    if (session?.finishedAt) return;
+    if (session.finishedAt) return;
     const updated = { ...exerciseChecklist, [key]: !exerciseChecklist[key] };
     setExerciseChecklist(updated);
     debouncedSaveChecklist(updated);
   };
 
   const handleExtendWorkout = async () => {
-    if (!workoutInfo?.workout) return;
     setIsExtending(true);
     try {
       let originalExercises: Exercise[] = [];
-      if (hasExercises(workoutInfo.workout)) {
-        originalExercises = (workoutInfo.workout as Workout).exercises || [];
+      if (hasExercises(planned)) {
+        originalExercises = (planned as Workout).exercises || [];
       }
       const result = await extendWorkout({
-        workoutTitle: workoutInfo.workout.title,
-        workoutType: workoutInfo.workout.programType,
+        workoutTitle: planned.title,
+        workoutType: planned.programType,
         exercises: JSON.stringify([...originalExercises, ...extendedExercises]),
       });
       const allExtended = [...extendedExercises, ...result.newExercises];
       setExtendedExercises(allExtended);
-      if (session) await updateWorkoutSession(session.id, { extendedExercises: allExtended });
+      await updateWorkoutSession(session.id, { extendedExercises: allExtended });
     } catch (error) {
       console.error('Failed to extend workout:', error);
       toast({ title: 'Could not extend workout', description: 'AI extension failed. Please try again.', variant: 'destructive' });
@@ -147,24 +216,22 @@ export default function ActiveWorkoutPage() {
   };
 
   const handleFinishWorkout = async () => {
-    if (!session || !workoutInfo?.workout) return;
     debouncedSaveNotes.flush();
     const finishedAt = new Date();
-    const updatedSessionData = { ...session, finishedAt, notes, workoutTitle: workoutInfo.workout.title, programType: workoutInfo.workout.programType };
+    const updatedSessionData = { ...session, finishedAt, notes, workoutTitle: planned.title, programType: planned.programType };
     setSession(updatedSessionData);
-    await updateWorkoutSession(session.id, { finishedAt, notes, workoutTitle: workoutInfo.workout.title, programType: workoutInfo.workout.programType });
+    await updateWorkoutSession(session.id, { finishedAt, notes, workoutTitle: planned.title, programType: planned.programType });
     setIsCompleteModalOpen(true);
     refreshData();
   };
 
   const handleSkipWorkout = async () => {
-    if (!session || !workoutInfo?.workout) return;
     debouncedSaveNotes.flush();
     const finishedAt = new Date();
     const skipNotes = notes ? `${notes}\n\n[WORKOUT SKIPPED]` : '[WORKOUT SKIPPED]';
-    const updatedSessionData = { ...session, finishedAt, notes: skipNotes, workoutTitle: workoutInfo.workout.title, programType: workoutInfo.workout.programType, skipped: true };
+    const updatedSessionData = { ...session, finishedAt, notes: skipNotes, workoutTitle: planned.title, programType: planned.programType, skipped: true };
     setSession(updatedSessionData);
-    await updateWorkoutSession(session.id, { finishedAt, notes: skipNotes, workoutTitle: workoutInfo.workout.title, programType: workoutInfo.workout.programType, skipped: true });
+    await updateWorkoutSession(session.id, { finishedAt, notes: skipNotes, workoutTitle: planned.title, programType: planned.programType, skipped: true });
     setIsCompleteModalOpen(true);
     refreshData();
   };
@@ -176,209 +243,94 @@ export default function ActiveWorkoutPage() {
   };
 
   const handleTimerComplete = useCallback(async (record: TimerRecord) => {
-    if (!session) return;
     await updateWorkoutSession(session.id, { timerRecord: record });
-  }, [session]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id]);
 
-  if (loading) {
-    return (
-      <div className="space-y-4 max-w-2xl mx-auto">
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-24 w-full" />
-      </div>
-    );
-  }
+  const exerciseKeys: string[] = [
+    ...(hasRuns(planned) ? (planned as RunningWorkout).runs.map((_, i) => `run-${i}`) : []),
+    ...(hasExercises(planned) ? (planned as Workout).exercises.map((_, i) => `ex-${i}`) : []),
+  ].concat(extendedExercises.map((_, i) => `ext-${i}`));
 
-  if (!workoutInfo?.workout || !session) {
-    return (
-      <div className="text-center max-w-2xl mx-auto">
-        <Card>
-          <CardHeader><CardTitle>No Workout Today</CardTitle></CardHeader>
-          <CardContent><p className="text-muted-foreground">Enjoy your rest day or check your program schedule.</p></CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const { workout, day } = workoutInfo;
-  const week = Math.ceil(day / 7);
-  const dayOfWeek = day % 7 === 0 ? 7 : day % 7;
-  const isRunning = isRunningWorkout(workout);
-  const isHybrid = hasRuns(workout) && hasExercises(workout);
-  const isOneOffWorkout = ['one-off-ai', 'custom-workout'].includes(session.programId);
-  const canExtendWorkout = workout.programType === 'hyrox' || isHybrid || isOneOffWorkout;
-
-  // All sessions for this day — fall back to the single workout if sessions not populated.
-  const daySessions: WorkoutDay[] = (workoutInfo.sessions && workoutInfo.sessions.length > 1)
-    ? workoutInfo.sessions
-    : [workout as WorkoutDay];
-  const isMultiSession = daySessions.length > 1;
-
-  // Build checklist keys across all sessions. For multi-session days use `s{i}-` prefix to namespace.
-  const allExerciseKeys: string[] = daySessions.flatMap((s, si) => {
-    const prefix = isMultiSession ? `s${si}-` : '';
-    return [
-      ...(hasRuns(s) ? (s as RunningWorkout).runs.map((_, i) => `${prefix}run-${i}`) : []),
-      ...(hasExercises(s) ? (s as Workout).exercises.map((_, i) => `${prefix}ex-${i}`) : []),
-    ];
-  }).concat(extendedExercises.map((_, i) => `ext-${i}`));
-
-  const checkedCount = allExerciseKeys.filter(k => exerciseChecklist[k]).length;
-  const totalCount = allExerciseKeys.length;
+  const checkedCount = exerciseKeys.filter(k => exerciseChecklist[k]).length;
+  const totalCount = exerciseKeys.length;
   const progressPct = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
 
   return (
     <>
-      <div className="space-y-6 max-w-2xl mx-auto">
-        {!isOnline && (
-          <div className="flex items-center gap-2 rounded-md border border-yellow-400 bg-yellow-50 px-4 py-2 text-sm text-yellow-800">
-            <WifiOff className="h-4 w-4 shrink-0" />
-            <span>You&apos;re offline — your progress is saved locally and will sync when reconnected.</span>
+      <Card className="bg-accent/20 border-accent">
+        <CardHeader>
+          <div className="flex-1">
+            {isMultiSession && (
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Session {sessionNumber} of {sessionTotal}</p>
+            )}
+            <CardTitle className="text-2xl font-bold tracking-tight">{planned.title}</CardTitle>
+            <CardDescription className="font-medium text-foreground/80">
+              {summaryLoading ? (
+                <div className="space-y-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /></div>
+              ) : summaryText ? (
+                <div className="relative">{summaryText}</div>
+              ) : (
+                <div className="relative">{planned.title}<span className="text-xs text-muted-foreground/60 ml-2">⏳ Enhancing...</span></div>
+              )}
+            </CardDescription>
           </div>
-        )}
-        <Card className="bg-accent/20 border-accent">
-          <CardHeader>
-            <div className="flex-1">
-              <CardTitle className="text-2xl font-bold tracking-tight">{workout.title}</CardTitle>
-              <CardDescription className="font-medium text-foreground/80">
-                {summaryLoading ? (
-                  <div className="space-y-2"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /></div>
-                ) : summaryText ? (
-                  <div className="relative">{summaryText}</div>
-                ) : (
-                  <div className="relative">{workout.title}<span className="text-xs text-muted-foreground/60 ml-2">⏳ Enhancing...</span></div>
-                )}
-              </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center gap-6 text-sm text-muted-foreground">
+            {!isOneOffWorkout && day > 0 && (
+              <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4" /><span>Week {week}, Day {dayOfWeek}</span></div>
+            )}
+            {isOneOffWorkout && session.duration && (
+              <div className="flex items-center gap-2"><Clock className="h-4 w-4" /><span>{session.duration}</span></div>
+            )}
+          </div>
+
+          {isRunning && !trainingPaces && (
+            <div className="p-4 border border-yellow-400 bg-yellow-50 rounded-md text-yellow-800 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 mt-0.5" />
+              <div>
+                <h4 className="font-semibold">Paces Not Calculated</h4>
+                <p className="text-sm">To see your personalized training paces, please add at least one benchmark race time to your profile.</p>
+                <Button variant="link" className="p-0 h-auto mt-1 text-sm text-yellow-800" asChild>
+                  <Link href="/profile">Update Your Profile</Link>
+                </Button>
+              </div>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center gap-6 text-sm text-muted-foreground">
-              {!isOneOffWorkout && (
-                <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4" /><span>Week {week}, Day {dayOfWeek}</span></div>
-              )}
-              {isOneOffWorkout && session.duration && (
-                <div className="flex items-center gap-2"><Clock className="h-4 w-4" /><span>{session.duration}</span></div>
-              )}
+          )}
+
+          <Button variant="secondary" className="w-full" onClick={() => setShowTimer((prev) => !prev)}>
+            <Timer className="mr-2" />
+            {showTimer ? 'Hide Timer' : 'Use the Timer'}
+          </Button>
+
+          {showTimer && (
+            <div className="rounded-lg border border-border bg-muted/20 p-4">
+              <WorkoutTimer onComplete={handleTimerComplete} />
             </div>
+          )}
 
-            {isRunning && !trainingPaces && (
-              <div className="p-4 border border-yellow-400 bg-yellow-50 rounded-md text-yellow-800 flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold">Paces Not Calculated</h4>
-                  <p className="text-sm">To see your personalized training paces, please add at least one benchmark race time to your profile.</p>
-                  <Button variant="link" className="p-0 h-auto mt-1 text-sm text-yellow-800" asChild>
-                    <Link href="/profile">Update Your Profile</Link>
-                  </Button>
-                </div>
+          {!session.finishedAt && totalCount > 0 && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>{checkedCount} / {totalCount} completed</span>
+                <span>{progressPct}%</span>
               </div>
-            )}
+              <Progress value={progressPct} className="h-2" />
+            </div>
+          )}
 
-            <Button variant="secondary" className="w-full" onClick={() => setShowTimer((prev) => !prev)}>
-              <Timer className="mr-2" />
-              {showTimer ? 'Hide Timer' : 'Use the Timer'}
-            </Button>
-
-            {showTimer && (
-              <div className="rounded-lg border border-border bg-muted/20 p-4">
-                <WorkoutTimer onComplete={handleTimerComplete} />
-              </div>
-            )}
-
-            {!session.finishedAt && totalCount > 0 && (
-              <div className="space-y-1">
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>{checkedCount} / {totalCount} completed</span>
-                  <span>{progressPct}%</span>
-                </div>
-                <Progress value={progressPct} className="h-2" />
-              </div>
-            )}
-
-            <div>
-              <div className="space-y-3">
-                {daySessions.map((sess, si) => {
-                  const prefix = isMultiSession ? `s${si}-` : '';
-                  const sessHasRuns = hasRuns(sess);
-                  const sessHasExercises = hasExercises(sess);
-                  const sessIsHybrid = sessHasRuns && sessHasExercises;
-                  return (
-                    <div key={`session-${si}`} className="space-y-3">
-                      {isMultiSession && (
-                        <div className="flex items-center gap-3 pt-2">
-                          <h3 className="text-base font-semibold text-primary whitespace-nowrap">{sess.title}</h3>
-                          <Separator className="flex-1" />
-                        </div>
-                      )}
-                      {sessHasRuns && (
-                        <>
-                          {sessIsHybrid && <h4 className="text-sm font-semibold text-muted-foreground">Runs</h4>}
-                          {(sess as RunningWorkout).runs.map((run: PlannedRun, index) => {
-                            const key = `${prefix}run-${index}`;
-                            const isDone = !!exerciseChecklist[key];
-                            const rawLabel = formatPlannedRun(run);
-                            const description = user?.unitSystem === 'imperial' ? convertDistanceInText(rawLabel, 'imperial') : rawLabel;
-                            return (
-                              <Card key={`${run.description}-${index}`} className={isDone ? 'opacity-60' : ''}>
-                                <CardContent className="py-4 px-2 flex items-center gap-4">
-                                  {!session.finishedAt && (
-                                    <button onClick={() => handleToggleExercise(key)} className="shrink-0 text-muted-foreground hover:text-primary transition-colors" aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}>
-                                      {isDone ? <CheckSquare className="h-6 w-6 text-primary" /> : <Square className="h-6 w-6" />}
-                                    </button>
-                                  )}
-                                  <div className="flex-1">
-                                    <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{description}</p>
-                                    {trainingPaces && (
-                                      <p className="text-sm text-muted-foreground">Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km</p>
-                                    )}
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                        </>
-                      )}
-                      {sessHasExercises && (
-                        <>
-                          {sessIsHybrid && <h4 className="text-sm font-semibold text-muted-foreground mt-2">Exercises</h4>}
-                          {(sess as Workout).exercises.map((ex: Exercise, index) => {
-                            const key = `${prefix}ex-${index}`;
-                            const isDone = !!exerciseChecklist[key];
-                            const details = user?.unitSystem ? convertTextWithUnits(ex.details, user.unitSystem) : ex.details;
-                            return (
-                              <Card key={`${ex.name}-${index}`} className={isDone ? 'opacity-60' : ''}>
-                                <CardContent className="py-4 px-2 flex items-center gap-4">
-                                  {!session.finishedAt && (
-                                    <button onClick={() => handleToggleExercise(key)} className="shrink-0 text-muted-foreground hover:text-primary transition-colors" aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}>
-                                      {isDone ? <CheckSquare className="h-6 w-6 text-primary" /> : <Square className="h-6 w-6" />}
-                                    </button>
-                                  )}
-                                  <div className="flex-1">
-                                    <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{ex.name}</p>
-                                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{details}</p>
-                                    {user && <ExerciseHistory userId={user.id} exerciseName={ex.name} />}
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {extendedExercises.length > 0 && (
-                  <><Separator /><h3 className="text-base font-semibold !mt-6">Workout Extension:</h3></>
-                )}
-
-                {extendedExercises.map((item, index) => {
-                  const key = `ext-${index}`;
+          <div className="space-y-3">
+            {hasRuns(planned) && (
+              <>
+                {isHybrid && <h4 className="text-sm font-semibold text-muted-foreground">Runs</h4>}
+                {(planned as RunningWorkout).runs.map((run: PlannedRun, index) => {
+                  const key = `run-${index}`;
                   const isDone = !!exerciseChecklist[key];
-                  const details = user?.unitSystem ? convertTextWithUnits(item.details, user.unitSystem) : item.details;
+                  const rawLabel = formatPlannedRun(run);
+                  const description = user?.unitSystem === 'imperial' ? convertDistanceInText(rawLabel, 'imperial') : rawLabel;
                   return (
-                    <Card key={`${item.name}-${index}`} className={`border-dashed border-primary/50 ${isDone ? 'opacity-60' : ''}`}>
+                    <Card key={`${run.description}-${index}`} className={isDone ? 'opacity-60' : ''}>
                       <CardContent className="py-4 px-2 flex items-center gap-4">
                         {!session.finishedAt && (
                           <button onClick={() => handleToggleExercise(key)} className="shrink-0 text-muted-foreground hover:text-primary transition-colors" aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}>
@@ -386,56 +338,105 @@ export default function ActiveWorkoutPage() {
                           </button>
                         )}
                         <div className="flex-1">
-                          <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{item.name}</p>
-                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{details}</p>
-                          {user && <ExerciseHistory userId={user.id} exerciseName={item.name} />}
+                          <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{description}</p>
+                          {trainingPaces && (
+                            <p className="text-sm text-muted-foreground">Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km</p>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
                   );
                 })}
-              </div>
-            </div>
-
-            {canExtendWorkout && !session.finishedAt && (
-              <div className="pt-2">
-                <Button variant="outline" className="w-full" onClick={handleExtendWorkout} disabled={isExtending}>
-                  {isExtending ? <Loader2 className="mr-2 animate-spin" /> : <Sparkles className="mr-2 text-yellow-400" />}
-                  {isExtending ? 'Generating...' : 'Extend Workout with AI'}
-                </Button>
-              </div>
+              </>
+            )}
+            {hasExercises(planned) && (
+              <>
+                {isHybrid && <h4 className="text-sm font-semibold text-muted-foreground mt-2">Exercises</h4>}
+                {(planned as Workout).exercises.map((ex: Exercise, index) => {
+                  const key = `ex-${index}`;
+                  const isDone = !!exerciseChecklist[key];
+                  const details = user?.unitSystem ? convertTextWithUnits(ex.details, user.unitSystem) : ex.details;
+                  return (
+                    <Card key={`${ex.name}-${index}`} className={isDone ? 'opacity-60' : ''}>
+                      <CardContent className="py-4 px-2 flex items-center gap-4">
+                        {!session.finishedAt && (
+                          <button onClick={() => handleToggleExercise(key)} className="shrink-0 text-muted-foreground hover:text-primary transition-colors" aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}>
+                            {isDone ? <CheckSquare className="h-6 w-6 text-primary" /> : <Square className="h-6 w-6" />}
+                          </button>
+                        )}
+                        <div className="flex-1">
+                          <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{ex.name}</p>
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{details}</p>
+                          {user && <ExerciseHistory userId={user.id} exerciseName={ex.name} />}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="workout-notes" className="text-base font-semibold">Workout Notes</Label>
-              <Textarea id="workout-notes" placeholder="How did the workout feel? Any PRs? Aches or pains?" value={notes} onChange={handleNotesChange} disabled={!!session.finishedAt} rows={4} />
-            </div>
+            {extendedExercises.length > 0 && (
+              <><Separator /><h3 className="text-base font-semibold !mt-6">Workout Extension:</h3></>
+            )}
 
-            <div className="flex flex-col sm:flex-row gap-2 pt-4">
-              {!session.finishedAt ? (
-                <>
-                  <Button className="w-full" onClick={handleFinishWorkout}><Flag className="mr-2" />Finish Workout</Button>
-                  <Button variant="outline" className="w-full" onClick={() => setIsLinkerOpen(true)}><LinkIcon className="mr-2" />Link Strava Activity</Button>
-                  <Button variant="outline" className="w-full" onClick={handleSkipWorkout}><X className="mr-2" />Skip Workout</Button>
-                </>
-              ) : (
-                <Button className="w-full" variant="secondary" onClick={() => setIsCompleteModalOpen(true)}><Share2 className="mr-2" />Share Workout</Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            {extendedExercises.map((item, index) => {
+              const key = `ext-${index}`;
+              const isDone = !!exerciseChecklist[key];
+              const details = user?.unitSystem ? convertTextWithUnits(item.details, user.unitSystem) : item.details;
+              return (
+                <Card key={`${item.name}-${index}`} className={`border-dashed border-primary/50 ${isDone ? 'opacity-60' : ''}`}>
+                  <CardContent className="py-4 px-2 flex items-center gap-4">
+                    {!session.finishedAt && (
+                      <button onClick={() => handleToggleExercise(key)} className="shrink-0 text-muted-foreground hover:text-primary transition-colors" aria-label={isDone ? 'Mark incomplete' : 'Mark complete'}>
+                        {isDone ? <CheckSquare className="h-6 w-6 text-primary" /> : <Square className="h-6 w-6" />}
+                      </button>
+                    )}
+                    <div className="flex-1">
+                      <p className={`font-semibold ${isDone ? 'line-through text-muted-foreground' : ''}`}>{item.name}</p>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{details}</p>
+                      {user && <ExerciseHistory userId={user.id} exerciseName={item.name} />}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
 
-      {session && workout && (
-        <>
-          {session.finishedAt && (
-            <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><Loader2 className="h-8 w-8 animate-spin text-white" /></div>}>
-              <WorkoutCompleteModal isOpen={isCompleteModalOpen} onClose={() => setIsCompleteModalOpen(false)} session={session} userHasStrava={!!user?.strava?.accessToken} workout={workout} />
-            </Suspense>
+          {canExtendWorkout && !session.finishedAt && (
+            <div className="pt-2">
+              <Button variant="outline" className="w-full" onClick={handleExtendWorkout} disabled={isExtending}>
+                {isExtending ? <Loader2 className="mr-2 animate-spin" /> : <Sparkles className="mr-2 text-yellow-400" />}
+                {isExtending ? 'Generating...' : 'Extend Workout with AI'}
+              </Button>
+            </div>
           )}
-          <LinkStravaActivityDialog isOpen={isLinkerOpen} setIsOpen={setIsLinkerOpen} session={session} onLinkSuccess={handleLinkSuccess} />
-        </>
+
+          <div className="space-y-2">
+            <Label htmlFor={`workout-notes-${session.id}`} className="text-base font-semibold">Workout Notes</Label>
+            <Textarea id={`workout-notes-${session.id}`} placeholder="How did the workout feel? Any PRs? Aches or pains?" value={notes} onChange={handleNotesChange} disabled={!!session.finishedAt} rows={4} />
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 pt-4">
+            {!session.finishedAt ? (
+              <>
+                <Button className="w-full" onClick={handleFinishWorkout}><Flag className="mr-2" />Finish{isMultiSession ? ' Session' : ' Workout'}</Button>
+                <Button variant="outline" className="w-full" onClick={() => setIsLinkerOpen(true)}><LinkIcon className="mr-2" />Link Strava Activity</Button>
+                <Button variant="outline" className="w-full" onClick={handleSkipWorkout}><X className="mr-2" />Skip</Button>
+              </>
+            ) : (
+              <Button className="w-full" variant="secondary" onClick={() => setIsCompleteModalOpen(true)}><Share2 className="mr-2" />Share Workout</Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {session.finishedAt && (
+        <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><Loader2 className="h-8 w-8 animate-spin text-white" /></div>}>
+          <WorkoutCompleteModal isOpen={isCompleteModalOpen} onClose={() => setIsCompleteModalOpen(false)} session={session} userHasStrava={!!user?.strava?.accessToken} workout={planned as Workout | RunningWorkout} />
+        </Suspense>
       )}
+      <LinkStravaActivityDialog isOpen={isLinkerOpen} setIsOpen={setIsLinkerOpen} session={session} onLinkSuccess={handleLinkSuccess} />
     </>
   );
 }
