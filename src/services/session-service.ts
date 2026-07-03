@@ -153,6 +153,104 @@ function createSessionData(userId: string, programId: string, date: Date, workou
     if (isNew) {
         data.startedAt = Timestamp.now();
     }
-    
+
     return data;
+}
+
+const DayChangeSchema = z.object({
+  date: z.date(),
+  // Final list of sub-workouts for the day, in order. Empty = the day was cleared entirely.
+  workouts: z.array(z.any()),
+});
+
+const SaveScheduleChangesInputSchema = z.object({
+  userId: z.string(),
+  programId: z.string(),
+  days: z.array(DayChangeSchema),
+});
+
+type SaveScheduleChangesInput = z.infer<typeof SaveScheduleChangesInputSchema>;
+
+/**
+ * Persists a training-calendar drag-and-drop rearrangement: for each changed date, writes that day's
+ * final set of sub-workouts. A date whose workouts array is empty is written as an explicit "cleared"
+ * marker doc (sessionCount 0, no workoutDetails) rather than having its session docs deleted outright —
+ * deleting them would make the date fall back to the program's original schedule on the next read,
+ * silently undoing the drag. Dates that already have a finished session are skipped as a safety net;
+ * the calling UI should never include those since only future/incomplete days can be rearranged.
+ */
+export async function saveScheduleChanges(input: SaveScheduleChangesInput): Promise<void> {
+    const { userId, programId, days } = SaveScheduleChangesInputSchema.parse(input);
+    const adminDb = getAdminDb();
+    const sessionsCollection = adminDb.collection('workoutSessions');
+    const batch = adminDb.batch();
+
+    for (const { date, workouts } of days) {
+        const dateTimestamp = Timestamp.fromDate(date);
+        const existingSnap = await sessionsCollection
+            .where('userId', '==', userId)
+            .where('workoutDate', '==', dateTimestamp)
+            .where('programId', 'not-in', ['one-off-ai', 'custom-workout'])
+            .get();
+
+        if (existingSnap.docs.some(d => !!d.data().finishedAt)) continue;
+
+        const existingBySessionIndex = new Map<number, FirebaseFirestore.QueryDocumentSnapshot>();
+        existingSnap.docs.forEach(doc => {
+            const idx = doc.data().sessionIndex ?? 0;
+            if (!existingBySessionIndex.has(idx)) existingBySessionIndex.set(idx, doc);
+        });
+
+        if (workouts.length === 0) {
+            const markerDoc = existingBySessionIndex.get(0);
+            existingBySessionIndex.delete(0);
+            const markerData = {
+                userId,
+                programId,
+                workoutDate: dateTimestamp,
+                workoutTitle: 'Rest',
+                programType: 'hyrox' as ProgramType,
+                workoutDetails: null,
+                sessionIndex: 0,
+                sessionCount: 0,
+                finishedAt: null,
+                skipped: false,
+            };
+            if (markerDoc) {
+                batch.update(markerDoc.ref, markerData);
+            } else {
+                batch.set(sessionsCollection.doc(), { ...markerData, startedAt: Timestamp.now(), notes: '' });
+            }
+        } else {
+            for (let i = 0; i < workouts.length; i++) {
+                const workout = workouts[i] as WorkoutDay;
+                const existingDoc = existingBySessionIndex.get(i);
+                existingBySessionIndex.delete(i);
+
+                const data = {
+                    userId,
+                    programId,
+                    workoutDate: dateTimestamp,
+                    workoutTitle: workout.title,
+                    programType: deriveSessionProgramType(workout),
+                    workoutDetails: workout,
+                    sessionIndex: i,
+                    sessionCount: workouts.length,
+                    finishedAt: null,
+                    skipped: false,
+                };
+
+                if (existingDoc) {
+                    batch.update(existingDoc.ref, data);
+                } else {
+                    batch.set(sessionsCollection.doc(), { ...data, startedAt: Timestamp.now(), notes: '' });
+                }
+            }
+        }
+
+        // Any remaining slots weren't reused above (the day shrank) — remove them.
+        existingBySessionIndex.forEach(doc => batch.delete(doc.ref));
+    }
+
+    await batch.commit();
 }

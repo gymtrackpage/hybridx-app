@@ -26,13 +26,25 @@ export function calculateStreakData(sessions: WorkoutSession[]): StreakData {
     };
   }
 
+  // A day can now have multiple completed sub-workouts (e.g. a Run + a Weight Training
+  // session). Any one of them finishing counts the day toward the streak, so de-dupe to
+  // one entry per calendar day before running the day-to-day streak logic.
+  const uniqueDays: Date[] = [];
+  for (const session of completedSessions) {
+    const day = new Date(session.workoutDate);
+    day.setHours(0, 0, 0, 0);
+    if (uniqueDays.length === 0 || !isSameDay(uniqueDays[uniqueDays.length - 1], day)) {
+      uniqueDays.push(day);
+    }
+  }
+
   // Calculate current streak
   let currentStreak = 0;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Check if most recent workout was today or yesterday
-  const mostRecent = completedSessions[0].workoutDate;
+  // Check if most recent workout day was today or yesterday
+  const mostRecent = uniqueDays[0];
   if (!isToday(mostRecent) && !isYesterday(mostRecent)) {
     // Streak is broken
     currentStreak = 0;
@@ -40,14 +52,11 @@ export function calculateStreakData(sessions: WorkoutSession[]): StreakData {
     // Count consecutive days
     let checkDate = isToday(mostRecent) ? today : subDays(today, 1);
 
-    for (const session of completedSessions) {
-      const sessionDate = new Date(session.workoutDate);
-      sessionDate.setHours(0, 0, 0, 0);
-
-      if (isSameDay(sessionDate, checkDate)) {
+    for (const day of uniqueDays) {
+      if (isSameDay(day, checkDate)) {
         currentStreak++;
         checkDate = subDays(checkDate, 1);
-      } else if (sessionDate < checkDate) {
+      } else if (day < checkDate) {
         // Gap in streak
         break;
       }
@@ -58,13 +67,8 @@ export function calculateStreakData(sessions: WorkoutSession[]): StreakData {
   let longestStreak = 0;
   let tempStreak = 1;
 
-  for (let i = 0; i < completedSessions.length - 1; i++) {
-    const current = new Date(completedSessions[i].workoutDate);
-    const next = new Date(completedSessions[i + 1].workoutDate);
-    current.setHours(0, 0, 0, 0);
-    next.setHours(0, 0, 0, 0);
-
-    const daysDiff = Math.floor((current.getTime() - next.getTime()) / (1000 * 60 * 60 * 24));
+  for (let i = 0; i < uniqueDays.length - 1; i++) {
+    const daysDiff = Math.floor((uniqueDays[i].getTime() - uniqueDays[i + 1].getTime()) / (1000 * 60 * 60 * 24));
 
     if (daysDiff === 1) {
       tempStreak++;

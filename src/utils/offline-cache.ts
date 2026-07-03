@@ -10,6 +10,7 @@ const CACHE_KEYS = {
   PROGRAM: 'cached_program',
   TODAYS_WORKOUT: 'cached_todays_workout',
   TODAYS_SESSION: 'cached_todays_session',
+  TODAYS_SESSIONS: 'cached_todays_sessions',
   LAST_SYNC: 'last_sync_time',
   PENDING_UPDATES: 'pending_updates',
 };
@@ -295,6 +296,61 @@ export const OfflineCache = {
 
   clearTodaysSession(): void {
     localStorage.removeItem(CACHE_KEYS.TODAYS_SESSION);
+  },
+
+  /**
+   * Save all of today's sessions (one per sub-workout, e.g. Run + Weight Training) for offline access.
+   */
+  saveTodaysSessions(sessions: WorkoutSession[]): void {
+    try {
+      const entry: CacheEntry<any[]> = {
+        data: sessions.map(s => ({
+          ...s,
+          workoutDate: s.workoutDate instanceof Date ? s.workoutDate.toISOString() : s.workoutDate,
+          startedAt: s.startedAt instanceof Date ? s.startedAt.toISOString() : s.startedAt,
+          finishedAt: s.finishedAt instanceof Date ? s.finishedAt?.toISOString() : s.finishedAt,
+        })),
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(CACHE_KEYS.TODAYS_SESSIONS, JSON.stringify(entry));
+    } catch (error) {
+      logger.error('Error caching today\'s sessions:', error);
+    }
+  },
+
+  /**
+   * Get today's sessions from cache. Returns null if not cached or not for today.
+   */
+  getTodaysSessions(): WorkoutSession[] | null {
+    try {
+      const cached = localStorage.getItem(CACHE_KEYS.TODAYS_SESSIONS);
+      if (!cached) return null;
+
+      const entry: CacheEntry<any[]> = JSON.parse(cached);
+      if (!entry.data || entry.data.length === 0) return null;
+
+      const today = new Date().toISOString().split('T')[0];
+      const sessionDate = new Date(entry.data[0].workoutDate).toISOString().split('T')[0];
+
+      if (sessionDate !== today) {
+        this.clearTodaysSessions();
+        return null;
+      }
+
+      return entry.data.map(s => ({
+        ...s,
+        workoutDate: new Date(s.workoutDate),
+        startedAt: new Date(s.startedAt),
+        finishedAt: s.finishedAt ? new Date(s.finishedAt) : undefined,
+      }));
+    } catch (error) {
+      logger.error('Error reading cached today\'s sessions:', error);
+      return null;
+    }
+  },
+
+  clearTodaysSessions(): void {
+    localStorage.removeItem(CACHE_KEYS.TODAYS_SESSIONS);
   },
 
   /**

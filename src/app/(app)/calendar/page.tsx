@@ -1,731 +1,463 @@
 // src/app/(app)/calendar/page.tsx
 'use client';
 
-import { useState, useEffect, lazy, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { getAuthInstance } from '@/lib/firebase';
 import { getUserClient } from '@/services/user-service-client';
 import { getProgramClient } from '@/services/program-service-client';
-import { getWorkoutForDay, formatPlannedRun } from '@/lib/workout-utils';
-import { getAllUserSessions, getOrCreateWorkoutSession, updateWorkoutSession } from '@/services/session-service-client';
-import { swapWorkouts } from '@/services/session-service'; // Import the new server action
-import type { User, Program, WorkoutDay, WorkoutSession, RunningWorkout, Workout } from '@/models/types';
+import { getWorkoutForDay } from '@/lib/workout-utils';
+import { getAllUserSessions } from '@/services/session-service-client';
+import { saveScheduleChanges } from '@/services/session-service';
+import type { Program, WorkoutDay, WorkoutSession, RunningWorkout, Workout, UnitSystem } from '@/models/types';
 import { hasRuns, hasExercises } from '@/lib/type-guards';
-import { addDays, format, isSameDay, parseISO, isValid, isToday, isPast, startOfDay } from 'date-fns';
-import { Button } from '@/components/ui/button';
-import { Link as LinkIcon, Activity, Clock, MapPin, Forward, Edit, CheckCircle, Loader2 } from 'lucide-react';
+import { convertDistance } from '@/lib/unit-conversion';
+import { addDays, format, isSameDay, startOfDay, endOfWeek } from 'date-fns';
+import { RotateCcw, Loader2, CheckCircle2, XCircle, GripVertical } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { formatTextWithBullets } from '@/utils/text-formatter';
-import { Textarea } from '@/components/ui/textarea';
-import { useDebouncedCallback } from 'use-debounce';
+import { cn } from '@/lib/utils';
 
-// Lazy load heavy components
-const Calendar = lazy(() => import('@/components/ui/calendar').then(mod => ({ default: mod.Calendar })));
-const LinkStravaActivityDialog = lazy(() => import('@/components/link-strava-activity-dialog').then(mod => ({ default: mod.LinkStravaActivityDialog })));
-
-interface WorkoutEvent {
+interface DaySlot {
   date: Date;
-  workout?: WorkoutDay;
-  session?: WorkoutSession;
-  isCompleted: boolean;
-  isMissed: boolean;
-  color: string;
-  isRestDay: boolean;
+  dateKey: string;
+  workouts: WorkoutDay[];
+  sessions: WorkoutSession[];
+  isToday: boolean;
 }
 
+function isRestDayWorkout(workout: WorkoutDay): boolean {
+  const t = workout.title.toLowerCase();
+  return t.includes('rest') || t.includes('recover');
+}
+
+function workoutAccentClass(workout: WorkoutDay): string {
+  if (hasRuns(workout) && hasExercises(workout)) return 'border-l-teal-500';
+  if (hasRuns(workout)) {
+    switch ((workout as RunningWorkout).runs[0]?.type) {
+      case 'intervals': return 'border-l-orange-500';
+      case 'tempo': return 'border-l-yellow-500';
+      case 'long': return 'border-l-blue-600';
+      case 'easy':
+      case 'recovery': return 'border-l-blue-400';
+      default: return 'border-l-blue-500';
+    }
+  }
+  if (hasExercises(workout)) {
+    return (workout as Workout).exercises[0]?.sessionType === 'cardio' ? 'border-l-pink-500' : 'border-l-purple-500';
+  }
+  return 'border-l-gray-400';
+}
+
+function summarizeWorkout(workout: WorkoutDay, unitSystem?: UnitSystem): string {
+  if (hasRuns(workout)) {
+    const totalKm = (workout as RunningWorkout).runs.reduce((sum, r) => sum + (r.distance || 0), 0);
+    return convertDistance(totalKm, unitSystem ?? 'metric');
+  }
+  if (hasExercises(workout)) {
+    const n = (workout as Workout).exercises.length;
+    return `${n} exercise${n === 1 ? '' : 's'}`;
+  }
+  return '';
+}
+
+function buildDaySlots(program: Program, startDate: Date, sessions: WorkoutSession[], rangeStart: Date, rangeEnd: Date): DaySlot[] {
+  const sessionsByDate = new Map<string, WorkoutSession[]>();
+  sessions.forEach(s => {
+    const key = format(startOfDay(s.workoutDate), 'yyyy-MM-dd');
+    const list = sessionsByDate.get(key) ?? [];
+    list.push(s);
+    sessionsByDate.set(key, list);
+  });
+  sessionsByDate.forEach(list => list.sort((a, b) => (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0)));
+
+  const today0 = startOfDay(new Date());
+  const slots: DaySlot[] = [];
+  let cursor = new Date(rangeStart);
+  while (cursor <= rangeEnd) {
+    const dateKey = format(cursor, 'yyyy-MM-dd');
+    const persisted = sessionsByDate.get(dateKey);
+    // A persisted doc for the date (even a content-less "cleared" one) is fully authoritative —
+    // it never partially falls back to the program's original schedule for that date.
+    const workouts = persisted
+      ? persisted.map(s => s.workoutDetails).filter((w): w is WorkoutDay => !!w)
+      : getWorkoutForDay(program, startDate, cursor).sessions;
+
+    slots.push({
+      date: new Date(cursor),
+      dateKey,
+      workouts,
+      sessions: persisted ?? [],
+      isToday: isSameDay(cursor, today0),
+    });
+    cursor = addDays(cursor, 1);
+  }
+  return slots;
+}
+
+const MAX_WEEKS = 16;
+
 export default function CalendarPage() {
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [loading, setLoading] = useState(true);
-  const [workoutEvents, setWorkoutEvents] = useState<WorkoutEvent[]>([]);
-  const [isLinkerOpen, setIsLinkerOpen] = useState(false);
-  const [sessionToLink, setSessionToLink] = useState<WorkoutSession | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [editingNotes, setEditingNotes] = useState(false);
-  const [notes, setNotes] = useState('');
-  const [isMarkingDone, setIsMarkingDone] = useState(false);
-  const router = useRouter();
+  const [program, setProgram] = useState<Program | null>(null);
+  const [unitSystem, setUnitSystem] = useState<UnitSystem | undefined>(undefined);
+  const [programStartDate, setProgramStartDate] = useState<Date | null>(null);
+  const [daySlots, setDaySlots] = useState<DaySlot[]>([]);
+  const [originalByKey, setOriginalByKey] = useState<Map<string, WorkoutDay[]>>(new Map());
+  const [changedKeys, setChangedKeys] = useState<Set<string>>(new Set());
+  const [activeDrag, setActiveDrag] = useState<{ dateKey: string; workout: WorkoutDay } | null>(null);
+  const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
-  const selectedEvent = workoutEvents.find(event => 
-    selectedDate && isSameDay(event.date, selectedDate)
-  );
-
-  const todaysEvent = workoutEvents.find(event => isToday(event.date));
-
-  const selectedWorkout = selectedEvent?.workout;
-  const completedSession = selectedEvent?.session;
-
-  // When selectedEvent changes, update notes state
-  useEffect(() => {
-    if (selectedEvent?.session?.notes) {
-      setNotes(selectedEvent.session.notes);
-    } else {
-      setNotes('');
-    }
-    setEditingNotes(false); // Reset editing state on date change
-  }, [selectedEvent]);
-
-  const fetchCalendarData = async (fbUser: FirebaseUser) => {
+  const loadCalendarData = useCallback(async (fbUser: FirebaseUser) => {
     try {
-      setFirebaseUser(fbUser);
       const user = await getUserClient(fbUser.uid);
-      const sessions = await getAllUserSessions(fbUser.uid);
-      
-      let program = null;
+      setUnitSystem(user?.unitSystem);
+
+      let userProgram: Program | null = null;
       if (user?.programId && user.startDate) {
-        program = await getProgramClient(user.programId);
+        userProgram = user.customProgram
+          ? ({ id: user.programId, workouts: user.customProgram } as Program)
+          : await getProgramClient(user.programId);
       }
-      
-      generateWorkoutEvents(program, user?.startDate, sessions);
+      setProgram(userProgram);
+
+      if (!userProgram || !user?.startDate) {
+        setDaySlots([]);
+        setOriginalByKey(new Map());
+        setChangedKeys(new Set());
+        return;
+      }
+
+      const startDate = startOfDay(new Date(user.startDate));
+      setProgramStartDate(startDate);
+      const today0 = startOfDay(new Date());
+      const rangeStart = today0;
+      const cycleLength = Math.max(...userProgram.workouts.map(w => w.day), 0);
+      const programEnd = addDays(startDate, Math.max(cycleLength - 1, 0));
+      const currentWeekEnd = endOfWeek(today0, { weekStartsOn: 1 });
+      const candidateEnd = programEnd > currentWeekEnd ? programEnd : currentWeekEnd;
+      const cappedEnd = addDays(rangeStart, MAX_WEEKS * 7 - 1);
+      const rangeEnd = candidateEnd < cappedEnd ? candidateEnd : cappedEnd;
+
+      const sessions = await getAllUserSessions(fbUser.uid);
+      const slots = buildDaySlots(userProgram, startDate, sessions, rangeStart, rangeEnd);
+
+      setDaySlots(slots);
+      setOriginalByKey(new Map(slots.map(s => [s.dateKey, s.workouts])));
+      setChangedKeys(new Set());
     } catch (error) {
-        console.error('❌ Error fetching calendar data:', error);
+      console.error('Error fetching calendar data:', error);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        setLoading(true);
-        const auth = await getAuthInstance();
-        const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-          if (fbUser) {
-            await fetchCalendarData(fbUser);
-          } else {
-            setLoading(false);
-          }
-        });
-        return unsubscribe;
-      } catch (error) {
-        console.error('❌ Calendar initialization error:', error);
-        setLoading(false);
-      }
-      return () => {};
-    };
-
-    let unsubscribe: () => void = () => {};
-    initialize().then(unsub => unsubscribe = unsub);
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
   }, []);
 
-    const getEventColor = (workout: WorkoutDay, isCompleted: boolean, isMissed: boolean): string => {
-        if (isCompleted) return 'bg-green-500';
-        if (isMissed) return 'bg-red-400';
-
-        const hasR = hasRuns(workout);
-        const hasE = hasExercises(workout);
-
-        // Hybrid day (run + strength/cardio)
-        if (hasR && hasE) return 'bg-teal-500';
-
-        // Running — shade by intensity
-        if (hasR) {
-            const primaryRunType = (workout as RunningWorkout).runs[0]?.type;
-            switch (primaryRunType) {
-                case 'intervals': return 'bg-orange-500';
-                case 'tempo':     return 'bg-yellow-500';
-                case 'long':      return 'bg-blue-600';
-                case 'easy':
-                case 'recovery':  return 'bg-blue-400';
-                default:          return 'bg-blue-500';
-            }
-        }
-
-        // Strength or cardio — check the sessionType on exercises
-        if (hasE) {
-            const firstSessionType = (workout as Workout).exercises[0]?.sessionType;
-            if (firstSessionType === 'cardio') return 'bg-pink-500';
-            return 'bg-purple-500'; // strength (default)
-        }
-
-        return 'bg-gray-400';
-    };
-
-  const generateWorkoutEvents = (program: Program | null, startDate: Date | undefined, sessions: WorkoutSession[]) => {
-    const events: WorkoutEvent[] = [];
-    
-    const sessionsMap = new Map<string, WorkoutSession>();
-    sessions.forEach(session => {
-        let sessionDate: Date;
-        const dateSource = session.finishedAt || session.workoutDate;
-
-        if (dateSource instanceof Date) {
-          sessionDate = new Date(dateSource);
+  useEffect(() => {
+    let unsubscribe: () => void = () => {};
+    const initialize = async () => {
+      const auth = await getAuthInstance();
+      unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+        if (fbUser) {
+          setFirebaseUser(fbUser);
+          setLoading(true);
+          await loadCalendarData(fbUser);
         } else {
-          // Ensure dateSource is a string before calling toString() if it's not a Date object
-          // However, parseISO expects a string. 
-          // dateSource comes from session.finishedAt (Date | string | undefined) or session.workoutDate (Date)
-          // If dateSource is undefined, we shouldn't be here due to the || check above? Wait, finishedAt is optional. workoutDate is required.
-          // So dateSource should be defined.
-          
-          if (typeof dateSource === 'string') {
-              sessionDate = parseISO(dateSource);
-          } else {
-             // Fallback if it's something else (like a Firestore timestamp object that might have toDate())
-             // or just convert to string safely
-             sessionDate = parseISO(String(dateSource));
-          }
+          setLoading(false);
         }
+      });
+    };
+    initialize();
+    return () => unsubscribe();
+  }, [loadCalendarData]);
 
-        if (isValid(sessionDate)) {
-            const dateKey = format(startOfDay(sessionDate), 'yyyy-MM-dd');
-            sessionsMap.set(dateKey, session);
-        }
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } })
+  );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const slot = daySlots.find(d => d.dateKey === event.active.id);
+    if (slot && slot.workouts.length === 1) {
+      setActiveDrag({ dateKey: slot.dateKey, workout: slot.workouts[0] });
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDrag(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const sourceKey = String(active.id);
+    const targetKey = String(over.id);
+
+    setDaySlots(prev => {
+      const sourceSlot = prev.find(d => d.dateKey === sourceKey);
+      const targetSlot = prev.find(d => d.dateKey === targetKey);
+      if (!sourceSlot || !targetSlot) return prev;
+      const sourceWorkouts = sourceSlot.workouts;
+      const targetWorkouts = targetSlot.workouts;
+      return prev.map(d => {
+        if (d.dateKey === sourceKey) return { ...d, workouts: targetWorkouts };
+        if (d.dateKey === targetKey) return { ...d, workouts: sourceWorkouts };
+        return d;
+      });
     });
-
-    if (program && startDate) {
-      const normalizedStartDate = startOfDay(new Date(startDate));
-      
-      const programDuration = Math.max(...program.workouts.map(w => w.day), 0);
-
-      for (let i = 0; i < programDuration + 365; i++) { // Generate events for a year past program end
-        const currentDate = addDays(normalizedStartDate, i);
-        const dateKey = format(currentDate, 'yyyy-MM-dd');
-        const { workout: programmedWorkout } = getWorkoutForDay(program, normalizedStartDate, currentDate);
-        const session = sessionsMap.get(dateKey);
-        
-        const workout = session?.workoutDetails || programmedWorkout;
-
-        if (workout) {
-            const isRestDay = workout.title.toLowerCase().includes('rest') || workout.title.toLowerCase().includes('recover');
-            const isCompleted = !!session?.finishedAt && !session?.skipped;
-            const isPastDate = isPast(currentDate) && !isToday(currentDate);
-            const isMissed = !isCompleted && !session?.skipped && isPastDate && !isRestDay;
-
-            events.push({
-                date: currentDate,
-                workout: workout,
-                session: session,
-                isCompleted,
-                isMissed,
-                color: getEventColor(workout, isCompleted, isMissed),
-                isRestDay,
-            });
-
-            if (session) {
-                sessionsMap.delete(dateKey);
-            }
-        }
-      }
-    }
-    
-    sessionsMap.forEach((session, dateKey) => {
-        if (session.workoutDetails) {
-            const isRestDay = session.workoutDetails.title.toLowerCase().includes('rest') || session.workoutDetails.title.toLowerCase().includes('recover');
-            const eventDate = parseISO(`${dateKey}T12:00:00.000Z`);
-            const isCompleted = !!session.finishedAt && !session.skipped;
-            events.push({
-                date: eventDate,
-                session: session,
-                workout: session.workoutDetails,
-                isCompleted,
-                isMissed: false,
-                color: isCompleted ? 'bg-green-500' : 'bg-gray-400',
-                isRestDay,
-            });
-        }
+    setChangedKeys(prev => {
+      const next = new Set(prev);
+      next.add(sourceKey);
+      next.add(targetKey);
+      return next;
     });
-
-    setWorkoutEvents(events);
   };
 
-  const debouncedSaveNotes = useDebouncedCallback(async (value: string) => {
-    if (!completedSession) return;
+  const handleResetWeek = (weekKeys: string[]) => {
+    setDaySlots(prev => prev.map(d => weekKeys.includes(d.dateKey) ? { ...d, workouts: originalByKey.get(d.dateKey) ?? [] } : d));
+    setChangedKeys(prev => {
+      const next = new Set(prev);
+      weekKeys.forEach(k => next.delete(k));
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    if (!firebaseUser || !program || changedKeys.size === 0) return;
+    setSaving(true);
     try {
-      await updateWorkoutSession(completedSession.id, { notes: value });
-      // We don't need to show a toast every time they type
+      const days = Array.from(changedKeys).map(key => {
+        const slot = daySlots.find(d => d.dateKey === key)!;
+        return { date: slot.date, workouts: slot.workouts };
+      });
+      await saveScheduleChanges({ userId: firebaseUser.uid, programId: program.id, days });
+      toast({ title: 'Schedule updated', description: 'Your training calendar has been saved.' });
+      await loadCalendarData(firebaseUser);
     } catch (error) {
-      console.error("Failed to save notes:", error);
-      toast({ title: "Error", description: "Could not save your notes.", variant: "destructive" });
-    }
-  }, 1000);
-
-  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setNotes(e.target.value);
-    debouncedSaveNotes(e.target.value);
-  };
-
-  const handleSaveNotes = () => {
-    debouncedSaveNotes.flush();
-    setEditingNotes(false);
-    toast({ title: "Notes Saved", description: "Your workout notes have been updated." });
-  };
-
-
-  const handleDoToday = async () => {
-      if (!firebaseUser || !selectedWorkout || !selectedDate || !program) {
-          toast({ title: "Error", description: "Cannot swap workout. User or workout data is missing.", variant: "destructive" });
-          return;
-      }
-
-      try {
-          const today = startOfDay(new Date());
-          const sourceDate = startOfDay(selectedDate);
-          
-          const todaysOriginalWorkout = todaysEvent?.workout || null;
-
-          await swapWorkouts({
-              userId: firebaseUser.uid,
-              programId: program.id,
-              date1: today, 
-              workout1: selectedWorkout,
-              date2: sourceDate,
-              workout2: todaysOriginalWorkout
-          });
-          
-          toast({ title: "Workouts Swapped!", description: `"${selectedWorkout.title}" is now scheduled for today.` });
-          router.push('/workout/active');
-
-      } catch (error) {
-          console.error("Failed to swap workouts:", error);
-          toast({ title: "Error", description: "Could not swap the workouts. Please try again.", variant: "destructive" });
-      }
-  };
-
-
-  const getCompletedExercises = (session: WorkoutSession): { name: string, details: string }[] => {
-    if (session.workoutDetails) {
-        const runs = hasRuns(session.workoutDetails) ? session.workoutDetails.runs.map(r => ({
-            name: r.description || r.type,
-            details: `${r.distance}km – ${r.type}`,
-        })) : [];
-        const exercises = (session.workoutDetails.exercises ?? []).map((e: any) => ({
-            name: e.name,
-            details: e.details || 'Completed',
-        }));
-        return [...runs, ...exercises];
-    }
-    
-    // Type assertion needed here because completedItems is not in the WorkoutSession interface anymore
-    // but might still exist in older data or handled dynamically.
-    // If it is indeed removed, this block should be removed or adjusted.
-    // For now, casting to 'any' to bypass the type check error if the data might still be there.
-    const sessionAny = session as any;
-    if (!sessionAny.completedItems) return [];
-    const items: { name: string, details: string }[] = [];
-    for (const itemName in sessionAny.completedItems) {
-      if (sessionAny.completedItems[itemName]) {
-        items.push({ name: itemName, details: 'Completed' });
-      }
-    }
-    return items;
-  };
-
-  const formatSessionDate = (session: WorkoutSession): string => {
-    if (!session.finishedAt) return 'Unknown date';
-    
-    try {
-      let finishedDate: Date;
-      
-      if (session.finishedAt instanceof Date) {
-        finishedDate = session.finishedAt;
-      } else if (typeof session.finishedAt === 'string') {
-        finishedDate = parseISO(session.finishedAt);
-      } else if (session.finishedAt && typeof (session.finishedAt as any).toDate === 'function') {
-        finishedDate = (session.finishedAt as any).toDate();
-      } else {
-        return 'Invalid date';
-      }
-
-      return format(finishedDate, "MMMM do, yyyy 'at' h:mm a");
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return 'Invalid date';
-    }
-  };
-
-  const handleLinkSuccess = async () => {
-    setIsLinkerOpen(false);
-    setSessionToLink(null);
-    setLoading(true);
-    const auth = await getAuthInstance();
-    if (auth.currentUser) {
-        await fetchCalendarData(auth.currentUser);
-    }
-    setLoading(false);
-  };
-
-  const handleMarkDone = async () => {
-    if (!selectedWorkout || !selectedDate || !firebaseUser) return;
-    setIsMarkingDone(true);
-    try {
-        const dayStart = startOfDay(selectedDate);
-        const programId = program?.id || 'manual';
-
-        // Ensure a session doc exists (creates one if not)
-        const session = await getOrCreateWorkoutSession(
-            firebaseUser.uid,
-            programId,
-            dayStart,
-            selectedWorkout,
-        );
-
-        // Mark it completed at noon on the selected day (preserves the date correctly)
-        const completedAt = new Date(selectedDate);
-        completedAt.setHours(12, 0, 0, 0);
-
-        await updateWorkoutSession(session.id, {
-            finishedAt: completedAt,
-            workoutTitle: selectedWorkout.title,
-            skipped: false,
-        });
-
-        toast({ title: 'Marked as Completed', description: `${selectedWorkout.title} logged.` });
-        await fetchCalendarData(firebaseUser);
-    } catch (error) {
-        console.error('Failed to mark workout done:', error);
-        toast({ title: 'Error', description: 'Could not mark workout as completed.', variant: 'destructive' });
+      console.error('Failed to save schedule changes:', error);
+      toast({ title: 'Error', description: 'Could not save your changes. Please try again.', variant: 'destructive' });
     } finally {
-        setIsMarkingDone(false);
+      setSaving(false);
     }
   };
-  
-    const formatDuration = (seconds: number) => {
-        if (!seconds) return '0m';
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        if (h > 0) {
-            return `${h}h ${m}m`;
-        }
-        return `${m}m`;
-    };
 
-    const formatDistance = (meters: number) => {
-        if (!meters) return '0 km';
-        const km = meters / 1000;
-        return km >= 1 ? `${km.toFixed(1)} km` : `${meters.toFixed(0)} m`;
-    };
+  const { leadingSlots, weekChunks } = useMemo(() => {
+    if (daySlots.length === 0) return { leadingSlots: [] as DaySlot[], weekChunks: [] as DaySlot[][] };
+    const leadingEnd = endOfWeek(daySlots[0].date, { weekStartsOn: 1 });
+    const leading = daySlots.filter(d => d.date <= leadingEnd);
+    const rest = daySlots.filter(d => d.date > leadingEnd);
+    const chunks: DaySlot[][] = [];
+    for (let i = 0; i < rest.length; i += 7) {
+      chunks.push(rest.slice(i, i + 7));
+    }
+    return { leadingSlots: leading, weekChunks: chunks };
+  }, [daySlots]);
 
-    const [program, setProgram] = useState<Program | null>(null);
-    useEffect(() => {
-        const getProg = async (user: FirebaseUser) => {
-            const appUser = await getUserClient(user.uid);
-            if (appUser?.programId) {
-                const p = await getProgramClient(appUser.programId);
-                setProgram(p);
-            }
-        }
-        if (firebaseUser) {
-            getProg(firebaseUser);
-        }
-    }, [firebaseUser]);
+  if (loading) {
+    return (
+      <div className="space-y-6 max-w-2xl mx-auto">
+        <Skeleton className="h-8 w-1/2" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
 
+  if (!program) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Training Calendar</h1>
+          <p className="text-muted-foreground">Drag workouts between days to rearrange your week.</p>
+        </div>
+        <Card>
+          <CardContent className="text-center py-12">
+            <p className="text-muted-foreground">Assign a program in your profile to see and rearrange your training calendar.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <>
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Workout Calendar</h1>
-        <p className="text-muted-foreground">Visualize your active program and track your progress.</p>
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <div className="space-y-6 max-w-2xl mx-auto pb-24">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Training Calendar</h1>
+            <p className="text-muted-foreground">Long-press and drag a workout onto another day to reschedule it.</p>
+          </div>
+          <Button onClick={handleSave} disabled={changedKeys.size === 0 || saving} className={cn(changedKeys.size === 0 && 'opacity-50')}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Save{changedKeys.size > 0 ? ` (${changedKeys.size})` : ''}
+          </Button>
+        </div>
+
+        {daySlots.length === 0 ? (
+          <Card><CardContent className="text-center py-12"><p className="text-muted-foreground">No upcoming schedule found.</p></CardContent></Card>
+        ) : (
+          <>
+            <div className="rounded-lg border overflow-hidden divide-y">
+              {leadingSlots.map(day => (
+                <DayRow key={day.dateKey} day={day} unitSystem={unitSystem} />
+              ))}
+            </div>
+
+            {weekChunks.map((week, wi) => {
+              const range = `${format(week[0].date, 'd MMM')} - ${format(week[week.length - 1].date, 'd MMM')}`;
+              const firstDayInfo = programStartDate ? getWorkoutForDay(program, programStartDate, week[0].date) : null;
+              const weekNumber = firstDayInfo && firstDayInfo.day >= 1 ? Math.ceil(firstDayInfo.day / 7) : undefined;
+              const weekWorkouts = week.flatMap(d => d.workouts).filter(w => !isRestDayWorkout(w));
+              const totalRunKm = weekWorkouts.filter(hasRuns).reduce((sum, w) => sum + (w as RunningWorkout).runs.reduce((s, r) => s + (r.distance || 0), 0), 0);
+              const weekKeys = week.map(d => d.dateKey);
+              const hasWeekChanges = weekKeys.some(k => changedKeys.has(k));
+
+              return (
+                <div key={wi} className="rounded-lg border overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+                    <div>
+                      <p className="font-bold flex items-center gap-2">
+                        {range}
+                        {weekNumber !== undefined && <Badge variant="secondary">Week {weekNumber}</Badge>}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {weekWorkouts.length} session{weekWorkouts.length === 1 ? '' : 's'}
+                        {totalRunKm > 0 ? ` • ${convertDistance(totalRunKm, unitSystem ?? 'metric')} running` : ''}
+                      </p>
+                    </div>
+                    {hasWeekChanges && (
+                      <Button variant="ghost" size="sm" onClick={() => handleResetWeek(weekKeys)}>
+                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                        Reset
+                      </Button>
+                    )}
+                  </div>
+                  <div className="divide-y">
+                    {week.map(day => (
+                      <DayRow key={day.dateKey} day={day} unitSystem={unitSystem} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
 
-      <Card>
-        <CardContent className="p-2 md:p-6 flex justify-center">
-          {loading ? (
-            <div className="space-y-4 w-full max-w-md">
-              <Skeleton className="h-[300px] w-full" />
-            </div>
-          ) : (
-            <Suspense fallback={<Skeleton className="h-[300px] w-full" />}>
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={setSelectedDate}
-                className="rounded-md"
-                components={{
-                  DayContent: ({ date }) => {
-                    const event = workoutEvents.find(e => isSameDay(e.date, date));
-                    if (event && !event.isRestDay) {
-                      return (
-                        <div className="relative h-full w-full flex items-center justify-center">
-                          <span className="relative z-10">{date.getDate()}</span>
-                          <div
-                            className={`absolute bottom-1 h-1.5 w-1.5 rounded-full ${event.color}`}
-                          />
-                        </div>
-                      );
-                    }
-                    return <span>{date.getDate()}</span>;
-                  },
-                }}
-              />
-            </Suspense>
-          )}
-          <div className="flex flex-wrap justify-center gap-4 pt-2 pb-1 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-green-500 inline-block" /> Completed</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-400 inline-block" /> Missed</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-400 inline-block" /> Easy / Recovery Run</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-yellow-500 inline-block" /> Tempo Run</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-orange-500 inline-block" /> Intervals</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-blue-600 inline-block" /> Long Run</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-purple-500 inline-block" /> Strength</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-pink-500 inline-block" /> Conditioning</span>
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-teal-500 inline-block" /> Hybrid</span>
+      <DragOverlay>
+        {activeDrag && (
+          <div className={cn('rounded-lg bg-card border-l-4 shadow-lg px-3 py-2 max-w-xs', workoutAccentClass(activeDrag.workout))}>
+            <p className="font-semibold text-sm">{activeDrag.workout.title}</p>
+            <p className="text-xs text-muted-foreground">{summarizeWorkout(activeDrag.workout, unitSystem)}</p>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </DragOverlay>
+    </DndContext>
+  );
+}
 
-      {selectedEvent && selectedDate && (
-        <Card>
-          <CardHeader>
-            <p className="text-sm font-medium text-accent-foreground">
-              {format(selectedDate, "EEEE, MMMM do")}
-            </p>
-            <CardTitle>
-              {completedSession?.stravaActivity?.name || selectedWorkout?.title || 'Workout Details'}
-            </CardTitle>
-            {completedSession?.finishedAt && !completedSession?.skipped ? (
-              <div className="space-y-2 mt-2">
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                  Completed
-                </Badge>
-                <CardDescription>
-                  {formatSessionDate(completedSession)}
-                </CardDescription>
-              </div>
-            ) : completedSession?.skipped ? (
-              <div className="mt-2">
-                <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 w-fit">
-                  Skipped
-                </Badge>
-              </div>
-            ) : selectedEvent?.isMissed ? (
-              <div className="mt-2">
-                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 w-fit">
-                  Missed
-                </Badge>
-              </div>
-            ) : (
-               <div className="mt-2">
-                {(() => {
-                  if (!selectedWorkout) return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 w-fit">Planned</Badge>;
-                  const hasR = hasRuns(selectedWorkout);
-                  const hasE = hasExercises(selectedWorkout);
-                  if (hasR && hasE) return <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 w-fit">Hybrid</Badge>;
-                  if (hasR) {
-                    const t = (selectedWorkout as RunningWorkout).runs[0]?.type;
-                    if (t === 'intervals') return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 w-fit">Intervals</Badge>;
-                    if (t === 'tempo') return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 w-fit">Tempo Run</Badge>;
-                    if (t === 'long') return <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200 w-fit">Long Run</Badge>;
-                    return <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 w-fit">Easy Run</Badge>;
-                  }
-                  const firstSessionType = hasE ? (selectedWorkout as Workout).exercises[0]?.sessionType : undefined;
-                  if (firstSessionType === 'cardio') return <Badge variant="outline" className="bg-pink-50 text-pink-700 border-pink-200 w-fit">Conditioning</Badge>;
-                  return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 w-fit">Strength</Badge>;
-                })()}
-               </div>
-            )}
-          </CardHeader>
-          <CardContent>
-            {completedSession?.stravaActivity ? (
-                <div className="space-y-4">
-                    <div className="flex items-center justify-around p-4 border rounded-lg bg-muted/50">
-                        <div className="text-center">
-                            <div className="text-2xl font-bold">{formatDistance(completedSession.stravaActivity.distance || 0)}</div>
-                            <div className="text-xs text-muted-foreground">DISTANCE</div>
-                        </div>
-                         <div className="text-center">
-                            <div className="text-2xl font-bold">{formatDuration(completedSession.stravaActivity.moving_time || 0)}</div>
-                            <div className="text-xs text-muted-foreground">TIME</div>
-                        </div>
-                    </div>
-                </div>
-            ) : completedSession?.finishedAt ? (
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-semibold mb-2">Completed Items</h4>
-                  {getCompletedExercises(completedSession).length > 0 ? (
-                    <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-                      {getCompletedExercises(completedSession).map((exercise, index) => (
-                        <li key={index}>
-                          <span className="font-medium text-foreground">{exercise.name}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No completed items details available for this session.</p>
-                  )}
-                </div>
-              </div>
-            ) : selectedWorkout ? (
-              <div>
-                <h4 className="font-semibold mb-2">Planned Workout</h4>
-                <div className="space-y-4">
-                  {hasRuns(selectedWorkout) && selectedWorkout.runs.map((run, index) => (
-                      <div key={index} className="space-y-1">
-                        <p className="font-medium text-foreground">{formatPlannedRun(run)}</p>
-                      </div>
-                  ))}
-                  {hasExercises(selectedWorkout) && (selectedWorkout.exercises ?? []).map((exercise, index) => {
-                      const formattedDetails = formatTextWithBullets(exercise.details);
-                      return (
-                        <div key={index} className="space-y-1">
-                          <p className="font-medium text-foreground">{exercise.name}</p>
-                          {formattedDetails.map((line, lineIndex) => (
-                            <p key={lineIndex} className="text-sm text-muted-foreground whitespace-pre-wrap ml-4">
-                              {line}
-                            </p>
-                          ))}
-                        </div>
-                      );
-                  })}
-                </div>
-              </div>
-            ) : null}
+function DayRow({ day, unitSystem }: { day: DaySlot; unitSystem?: UnitSystem }) {
+  const finishedSession = day.sessions.find(s => s.finishedAt);
+  const isDone = !!finishedSession && !finishedSession.skipped;
+  const isSkipped = !!finishedSession?.skipped;
+  const isLocked = !!finishedSession; // completed/skipped — not editable
+  const workout = day.workouts[0];
+  const isEmpty = day.workouts.length === 0;
+  const isMulti = day.workouts.length > 1;
+  const isRest = !isEmpty && !isMulti && isRestDayWorkout(workout);
 
-            {/* Notes Section */}
-            {completedSession && (
-              <div className="mt-4 pt-4 border-t">
-                  <div className="flex justify-between items-center mb-2">
-                      <h4 className="font-semibold">Your Notes</h4>
-                      {!editingNotes && (
-                          <Button variant="ghost" size="sm" onClick={() => setEditingNotes(true)}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit
-                          </Button>
-                      )}
-                  </div>
-                  {editingNotes ? (
-                      <div className="space-y-2">
-                          <Textarea
-                              value={notes}
-                              onChange={handleNotesChange}
-                              placeholder="Add notes about your workout..."
-                              rows={4}
-                          />
-                          <Button size="sm" onClick={handleSaveNotes}>Save Notes</Button>
-                      </div>
-                  ) : (
-                      <p className="text-sm text-muted-foreground border-l-2 pl-4 italic min-h-[40px]">
-                          {notes || 'No notes for this workout.'}
-                      </p>
-                  )}
-              </div>
-            )}
+  const isDraggable = !isLocked && day.workouts.length === 1 && !isRest;
+  const isDroppable = !isLocked && day.workouts.length <= 1;
 
+  const { attributes, listeners, setNodeRef: setDragRef, isDragging } = useDraggable({
+    id: day.dateKey,
+    disabled: !isDraggable,
+  });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: day.dateKey,
+    disabled: !isDroppable,
+  });
 
-             {selectedWorkout && !selectedEvent.isRestDay && (
-                (() => {
-                    const isPastOrToday = isToday(selectedDate) || isPast(selectedDate);
-                    const isUnfinished = completedSession && !completedSession.finishedAt && !completedSession.skipped;
-                    const isNotDone = !completedSession || isUnfinished;
-                    const showMarkDone = isPastOrToday && isNotDone;
-                    const showDoToday = !isToday(selectedDate) && !completedSession && program;
-                    const showLinkStrava = !completedSession;
-
-                    if (!showMarkDone && !showDoToday && !showLinkStrava) return null;
-
-                    return (
-                        <div className="pt-4 mt-4 border-t flex flex-col gap-2">
-                            {showMarkDone && (
-                                <Button
-                                    variant="default"
-                                    className="w-full"
-                                    onClick={handleMarkDone}
-                                    disabled={isMarkingDone}
-                                >
-                                    {isMarkingDone
-                                        ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        : <CheckCircle className="mr-2 h-4 w-4" />
-                                    }
-                                    Mark as Completed
-                                </Button>
-                            )}
-                            <div className="flex flex-col sm:flex-row gap-2">
-                                {showDoToday && (
-                                    <Button
-                                        variant="accent"
-                                        className="w-full"
-                                        onClick={handleDoToday}
-                                    >
-                                        <Forward className="mr-2 h-4 w-4" />
-                                        Do This Workout Today
-                                    </Button>
-                                )}
-                                {showLinkStrava && (
-                                    <Button
-                                        variant="outline"
-                                        className="w-full"
-                                        onClick={() => {
-                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                            const tempSession: any = {
-                                                id: '',
-                                                userId: '',
-                                                programId: (selectedEvent as any)?.program?.id || '',
-                                                workoutDate: selectedDate,
-                                                workoutTitle: selectedWorkout.title,
-                                                startedAt: new Date(),
-                                                completedItems: {},
-                                            };
-                                            setSessionToLink(tempSession as WorkoutSession);
-                                            setIsLinkerOpen(true);
-                                        }}
-                                    >
-                                        <LinkIcon className="mr-2 h-4 w-4" />
-                                        Link Strava Activity
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })()
-             )}
-
-             {/* Link button for COMPLETED sessions that don't yet have a Strava activity linked */}
-             {completedSession && !completedSession.stravaId && !completedSession.skipped && (
-                <div className="pt-4 mt-4 border-t">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => {
-                            setSessionToLink(completedSession);
-                            setIsLinkerOpen(true);
-                        }}
-                    >
-                        <LinkIcon className="mr-2 h-4 w-4" />
-                        Link to Strava Activity
-                    </Button>
-                    <p className="text-xs text-muted-foreground text-center mt-1.5">
-                        Merge this workout with a watch-recorded Strava activity
-                    </p>
-                </div>
-             )}
-
-          </CardContent>
-        </Card>
+  return (
+    <div
+      ref={(node) => { setDragRef(node); setDropRef(node); }}
+      className={cn(
+        'flex items-center gap-3 px-4 py-3 bg-card transition-colors',
+        isOver && isDroppable && 'bg-green-100 dark:bg-green-950/40 ring-2 ring-green-500 ring-inset',
+        isDragging && 'opacity-30',
+        day.isToday && 'bg-accent/10'
       )}
+    >
+      <div className="w-11 shrink-0 text-center">
+        <p className={cn('text-[10px] font-semibold uppercase', day.isToday ? 'text-primary' : 'text-muted-foreground')}>
+          {format(day.date, 'EEE')}
+        </p>
+        <p className="text-sm font-bold">{format(day.date, 'd')}</p>
+      </div>
 
-      {workoutEvents.length === 0 && !loading && (
-        <Card>
-          <CardContent className="text-center py-8">
-            <p className="text-muted-foreground">
-              No workout data found. Complete some workouts or start a program to see them here.
-            </p>
-          </CardContent>
-        </Card>
+      {isEmpty || isRest ? (
+        <div className="flex-1 flex items-center justify-between min-h-[2.5rem]">
+          <p className="text-sm text-muted-foreground">{isRest ? workout.title : 'Rest'}</p>
+        </div>
+      ) : isMulti ? (
+        <div className="flex-1 flex items-center justify-between min-h-[2.5rem]">
+          <div>
+            <p className="text-sm font-medium">{day.workouts.length} sessions scheduled</p>
+            <p className="text-xs text-muted-foreground">{day.workouts.map(w => w.title).join(' + ')}</p>
+          </div>
+          {day.isToday && (
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/workout/active">View</Link>
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div
+          {...(isDraggable ? { ...attributes, ...listeners } : {})}
+          className={cn(
+            'flex-1 flex items-center justify-between gap-2 rounded-lg border-l-4 bg-muted/60 px-3 py-2',
+            workoutAccentClass(workout),
+            isDraggable && 'cursor-grab active:cursor-grabbing touch-none'
+          )}
+        >
+          <div className="min-w-0">
+            <p className="font-semibold text-sm truncate">{workout.title}</p>
+            <p className="text-xs text-muted-foreground">{summarizeWorkout(workout, unitSystem)}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {isDone && (
+              <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/50">
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                Done
+              </Badge>
+            )}
+            {isSkipped && (
+              <Badge variant="outline" className="bg-orange-500/10 text-orange-700 border-orange-500/50">
+                <XCircle className="h-3 w-3 mr-1" />
+                Skipped
+              </Badge>
+            )}
+            {day.isToday && !isLocked && (
+              <Button variant="secondary" size="sm" asChild>
+                <Link href="/workout/active">Start</Link>
+              </Button>
+            )}
+            {isDraggable && <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />}
+          </div>
+        </div>
       )}
     </div>
-    {sessionToLink && (
-        <Suspense fallback={null}>
-          <LinkStravaActivityDialog
-              isOpen={isLinkerOpen}
-              setIsOpen={setIsLinkerOpen}
-              session={sessionToLink}
-              onLinkSuccess={handleLinkSuccess}
-          />
-        </Suspense>
-    )}
-    </>
   );
 }
