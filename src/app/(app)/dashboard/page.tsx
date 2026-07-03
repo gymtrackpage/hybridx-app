@@ -25,7 +25,7 @@ import { Separator } from '@/components/ui/separator';
 import { ChartContainer, BarChart as RechartsBarChart, Bar, XAxis, ChartTooltip, CartesianGrid, ChartTooltipContent } from '@/components/ui/chart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getOrCreateWorkoutSession, updateWorkoutSession, type WorkoutSession } from '@/services/session-service-client';
-import type { WorkoutDay, RunningWorkout, PlannedRun } from '@/models/types';
+import type { WorkoutDay, RunningWorkout, Workout, PlannedRun } from '@/models/types';
 import type { StravaActivity } from '@/services/strava-service';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -610,34 +610,60 @@ export default function DashboardPage() {
               ) : todaysWorkout?.workout && !programStartsInFuture ? (
                   <div className="space-y-4">
                       <Separator />
-                      <ul className="space-y-4 pt-4">
-                        {workoutHasRuns && (todaysWorkout.workout as RunningWorkout).runs.map((run: PlannedRun) => (
-                            <li key={run.description}>
-                              <p className="font-medium">{formatPlannedRun(run)}</p>
-                              {trainingPaces ? (
-                                  <p className="text-sm text-muted-foreground">
-                                      Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
-                                  </p>
-                              ) : (
-                                  <p className="text-sm text-yellow-600">Enter benchmark times in your profile to see target paces.</p>
-                              )}
-                            </li>
-                        ))}
-                        {workoutHasRuns && workoutHasExercises && (
-                            <li><Separator /></li>
-                        )}
-                        {workoutHasExercises && todaysWorkout.workout.exercises.map((ex) => (
-                            <li key={ex.name}>
-                                <p className="font-medium">{ex.name}</p>
-                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{ex.details}</p>
-                            </li>
-                        ))}
-                      </ul>
-                      {todaysWorkout.sessions.length > 1 && (
-                        <p className="text-sm text-muted-foreground pt-2">
-                          +{todaysWorkout.sessions.length - 1} more session{todaysWorkout.sessions.length > 2 ? 's' : ''} today — open the workout to see and complete them separately.
-                        </p>
-                      )}
+                      {todaysWorkout.sessions.map((sessionWorkout, idx) => {
+                        const sHasRuns = hasRuns(sessionWorkout);
+                        const sHasExercises = hasExercises(sessionWorkout);
+                        const persistedSession = todaysWorkoutSessions[idx];
+                        const isSessionDone = !!persistedSession?.finishedAt;
+                        const isMultiSession = todaysWorkout.sessions.length > 1;
+                        return (
+                          <div key={idx} className={cn('pt-4', idx > 0 && 'border-t')}>
+                            {isMultiSession && (
+                              <div className="flex items-center justify-between mb-2 gap-2">
+                                <p className="text-sm font-semibold">
+                                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mr-1.5">
+                                    Session {idx + 1} of {todaysWorkout.sessions.length}
+                                  </span>
+                                  {sessionWorkout.title}
+                                </p>
+                                {isSessionDone && (
+                                  <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200 shrink-0">
+                                    <CheckCircle className="mr-1 h-3 w-3" />
+                                    Done
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
+                            {isSessionDone ? (
+                              <p className="text-sm text-muted-foreground">Completed — nice work.</p>
+                            ) : (
+                              <ul className="space-y-4">
+                                {sHasRuns && (sessionWorkout as RunningWorkout).runs.map((run: PlannedRun) => (
+                                    <li key={run.description}>
+                                      <p className="font-medium">{formatPlannedRun(run)}</p>
+                                      {trainingPaces ? (
+                                          <p className="text-sm text-muted-foreground">
+                                              Target Pace: <span className="font-semibold text-primary">{formatPace(trainingPaces[run.paceZone])}</span> / km
+                                          </p>
+                                      ) : (
+                                          <p className="text-sm text-yellow-600">Enter benchmark times in your profile to see target paces.</p>
+                                      )}
+                                    </li>
+                                ))}
+                                {sHasRuns && sHasExercises && (
+                                    <li><Separator /></li>
+                                )}
+                                {sHasExercises && (sessionWorkout as Workout).exercises.map((ex) => (
+                                    <li key={ex.name}>
+                                        <p className="font-medium">{ex.name}</p>
+                                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{ex.details}</p>
+                                    </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
               ) : (
                   <div className="text-center text-muted-foreground py-10">

@@ -35,7 +35,6 @@ interface WorkoutEvent {
   sessions: (WorkoutSession | undefined)[];
   isCompleted: boolean;
   isMissed: boolean;
-  color: string;
   isRestDay: boolean;
 }
 
@@ -207,7 +206,6 @@ export default function CalendarPage() {
                 sessions: workouts.map((_, idx) => daySessions?.[idx]),
                 isCompleted: anyCompleted,
                 isMissed,
-                color: getEventColor(workouts[0], anyCompleted, isMissed),
                 isRestDay,
             });
 
@@ -233,7 +231,6 @@ export default function CalendarPage() {
             sessions: withDetails,
             isCompleted: anyCompleted,
             isMissed: false,
-            color: anyCompleted ? 'bg-green-500' : 'bg-gray-400',
             isRestDay,
         });
     });
@@ -454,12 +451,20 @@ export default function CalendarPage() {
                   DayContent: ({ date }) => {
                     const event = workoutEvents.find(e => isSameDay(e.date, date));
                     if (event && !event.isRestDay) {
+                      // One dot per sub-workout scheduled that day (e.g. Run + Weight Training),
+                      // each colored by its own completion status, so multi-session days are
+                      // visible at a glance without opening the day.
                       return (
                         <div className="relative h-full w-full flex items-center justify-center">
                           <span className="relative z-10">{date.getDate()}</span>
-                          <div
-                            className={`absolute bottom-1 h-1.5 w-1.5 rounded-full ${event.color}`}
-                          />
+                          <div className="absolute bottom-1 flex items-center gap-0.5">
+                            {event.workouts.map((workout, i) => {
+                              const session = event.sessions[i];
+                              const isCompleted = !!session?.finishedAt && !session?.skipped;
+                              const dotColor = getEventColor(workout, isCompleted, event.isMissed && !isCompleted);
+                              return <div key={i} className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />;
+                            })}
+                          </div>
                         </div>
                       );
                     }
