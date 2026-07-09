@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
+import { captureAttribution } from '@/lib/attribution';
 
 interface AuthContextType {
   user: User | null;
@@ -22,6 +23,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
+
+    captureAttribution();
 
     let unsubscribe: () => void;
 

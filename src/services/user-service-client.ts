@@ -82,6 +82,13 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'person
         subscriptionId: null,
         trialStartDate: Timestamp.fromDate(trialStartDate),
         onboardingSkipped: data.onboardingSkipped ?? false,
+        acquisitionSource: data.acquisitionSource ?? null,
+        acquisitionMedium: data.acquisitionMedium ?? null,
+        acquisitionCampaign: data.acquisitionCampaign ?? null,
+        acquisitionTerm: data.acquisitionTerm ?? null,
+        acquisitionContent: data.acquisitionContent ?? null,
+        acquisitionLandingPage: data.acquisitionLandingPage ?? null,
+        acquisitionReferrer: data.acquisitionReferrer ?? null,
     };
     await setDoc(userRef, userDataToSet);
 
@@ -103,6 +110,13 @@ export async function createUser(userId: string, data: Omit<User, 'id' | 'person
         subscriptionStatus: 'trial',
         trialStartDate: trialStartDate,
         onboardingSkipped: data.onboardingSkipped ?? false,
+        acquisitionSource: data.acquisitionSource,
+        acquisitionMedium: data.acquisitionMedium,
+        acquisitionCampaign: data.acquisitionCampaign,
+        acquisitionTerm: data.acquisitionTerm,
+        acquisitionContent: data.acquisitionContent,
+        acquisitionLandingPage: data.acquisitionLandingPage,
+        acquisitionReferrer: data.acquisitionReferrer,
     };
     return createdUser;
 }

@@ -2,6 +2,7 @@
 'use client';
 import { logger } from '@/lib/logger';
 import { trackEvent } from '@/lib/analytics';
+import { getAttribution } from '@/lib/attribution';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -382,6 +383,7 @@ export function SignupForm() {
       }
 
       // 4. Save user profile data to Firestore with selected program
+      const attribution = getAttribution();
       await createUser(user.uid, {
         email: finalData.email,
         firstName: finalData.firstName,
@@ -393,6 +395,13 @@ export function SignupForm() {
         startDate: finalData.selectedProgramId ? new Date() : undefined,
         customProgram: customProgram,
         onboardingSkipped: isQuickStart,
+        acquisitionSource: attribution?.utmSource,
+        acquisitionMedium: attribution?.utmMedium,
+        acquisitionCampaign: attribution?.utmCampaign,
+        acquisitionTerm: attribution?.utmTerm,
+        acquisitionContent: attribution?.utmContent,
+        acquisitionLandingPage: attribution?.landingPage,
+        acquisitionReferrer: attribution?.referrer,
       });
 
       const programMessage = finalData.selectedProgramId

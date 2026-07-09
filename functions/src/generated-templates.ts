@@ -1544,7 +1544,7 @@ export const nudge1 = `<!DOCTYPE html>
       <tr><td style="padding:0 0 40px 0;">
         <table border="0" cellspacing="0" cellpadding="0"><tr>
           <td style="background-color:#E6B31E;border-radius:4px;">
-            <a href="https://hybridx.club/dashboard" style="display:inline-block;padding:16px 36px;color:#18181b;font-weight:bold;font-size:16px;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.5px;">Start Session 01 →</a>
+            <a href="https://app.hybridx.club/dashboard" style="display:inline-block;padding:16px 36px;color:#18181b;font-weight:bold;font-size:16px;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.5px;">Start Session 01 →</a>
           </td>
         </tr></table>
         <p style="margin:12px 0 0 0;color:#52525b;font-size:13px;">Or open the app and tap <strong style="color:#a1a1aa;">Generate AI Workout</strong> for a fresh session on demand.</p>
@@ -1607,7 +1607,7 @@ export const nudge2 = `<!DOCTYPE html>
       <tr><td style="padding-bottom:40px;">
         <table border="0" cellspacing="0" cellpadding="0"><tr>
           <td style="background-color:#0d9488;border-radius:4px;">
-            <a href="https://hybridx.club/dashboard" style="display:inline-block;padding:16px 36px;color:#ffffff;font-weight:bold;font-size:15px;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.5px;">Open My Dashboard →</a>
+            <a href="https://app.hybridx.club/dashboard" style="display:inline-block;padding:16px 36px;color:#ffffff;font-weight:bold;font-size:15px;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.5px;">Open My Dashboard →</a>
           </td>
         </tr></table>
       </td></tr>
@@ -1691,10 +1691,10 @@ export const nudge3 = `<!DOCTYPE html>
       <tr><td style="padding:0 0 40px 0;">
         <table border="0" cellspacing="0" cellpadding="0"><tr>
           <td style="background-color:#dc2626;border-radius:4px;">
-            <a href="https://hybridx.club/dashboard" style="display:inline-block;padding:16px 36px;color:#ffffff;font-weight:bold;font-size:16px;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.5px;">Start Training Today →</a>
+            <a href="https://app.hybridx.club/dashboard" style="display:inline-block;padding:16px 36px;color:#ffffff;font-weight:bold;font-size:16px;text-decoration:none;font-family:Arial,sans-serif;letter-spacing:0.5px;">Start Training Today →</a>
           </td>
         </tr></table>
-        <p style="margin:12px 0 0 0;color:#3f3f46;font-size:13px;">Or <a href="https://hybridx.club/programs" style="color:#71717a;text-decoration:underline;">browse programs</a> — takes 2 minutes, changes your next 16 weeks.</p>
+        <p style="margin:12px 0 0 0;color:#3f3f46;font-size:13px;">Or <a href="https://app.hybridx.club/programs" style="color:#71717a;text-decoration:underline;">browse programs</a> — takes 2 minutes, changes your next 16 weeks.</p>
       </td></tr>
       <tr><td style="border-top:1px solid #27272a;padding-bottom:28px;"></td></tr>
       <tr><td style="padding-bottom:40px;">

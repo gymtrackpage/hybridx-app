@@ -13,7 +13,10 @@ const filesToCopy = [
     'onboarding-email-2-ai-coach.html',
     'onboarding-email-3-progress-tracking.html',
     'onboarding-email-4-advanced-features.html',
-    're-engagement-email-gmail.html'
+    're-engagement-email-gmail.html',
+    'onboarding-nudge-email-1.html',
+    'onboarding-nudge-email-2.html',
+    'onboarding-nudge-email-3.html'
 ];
 
 filesToCopy.forEach(file => {
@@ -46,7 +49,10 @@ filesToCopy.forEach(file => {
     const srcPath = path.join(sourceDir, file);
     if (fs.existsSync(srcPath)) {
         const content = fs.readFileSync(srcPath, 'utf8');
-        const mapKey = file.includes('email-1') ? 'day1' :
+        const mapKey = file.includes('nudge-email-1') ? 'nudge1' :
+                       file.includes('nudge-email-2') ? 'nudge2' :
+                       file.includes('nudge-email-3') ? 'nudge3' :
+                       file.includes('email-1') ? 'day1' :
                        file.includes('email-2') ? 'day3' :
                        file.includes('email-3') ? 'day7' :
                        file.includes('email-4') ? 'day14' :

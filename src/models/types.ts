@@ -101,6 +101,16 @@ export interface User {
   platform?: string;
   sessionCount?: number;
   totalSessionMinutes?: number;
+  // First-touch marketing attribution, captured from the marketing site at
+  // signup (see src/lib/attribution.ts). Lets conversions be traced back to
+  // the campaign/page that drove the trial signup.
+  acquisitionSource?: string;
+  acquisitionMedium?: string;
+  acquisitionCampaign?: string;
+  acquisitionTerm?: string;
+  acquisitionContent?: string;
+  acquisitionLandingPage?: string;
+  acquisitionReferrer?: string;
 }
 
 export type ProgramType = 'hyrox' | 'running' | 'hybrid';

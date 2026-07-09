@@ -1,6 +1,7 @@
 
 import type { Metadata, Viewport } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
+import Script from 'next/script';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/contexts/theme-context';
@@ -48,6 +49,25 @@ export default function RootLayout({
 
         {/* Apple Touch Icon */}
         <link rel="apple-touch-icon" href="/icon-logo.png" />
+
+        {/* Google tag (gtag.js) — same GA4 property + linker config as
+            hybridx.club, so a visitor who clicks through from the marketing
+            site into the app keeps a single stitched session. */}
+        <Script
+          async
+          src="https://www.googletagmanager.com/gtag/js?id=G-XKH1WYE7CQ"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-XKH1WYE7CQ', {
+              linker: { domains: ['hybridx.club', 'app.hybridx.club'] }
+            });
+          `}
+        </Script>
       </head>
       <body className="font-body antialiased">
         <ThemeProvider>
