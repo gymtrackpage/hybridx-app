@@ -235,6 +235,12 @@ export interface WorkoutSession {
         moving_time?: number;
         name?: string;
     };
+    /** Set when the linked Strava activity was rebuilt by the treadmill file fixer. */
+    treadmillFix?: {
+        originalStravaId: string;
+        fixedStravaId: string;
+        fixedAt: Date;
+    };
 }
 
 export interface Article {
