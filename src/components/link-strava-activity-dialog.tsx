@@ -2,7 +2,7 @@
 'use client';
 import { logger } from '@/lib/logger';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,9 +19,18 @@ import { useToast } from '@/hooks/use-toast';
 import type { WorkoutSession } from '@/models/types';
 import type { StravaActivity } from '@/services/strava-service';
 import { linkStravaActivityToSession } from '@/services/session-service-client';
-import { Loader2, Activity, Clock, MapPin, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { Loader2, Activity, Clock, MapPin, Link as LinkIcon, Sparkles, Wrench, CheckCircle2 } from 'lucide-react';
 import { getAuthInstance } from '@/lib/firebase';
 import { isSameDay, differenceInMinutes } from 'date-fns';
+
+const FixTreadmillDialog = lazy(() =>
+  import('@/components/fix-treadmill-dialog').then((mod) => ({ default: mod.FixTreadmillDialog })),
+);
+
+/** Treadmill fixing only makes sense for run-type activities. */
+function isRunActivity(activity: StravaActivity): boolean {
+  return /run/i.test(activity.sport_type || activity.type || '');
+}
 
 interface LinkStravaActivityDialogProps {
   isOpen: boolean;
@@ -93,6 +102,9 @@ export function LinkStravaActivityDialog({
   const [loading, setLoading] = useState(true);
   const [linking, setLinking] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<StravaActivity | null>(null);
+  const [step, setStep] = useState<'select' | 'offerFix'>('select');
+  const [linkedActivity, setLinkedActivity] = useState<StravaActivity | null>(null);
+  const [isFixOpen, setIsFixOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -101,6 +113,9 @@ export function LinkStravaActivityDialog({
     const fetch_ = async () => {
       setLoading(true);
       setSelectedActivity(null);
+      setStep('select');
+      setLinkedActivity(null);
+      setIsFixOpen(false);
       try {
         const auth = await getAuthInstance();
         const currentUser = auth.currentUser;
@@ -156,7 +171,13 @@ export function LinkStravaActivityDialog({
     try {
       await linkStravaActivityToSession(session.id, selectedActivity);
       toast({ title: 'Linked!', description: `"${session.workoutTitle}" linked to "${selectedActivity.name}".` });
-      onLinkSuccess();
+      if (isRunActivity(selectedActivity)) {
+        // Offer the treadmill file fix before handing control back to the caller
+        setLinkedActivity(selectedActivity);
+        setStep('offerFix');
+      } else {
+        onLinkSuccess();
+      }
     } catch (error) {
       toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to link.', variant: 'destructive' });
     } finally {
@@ -196,6 +217,62 @@ export function LinkStravaActivityDialog({
       </div>
     </button>
   );
+
+  // Linked, waiting on the user's treadmill decision — dismissing still counts
+  // as a successful link, so the caller refreshes.
+  const handleOpenChange = (open: boolean) => {
+    if (!open && step === 'offerFix') return onLinkSuccess();
+    setIsOpen(open);
+  };
+
+  if (isOpen && step === 'offerFix' && linkedActivity) {
+    return (
+      <>
+        <Dialog open={!isFixOpen} onOpenChange={handleOpenChange}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" /> Activity Linked
+              </DialogTitle>
+              <DialogDescription>
+                Was <strong>{linkedActivity.name}</strong> run on a treadmill? Watches often record
+                treadmill distance and pace badly. We can rebuild the Strava file with your prescribed
+                workout structure while keeping the heart rate and cadence your watch recorded.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="ghost" onClick={onLinkSuccess}>No, I&apos;m done</Button>
+              <Button onClick={() => setIsFixOpen(true)}>
+                <Wrench className="mr-2 h-4 w-4" /> Fix treadmill file
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {isFixOpen && (
+          <Suspense fallback={null}>
+            <FixTreadmillDialog
+              isOpen={isFixOpen}
+              setIsOpen={(open) => {
+                setIsFixOpen(open);
+                // Cancelled the fix — the link itself still succeeded
+                if (!open) onLinkSuccess();
+              }}
+              session={session}
+              activity={{
+                id: linkedActivity.id.toString(),
+                name: linkedActivity.name,
+                moving_time: linkedActivity.moving_time,
+                elapsed_time: linkedActivity.elapsed_time,
+                distance: linkedActivity.distance,
+                average_heartrate: linkedActivity.average_heartrate,
+              }}
+              onComplete={onLinkSuccess}
+            />
+          </Suspense>
+        )}
+      </>
+    );
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
