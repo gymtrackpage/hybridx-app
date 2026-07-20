@@ -13,7 +13,7 @@
 // the original afterwards.
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -35,17 +35,24 @@ import type { WorkoutSession } from '@/models/types';
 import { hasRuns } from '@/lib/type-guards';
 import {
   plannedRunsToDrafts,
+  plannedRunsToText,
   activityToDrafts,
+  aiSegmentsToDrafts,
   flattenDrafts,
   computeSegment,
   computeTotals,
   fmtHMS,
   fmtMinSecTotal,
   secPerKmToPaceStr,
+  parseDurationSec,
+  parseDistanceKmToMeters,
+  parsePaceSecPerKm,
+  parseIncline,
   nextDraftId,
   type TreadmillSegmentDraft,
   type SensorAlign,
 } from '@/lib/treadmill';
+import { parseTreadmillWorkout } from '@/ai/flows/parse-treadmill-workout';
 import {
   Loader2,
   Wrench,
@@ -58,6 +65,8 @@ import {
   HeartPulse,
   Clock,
   MapPin,
+  Sparkles,
+  RotateCcw,
 } from 'lucide-react';
 
 interface ActivitySummary {
@@ -83,6 +92,20 @@ interface FixTreadmillDialogProps {
 
 type Step = 'edit' | 'uploading' | 'done' | 'duplicate';
 
+/** Where the current segment prefill came from. */
+type PrefillSource = 'notes' | 'both' | 'planned' | 'activity' | 'blank';
+
+/** Lifecycle of the automatic AI parse of notes / planned workout. */
+type AiParseState = 'idle' | 'parsing' | 'applied' | 'ready' | 'empty' | 'failed';
+
+const PREFILL_LABEL: Record<PrefillSource, string> = {
+  notes: 'your workout notes',
+  both: 'your notes + planned workout',
+  planned: 'the planned workout',
+  activity: 'the recorded activity',
+  blank: 'scratch',
+};
+
 interface FixResult {
   newActivityUrl: string;
   originalActivityUrl: string;
@@ -104,7 +127,19 @@ export function FixTreadmillDialog({
   const [step, setStep] = useState<Step>('edit');
   const [result, setResult] = useState<FixResult | null>(null);
   const [duplicateUrl, setDuplicateUrl] = useState<string | null>(null);
+  const [prefillSource, setPrefillSource] = useState<PrefillSource>('blank');
+  const [aiState, setAiState] = useState<AiParseState>('idle');
+  const [aiDrafts, setAiDrafts] = useState<TreadmillSegmentDraft[] | null>(null);
+  const [aiSource, setAiSource] = useState<PrefillSource>('notes');
+  // Once the user touches the segments, the async AI result must not
+  // overwrite their edits — it becomes a one-tap "Apply" offer instead.
+  const userEditedRef = useRef(false);
   const { toast } = useToast();
+
+  const plannedRuns = useMemo(
+    () => (hasRuns(session.workoutDetails) ? session.workoutDetails.runs : []),
+    [session.workoutDetails],
+  );
 
   // Load the linked activity's details when not supplied by the caller
   useEffect(() => {
@@ -150,17 +185,77 @@ export function FixTreadmillDialog({
     load();
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Prefill segments: prescribed workout first, actual activity as fallback
+  // Instant deterministic prefill so the dialog is usable immediately:
+  // prescribed workout first, actual activity as fallback. The AI parse of
+  // the notes (below) replaces this as soon as it lands, unless the user has
+  // already started editing.
   useEffect(() => {
     if (!isOpen) return;
-    const planned = hasRuns(session.workoutDetails) ? session.workoutDetails.runs : [];
-    if (planned.length > 0) {
-      setDrafts(plannedRunsToDrafts(planned));
+    setName(session.workoutTitle || activity?.name || 'Treadmill Run');
+    // Never overwrite manual edits or an already-applied AI parse (the
+    // activity can finish loading after the AI result has landed).
+    if (userEditedRef.current || aiState === 'applied') return;
+    if (plannedRuns.length > 0) {
+      setDrafts(plannedRunsToDrafts(plannedRuns));
+      setPrefillSource('planned');
     } else if (activity) {
       setDrafts(activityToDrafts(activity.moving_time, activity.distance));
+      setPrefillSource('activity');
     }
-    setName(session.workoutTitle || activity?.name || 'Treadmill Run');
   }, [isOpen, activity?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Automatic AI parse: digest the workout notes (what was actually run),
+  // falling back to the planned workout text, into structured segments.
+  useEffect(() => {
+    if (!isOpen) {
+      setAiState('idle');
+      setAiDrafts(null);
+      userEditedRef.current = false;
+      return;
+    }
+    const notes = (session.notes || '').trim();
+    if (!notes && plannedRuns.length === 0) {
+      setAiState('empty');
+      return;
+    }
+    let cancelled = false;
+    setAiState('parsing');
+    setAiDrafts(null);
+    parseTreadmillWorkout({
+      workoutTitle: session.workoutTitle || undefined,
+      notes: notes || undefined,
+      plannedWorkout: plannedRuns.length > 0 ? plannedRunsToText(plannedRuns) : undefined,
+      activityMovingTimeSec: activityProp?.moving_time || undefined,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        const parsed = aiSegmentsToDrafts(res.segments);
+        if (parsed.length === 0 || res.source === 'none') {
+          setAiState('empty');
+          return;
+        }
+        const source: PrefillSource =
+          res.source === 'both' ? 'both' : res.source === 'planned' ? 'planned' : 'notes';
+        setAiSource(source);
+        setAiDrafts(parsed);
+        if (userEditedRef.current) {
+          // Don't clobber manual edits — offer the parsed result instead.
+          setAiState('ready');
+        } else {
+          setDrafts(parsed);
+          setPrefillSource(source);
+          setAiState('applied');
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        logger.error('FixTreadmillDialog: AI notes parse failed', err);
+        setAiState('failed');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { segments, hasErrors } = useMemo(() => flattenDrafts(drafts), [drafts]);
   const totals = useMemo(() => computeTotals(segments), [segments]);
@@ -170,20 +265,28 @@ export function FixTreadmillDialog({
     return Math.abs(totals.timeSec - activity.moving_time) / activity.moving_time > 0.15;
   }, [activity, totals.timeSec]);
 
-  const updateDraft = (id: number, patch: Partial<TreadmillSegmentDraft>) =>
+  const updateDraft = (id: number, patch: Partial<TreadmillSegmentDraft>) => {
+    userEditedRef.current = true;
     setDrafts((ds) => ds.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  };
 
-  const removeDraft = (id: number) => setDrafts((ds) => ds.filter((d) => d.id !== id));
+  const removeDraft = (id: number) => {
+    userEditedRef.current = true;
+    setDrafts((ds) => ds.filter((d) => d.id !== id));
+  };
 
-  const duplicateDraft = (id: number) =>
+  const duplicateDraft = (id: number) => {
+    userEditedRef.current = true;
     setDrafts((ds) => {
       const i = ds.findIndex((d) => d.id === id);
       if (i === -1) return ds;
       const copy = { ...ds[i], id: nextDraftId() };
       return [...ds.slice(0, i + 1), copy, ...ds.slice(i + 1)];
     });
+  };
 
-  const addDraft = () =>
+  const addDraft = () => {
+    userEditedRef.current = true;
     setDrafts((ds) => [
       ...ds,
       {
@@ -195,9 +298,28 @@ export function FixTreadmillDialog({
         incline: '0',
       },
     ]);
+  };
+
+  const applyAiDrafts = () => {
+    if (!aiDrafts) return;
+    userEditedRef.current = true;
+    setDrafts(aiDrafts);
+    setPrefillSource(aiSource);
+    setAiState('applied');
+  };
+
+  const resetToPlanned = () => {
+    if (plannedRuns.length === 0) return;
+    userEditedRef.current = true;
+    setDrafts(plannedRunsToDrafts(plannedRuns));
+    setPrefillSource('planned');
+    if (aiState === 'applied') setAiState('ready');
+  };
 
   const handleConfirm = async () => {
     if (hasErrors || segments.length === 0) return;
+    // A late AI result must not replace the segments being uploaded.
+    userEditedRef.current = true;
     setStep('uploading');
     try {
       const res = await fetch('/api/strava/fix-treadmill', {
@@ -245,6 +367,27 @@ export function FixTreadmillDialog({
     const c = computeSegment(d);
     if (!c) return null;
     return `${(c.speedMps * 3.6).toFixed(1)} km/h · ${fmtHMS(c.timeSec)} · ${(c.distanceM / 1000).toFixed(2)} km`;
+  };
+
+  const valueInvalid = (d: TreadmillSegmentDraft) =>
+    d.mode === 'time'
+      ? parseDurationSec(d.value) === null
+      : parseDistanceKmToMeters(d.value) === null;
+  const paceInvalid = (d: TreadmillSegmentDraft) => parsePaceSecPerKm(d.pace) === null;
+  const inclineInvalid = (d: TreadmillSegmentDraft) => parseIncline(d.incline) === null;
+
+  const setMode = (d: TreadmillSegmentDraft, mode: 'time' | 'distance') => {
+    if (d.mode === mode) return;
+    // Converting preserves the segment: same pace, equivalent value.
+    const c = computeSegment(d);
+    updateDraft(d.id, {
+      mode,
+      value: c
+        ? mode === 'distance'
+          ? (c.distanceM / 1000).toFixed(2)
+          : fmtMinSecTotal(c.timeSec)
+        : d.value,
+    });
   };
 
   /* ── render ── */
@@ -313,6 +456,55 @@ export function FixTreadmillDialog({
                   <Input id="fix-name" value={name} onChange={(e) => setName(e.target.value)} className="h-8" />
                 </div>
 
+                {aiState === 'parsing' && (
+                  <div className="flex items-center gap-2 rounded-lg border border-dashed p-2.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                    Reading your workout notes to prefill the segments…
+                  </div>
+                )}
+                {aiState === 'applied' && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border p-2.5 text-xs">
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span>
+                      Prefilled from <strong>{PREFILL_LABEL[prefillSource]}</strong> — check and adjust
+                      below.
+                    </span>
+                    {plannedRuns.length > 0 && prefillSource !== 'planned' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs ml-auto"
+                        onClick={resetToPlanned}
+                      >
+                        <RotateCcw className="h-3 w-3 mr-1" /> Use planned instead
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {aiState === 'ready' && aiDrafts && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border p-2.5 text-xs">
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span>
+                      Read {aiDrafts.length} segment{aiDrafts.length === 1 ? '' : 's'} from{' '}
+                      {PREFILL_LABEL[aiSource]}.
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2 text-xs ml-auto"
+                      onClick={applyAiDrafts}
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                )}
+                {aiState === 'failed' && (
+                  <div className="flex items-center gap-2 rounded-lg border p-2.5 text-xs text-muted-foreground">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    Couldn&apos;t auto-read your workout notes — edit the segments below manually.
+                  </div>
+                )}
+
                 <ScrollArea className="max-h-64 -mx-1 px-1">
                   <div className="space-y-2">
                     {drafts.map((d) => (
@@ -346,55 +538,69 @@ export function FixTreadmillDialog({
                         </div>
                         <div className="grid grid-cols-3 gap-2">
                           <div className="space-y-1">
-                            <button
-                              type="button"
-                              className="text-[10px] uppercase tracking-wide text-muted-foreground underline decoration-dotted"
-                              onClick={() => {
-                                const c = computeSegment(d);
-                                if (d.mode === 'time') {
-                                  updateDraft(d.id, {
-                                    mode: 'distance',
-                                    value: c ? (c.distanceM / 1000).toFixed(2) : d.value,
-                                  });
-                                } else {
-                                  updateDraft(d.id, {
-                                    mode: 'time',
-                                    value: c ? fmtMinSecTotal(c.timeSec) : d.value,
-                                  });
-                                }
-                              }}
-                              title="Toggle between time and distance"
+                            <div
+                              className="inline-flex rounded-md border p-0.5 gap-0.5"
+                              role="group"
+                              aria-label="Segment measured by time or distance"
                             >
-                              {d.mode === 'time' ? 'Time (mm:ss)' : 'Distance (km)'}
-                            </button>
+                              <button
+                                type="button"
+                                className={`px-1.5 py-0 rounded text-[10px] uppercase tracking-wide leading-4 ${
+                                  d.mode === 'time'
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                onClick={() => setMode(d, 'time')}
+                                aria-pressed={d.mode === 'time'}
+                              >
+                                Time
+                              </button>
+                              <button
+                                type="button"
+                                className={`px-1.5 py-0 rounded text-[10px] uppercase tracking-wide leading-4 ${
+                                  d.mode === 'distance'
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                onClick={() => setMode(d, 'distance')}
+                                aria-pressed={d.mode === 'distance'}
+                              >
+                                Dist
+                              </button>
+                            </div>
                             <Input
                               value={d.value}
                               onChange={(e) => updateDraft(d.id, { value: e.target.value })}
-                              className={`h-7 text-sm ${computeSegment(d) === null ? 'border-destructive' : ''}`}
+                              className={`h-7 text-sm ${valueInvalid(d) ? 'border-destructive' : ''}`}
                               inputMode="decimal"
+                              placeholder={d.mode === 'time' ? 'mm:ss' : 'km'}
+                              aria-label={d.mode === 'time' ? 'Duration (mm:ss)' : 'Distance (km)'}
                             />
                           </div>
                           <div className="space-y-1">
-                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground leading-5 inline-block">
                               Pace /km
                             </span>
                             <Input
                               value={d.pace}
                               onChange={(e) => updateDraft(d.id, { pace: e.target.value })}
-                              className="h-7 text-sm"
+                              className={`h-7 text-sm ${paceInvalid(d) ? 'border-destructive' : ''}`}
                               inputMode="decimal"
                               placeholder="5:30"
+                              aria-label="Pace per km (mm:ss)"
                             />
                           </div>
                           <div className="space-y-1">
-                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            <span className="text-[10px] uppercase tracking-wide text-muted-foreground leading-5 inline-block">
                               Incline %
                             </span>
                             <Input
                               value={d.incline}
                               onChange={(e) => updateDraft(d.id, { incline: e.target.value })}
-                              className="h-7 text-sm"
+                              className={`h-7 text-sm ${inclineInvalid(d) ? 'border-destructive' : ''}`}
                               inputMode="decimal"
+                              placeholder="0"
+                              aria-label="Incline percent"
                             />
                           </div>
                         </div>
@@ -420,6 +626,11 @@ export function FixTreadmillDialog({
                   {activity && activity.moving_time > 0 && (
                     <span className={durationMismatch ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground'}>
                       Watch recorded {fmtHMS(activity.moving_time)}
+                    </span>
+                  )}
+                  {hasErrors && (
+                    <span className="text-destructive">
+                      Fill in the highlighted fields to continue.
                     </span>
                   )}
                 </div>

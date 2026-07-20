@@ -13,7 +13,9 @@ import {
   buildActivity,
   generateTcx,
   plannedRunsToDrafts,
+  plannedRunsToText,
   activityToDrafts,
+  aiSegmentsToDrafts,
   type TreadmillSegmentDraft,
 } from '@/lib/treadmill';
 import type { PlannedRun } from '@/models/types';
@@ -229,5 +231,80 @@ describe('prefill', () => {
     const c = computeSegment(drafts[0])!;
     expect(c.timeSec).toBe(1800);
     expect(c.distanceM).toBeCloseTo(5000, -1);
+  });
+
+  it('describes planned runs as text for the AI parser', () => {
+    const runs: PlannedRun[] = [
+      {
+        type: 'intervals',
+        distance: 4,
+        paceZone: 'interval',
+        description: '8 x 500m hard',
+        effortLevel: 8,
+        noIntervals: 8,
+        targetPace: 270,
+      },
+      { type: 'easy', distance: 5, paceZone: 'easy', description: '', effortLevel: 3 },
+    ];
+    const text = plannedRunsToText(runs);
+    expect(text).toContain('Run 1: intervals, 4 km, 8 intervals, target pace 4:30/km');
+    expect(text).toContain('"8 x 500m hard"');
+    expect(text).toContain('Run 2: easy, 5 km, zone easy');
+  });
+});
+
+describe('AI-parsed segments', () => {
+  it('converts a well-formed AI result into drafts', () => {
+    const drafts = aiSegmentsToDrafts([
+      { name: '0–5 min', mode: 'time', value: '5:00', pace: '6:00', incline: '5' },
+      { name: 'Finish', mode: 'time', value: '2:30', pace: '3:30', incline: '1' },
+      { name: 'Rep', mode: 'distance', value: '0.4', pace: '4:30', incline: '0' },
+    ]);
+    expect(drafts).toHaveLength(3);
+    const { segments, hasErrors } = flattenDrafts(drafts);
+    expect(hasErrors).toBe(false);
+    expect(segments[0].timeSec).toBe(300);
+    expect(segments[0].incline).toBe(5);
+    expect(segments[1].timeSec).toBe(150);
+    expect(segments[2].distanceM).toBe(400);
+  });
+
+  it('keeps unknown fields empty for user input', () => {
+    const drafts = aiSegmentsToDrafts([
+      { name: 'Steady', mode: 'time', value: '35:00', pace: '', incline: '4.5' },
+    ]);
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0].pace).toBe('');
+    expect(drafts[0].incline).toBe('4.5');
+    // Missing pace flags the row as needing input
+    expect(flattenDrafts(drafts).hasErrors).toBe(true);
+  });
+
+  it('drops useless rows, defaults bad inclines to 0, and survives garbage', () => {
+    expect(aiSegmentsToDrafts(undefined)).toEqual([]);
+    expect(aiSegmentsToDrafts('nope')).toEqual([]);
+    const drafts = aiSegmentsToDrafts([
+      null,
+      { name: '', mode: 'time', value: '', pace: '', incline: '' }, // no value, no pace → dropped
+      { mode: 'distance', value: '2', pace: '??', incline: 'steep' },
+      { mode: 'time', value: 'later', pace: '5:00', incline: '2' }, // bad value kept via pace
+    ]);
+    expect(drafts).toHaveLength(2);
+    expect(drafts[0].name).toBe('Segment 1');
+    expect(drafts[0].pace).toBe(''); // unparseable pace cleared for user input
+    expect(drafts[0].incline).toBe('0');
+    expect(drafts[1].value).toBe(''); // unparseable duration cleared for user input
+    expect(drafts[1].pace).toBe('5:00');
+  });
+
+  it('caps the number of segments', () => {
+    const many = Array.from({ length: 100 }, (_, i) => ({
+      name: `S${i}`,
+      mode: 'time',
+      value: '1:00',
+      pace: '5:00',
+      incline: '0',
+    }));
+    expect(aiSegmentsToDrafts(many)).toHaveLength(60);
   });
 });

@@ -13,4 +13,5 @@ import '@/ai/flows/adjust-training-plan.ts';
 import '@/ai/flows/analyze-and-adjust.ts';
 import '@/ai/flows/generate-race-plan.ts'; // ADDED
 import '@/ai/flows/strava-description.ts';
+import '@/ai/flows/parse-treadmill-workout.ts';
 import '@/ai/schemas.ts';
