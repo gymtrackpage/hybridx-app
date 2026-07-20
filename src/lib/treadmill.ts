@@ -521,6 +521,80 @@ function runTypeLabel(type: PlannedRun['type']): string {
   }
 }
 
+/* ── prefill from AI-parsed workout notes ───────────────────────────────── */
+
+/** Segment shape returned by the parse-treadmill-workout AI flow. */
+export interface AiParsedSegment {
+  name?: unknown;
+  mode?: unknown;
+  value?: unknown;
+  pace?: unknown;
+  incline?: unknown;
+}
+
+const MAX_AI_SEGMENTS = 60;
+
+/**
+ * Convert AI-parsed segments into editable drafts, defensively: strings are
+ * trimmed and length-capped, the segment count is capped, and obviously
+ * useless rows (no parseable duration/distance AND no parseable pace) are
+ * dropped. Fields the AI left empty stay empty so the per-field validation
+ * highlights them for the user to fill in. Returns [] when nothing usable
+ * survives, so callers can fall back to the next prefill source.
+ */
+export function aiSegmentsToDrafts(raw: unknown): TreadmillSegmentDraft[] {
+  if (!Array.isArray(raw)) return [];
+  const drafts: TreadmillSegmentDraft[] = [];
+  for (const seg of raw.slice(0, MAX_AI_SEGMENTS) as AiParsedSegment[]) {
+    if (!seg || typeof seg !== 'object') continue;
+    const mode: 'time' | 'distance' = seg.mode === 'distance' ? 'distance' : 'time';
+    const value = typeof seg.value === 'string' ? seg.value.trim().slice(0, 20) : '';
+    const pace = typeof seg.pace === 'string' ? seg.pace.trim().slice(0, 20) : '';
+    const incline = typeof seg.incline === 'string' ? seg.incline.trim().slice(0, 20) : '';
+    const name =
+      typeof seg.name === 'string' && seg.name.trim()
+        ? seg.name.trim().slice(0, 120)
+        : `Segment ${drafts.length + 1}`;
+
+    const valueOk =
+      mode === 'time' ? parseDurationSec(value) !== null : parseDistanceKmToMeters(value) !== null;
+    const paceOk = parsePaceSecPerKm(pace) !== null;
+    if (!valueOk && !paceOk) continue;
+
+    drafts.push(
+      makeDraft({
+        name,
+        mode,
+        value: valueOk ? value : '',
+        pace: paceOk ? pace : '',
+        // Bad incline strings just become flat — incline is the least
+        // critical field and '0' keeps the row immediately usable.
+        incline: parseIncline(incline) !== null && incline !== '' ? incline : '0',
+      }),
+    );
+  }
+  return drafts;
+}
+
+/**
+ * Compact text description of the prescribed runs for the AI parser prompt.
+ * Includes the human description plus the structured fields.
+ */
+export function plannedRunsToText(runs: PlannedRun[]): string {
+  return runs
+    .map((run, i) => {
+      const parts: string[] = [`Run ${i + 1}: ${run.type}`];
+      if (run.distance > 0) parts.push(`${run.distance} km`);
+      if (run.noIntervals && run.noIntervals > 1) parts.push(`${run.noIntervals} intervals`);
+      if (run.targetPace && run.targetPace > 0)
+        parts.push(`target pace ${secPerKmToPaceStr(run.targetPace)}/km`);
+      parts.push(`zone ${run.paceZone}`);
+      if (run.description) parts.push(`"${run.description}"`);
+      return parts.join(', ');
+    })
+    .join('\n');
+}
+
 /** Single-segment fallback when there is no prescribed structure: match the
  *  actual activity's moving time and distance. */
 export function activityToDrafts(movingTimeSec: number, distanceM: number): TreadmillSegmentDraft[] {
