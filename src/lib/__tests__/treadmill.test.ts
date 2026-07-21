@@ -16,8 +16,10 @@ import {
   plannedRunsToText,
   activityToDrafts,
   aiSegmentsToDrafts,
+  canFixTreadmill,
   type TreadmillSegmentDraft,
 } from '@/lib/treadmill';
+import type { RunningWorkout, Workout } from '@/models/types';
 import type { PlannedRun } from '@/models/types';
 
 let id = 0;
@@ -295,6 +297,25 @@ describe('AI-parsed segments', () => {
     expect(drafts[0].incline).toBe('0');
     expect(drafts[1].value).toBe(''); // unparseable duration cleared for user input
     expect(drafts[1].pace).toBe('5:00');
+  });
+
+  it('gates the retrospective fix to linked run sessions', () => {
+    const run: PlannedRun = {
+      type: 'easy', distance: 5, paceZone: 'easy', description: '', effortLevel: 3,
+    };
+    const runningDetails: RunningWorkout = {
+      day: 1, title: 'Run', runs: [run], programType: 'running', exercises: [],
+    };
+    const strengthDetails: Workout = {
+      day: 1, title: 'Lift', exercises: [{ name: 'Squat', details: '5x5' }], programType: 'hyrox',
+    };
+    // No linked activity → nothing to fix
+    expect(canFixTreadmill({ stravaId: undefined, programType: 'running', workoutDetails: runningDetails })).toBe(false);
+    // Linked run sessions are eligible (by program type or by planned runs)
+    expect(canFixTreadmill({ stravaId: '123', programType: 'running', workoutDetails: undefined })).toBe(true);
+    expect(canFixTreadmill({ stravaId: '123', programType: 'hyrox', workoutDetails: runningDetails })).toBe(true);
+    // Pure strength sessions are not
+    expect(canFixTreadmill({ stravaId: '123', programType: 'hyrox', workoutDetails: strengthDetails })).toBe(false);
   });
 
   it('caps the number of segments', () => {

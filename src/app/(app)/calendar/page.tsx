@@ -34,13 +34,15 @@ import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { convertDistance, convertTextWithUnits } from '@/lib/unit-conversion';
 import { formatTextWithBullets } from '@/utils/text-formatter';
 import { addDays, format, isSameDay, parseISO, isValid, isToday, isPast, startOfDay, startOfWeek, endOfWeek } from 'date-fns';
-import { RotateCcw, Loader2, CheckCircle2, XCircle, GripVertical, Link as LinkIcon, Clock, Forward, Edit, CheckCircle, CalendarDays, ListChecks } from 'lucide-react';
+import { RotateCcw, Loader2, CheckCircle2, XCircle, GripVertical, Link as LinkIcon, Clock, Forward, Edit, CheckCircle, CalendarDays, ListChecks, Wrench } from 'lucide-react';
+import { canFixTreadmill } from '@/lib/treadmill';
 import { useToast } from '@/hooks/use-toast';
 import { useDebouncedCallback } from 'use-debounce';
 import { cn } from '@/lib/utils';
 
 const MonthCalendarWidget = lazy(() => import('@/components/ui/calendar').then(mod => ({ default: mod.Calendar })));
 const LinkStravaActivityDialog = lazy(() => import('@/components/link-strava-activity-dialog').then(mod => ({ default: mod.LinkStravaActivityDialog })));
+const FixTreadmillDialog = lazy(() => import('@/components/fix-treadmill-dialog').then(mod => ({ default: mod.FixTreadmillDialog })));
 
 interface DaySlot {
   date: Date;
@@ -498,6 +500,8 @@ function MonthGridCalendarView() {
   const [workoutEvents, setWorkoutEvents] = useState<MonthWorkoutEvent[]>([]);
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   const [sessionToLink, setSessionToLink] = useState<WorkoutSession | null>(null);
+  const [isFixOpen, setIsFixOpen] = useState(false);
+  const [sessionToFix, setSessionToFix] = useState<WorkoutSession | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [editingNotesIndex, setEditingNotesIndex] = useState<number | null>(null);
   const [notesByIndex, setNotesByIndex] = useState<Record<number, string>>({});
@@ -769,6 +773,17 @@ function MonthGridCalendarView() {
     setLoading(false);
   };
 
+  const handleFixComplete = async () => {
+    setIsFixOpen(false);
+    setSessionToFix(null);
+    setLoading(true);
+    const auth = await getAuthInstance();
+    if (auth.currentUser) {
+      await fetchCalendarData(auth.currentUser);
+    }
+    setLoading(false);
+  };
+
   const handleMarkDone = async (index: number) => {
     const workout = selectedEvent?.workouts[index];
     if (!workout || !selectedDate || !firebaseUser || !selectedEvent) return;
@@ -911,6 +926,10 @@ function MonthGridCalendarView() {
                 const showDoToday = index === 0 && selectedEvent.workouts.length === 1 && !isToday(selectedDate) && !session && !!program
                   && (!todaysEvent || todaysEvent.workouts.length <= 1);
                 const showLinkStrava = !session || (!session.stravaId && !session.skipped);
+                // Retrospective treadmill fix: linked run sessions only (the
+                // session's own details, or the planned day, must contain runs).
+                const showFixTreadmill =
+                  !!session?.stravaId && !session.skipped && (canFixTreadmill(session) || hasRuns(workout));
                 const isEditingNotes = editingNotesIndex === index;
 
                 return (
@@ -1034,7 +1053,7 @@ function MonthGridCalendarView() {
                       </div>
                     )}
 
-                    {(showMarkDone || showDoToday || showLinkStrava) && (
+                    {(showMarkDone || showDoToday || showLinkStrava || showFixTreadmill) && (
                       <div className="pt-4 mt-4 border-t flex flex-col gap-2">
                         {showMarkDone && (
                           <Button
@@ -1072,6 +1091,20 @@ function MonthGridCalendarView() {
                               Link Strava Activity
                             </Button>
                           )}
+                          {showFixTreadmill && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                setSessionToFix(session!);
+                                setIsFixOpen(true);
+                              }}
+                            >
+                              <Wrench className="mr-2 h-4 w-4" />
+                              Fix Treadmill File
+                            </Button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1099,6 +1132,19 @@ function MonthGridCalendarView() {
             setIsOpen={setIsLinkerOpen}
             session={sessionToLink}
             onLinkSuccess={handleLinkSuccess}
+          />
+        </Suspense>
+      )}
+      {sessionToFix && (
+        <Suspense fallback={null}>
+          <FixTreadmillDialog
+            isOpen={isFixOpen}
+            setIsOpen={(open) => {
+              setIsFixOpen(open);
+              if (!open) setSessionToFix(null);
+            }}
+            session={sessionToFix}
+            onComplete={handleFixComplete}
           />
         </Suspense>
       )}

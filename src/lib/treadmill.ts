@@ -14,7 +14,18 @@
 // Pure functions only — shared by the fix-treadmill API route (TCX build)
 // and the fix-treadmill dialog (editing, validation, totals).
 
-import type { PlannedRun, PaceZone } from '@/models/types';
+import type { PlannedRun, PaceZone, WorkoutSession } from '@/models/types';
+import { hasRuns } from '@/lib/type-guards';
+
+/**
+ * Whether the treadmill file fixer can be offered for a session: it must have
+ * a linked Strava activity to rebuild, and be a run (running program session
+ * or a workout containing planned runs) — never a pure strength session.
+ */
+export function canFixTreadmill(session: Pick<WorkoutSession, 'stravaId' | 'programType' | 'workoutDetails'>): boolean {
+  if (!session.stravaId) return false;
+  return session.programType === 'running' || hasRuns(session.workoutDetails);
+}
 
 /* ── segment model ──────────────────────────────────────────────────────── */
 

@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { format } from 'date-fns';
-import { Search, Filter, Calendar, CheckCircle2, XCircle, Clock, Trophy, Dumbbell, Route, ChevronDown, ChevronUp, Link as LinkIcon } from 'lucide-react';
+import { Search, Filter, Calendar, CheckCircle2, XCircle, Clock, Trophy, Dumbbell, Route, ChevronDown, ChevronUp, Link as LinkIcon, Wrench } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,10 +23,12 @@ import { formatExerciseDetails } from '@/utils/text-formatter';
 import type { Exercise, PlannedRun } from '@/models/types';
 import { formatPlannedRun } from '@/lib/workout-utils';
 import { hasRuns, hasExercises } from '@/lib/type-guards';
+import { canFixTreadmill } from '@/lib/treadmill';
 
 // Lazy load heavy dialogs
 const ShareWorkoutDialog = lazy(() => import('@/components/share-workout-dialog').then(mod => ({ default: mod.ShareWorkoutDialog })));
 const LinkStravaActivityDialog = lazy(() => import('@/components/link-strava-activity-dialog').then(mod => ({ default: mod.LinkStravaActivityDialog })));
+const FixTreadmillDialog = lazy(() => import('@/components/fix-treadmill-dialog').then(mod => ({ default: mod.FixTreadmillDialog })));
 
 export default function WorkoutHistoryPage() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
@@ -41,6 +43,18 @@ export default function WorkoutHistoryPage() {
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const [sessionToLink, setSessionToLink] = useState<WorkoutSession | null>(null);
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
+  const [sessionToFix, setSessionToFix] = useState<WorkoutSession | null>(null);
+  const [isFixOpen, setIsFixOpen] = useState(false);
+
+  const refreshSessions = async () => {
+    const auth = await getAuthInstance();
+    const user = auth.currentUser;
+    if (!user) return;
+    const result = await getPaginatedUserSessions(user.uid, 20);
+    setSessions(result.sessions);
+    setLastDoc(result.lastDoc);
+    setHasMore(result.hasMore);
+  };
 
   const toggleExpanded = (sessionId: string) => {
     setExpandedSessions(prev => {
@@ -565,6 +579,20 @@ export default function WorkoutHistoryPage() {
                             Link Strava
                           </Button>
                         )}
+                        {isCompleted && canFixTreadmill(session) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => {
+                              setSessionToFix(session);
+                              setIsFixOpen(true);
+                            }}
+                          >
+                            <Wrench className="h-3.5 w-3.5 mr-1.5" />
+                            Fix Treadmill
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -600,16 +628,26 @@ export default function WorkoutHistoryPage() {
             setIsLinkerOpen(false);
             setSessionToLink(null);
             // Refresh the session list so the Strava badge appears immediately
-            const { getAuthInstance } = await import('@/lib/firebase');
-            const auth = await getAuthInstance();
-            const user = auth.currentUser;
-            if (user) {
-              const { getPaginatedUserSessions } = await import('@/services/session-service-client');
-              const result = await getPaginatedUserSessions(user.uid, 20);
-              setSessions(result.sessions);
-              setLastDoc(result.lastDoc);
-              setHasMore(result.hasMore);
-            }
+            await refreshSessions();
+          }}
+        />
+      </Suspense>
+    )}
+
+    {sessionToFix && (
+      <Suspense fallback={null}>
+        <FixTreadmillDialog
+          isOpen={isFixOpen}
+          setIsOpen={(open) => {
+            setIsFixOpen(open);
+            if (!open) setSessionToFix(null);
+          }}
+          session={sessionToFix}
+          onComplete={async () => {
+            setIsFixOpen(false);
+            setSessionToFix(null);
+            // Refresh so the re-linked (corrected) activity shows immediately
+            await refreshSessions();
           }}
         />
       </Suspense>
