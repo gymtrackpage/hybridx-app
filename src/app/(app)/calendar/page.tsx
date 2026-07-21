@@ -634,6 +634,16 @@ function MonthGridCalendarView() {
           : (daySessions?.[0]?.workoutDetails ? [daySessions[0].workoutDetails] : []);
         const workouts: WorkoutDay[] = basePlanned.map((planned, idx) => daySessions?.[idx]?.workoutDetails ?? planned);
 
+        // A day can carry more persisted sessions than the program schedules
+        // (e.g. an extra workout logged outside the plan) — append those so
+        // they're not silently dropped from the calendar.
+        if (daySessions && daySessions.length > workouts.length) {
+          for (let idx = workouts.length; idx < daySessions.length; idx++) {
+            const extra = daySessions[idx]?.workoutDetails;
+            if (extra) workouts.push(extra);
+          }
+        }
+
         if (workouts.length > 0) {
           const isRestDay = workouts[0].title.toLowerCase().includes('rest') || workouts[0].title.toLowerCase().includes('recover');
           const anyCompleted = !!daySessions?.some(s => s.finishedAt && !s.skipped);

@@ -4,7 +4,7 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { format } from 'date-fns';
-import { Search, Filter, Calendar, CheckCircle2, XCircle, Clock, Trophy, Dumbbell, Route, ChevronDown, ChevronUp, Link as LinkIcon, Wrench } from 'lucide-react';
+import { Search, Filter, Calendar, CheckCircle2, XCircle, Clock, Trophy, Dumbbell, Route, ChevronDown, ChevronUp, Link as LinkIcon, Wrench, PlusSquare } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +29,7 @@ import { canFixTreadmill } from '@/lib/treadmill';
 const ShareWorkoutDialog = lazy(() => import('@/components/share-workout-dialog').then(mod => ({ default: mod.ShareWorkoutDialog })));
 const LinkStravaActivityDialog = lazy(() => import('@/components/link-strava-activity-dialog').then(mod => ({ default: mod.LinkStravaActivityDialog })));
 const FixTreadmillDialog = lazy(() => import('@/components/fix-treadmill-dialog').then(mod => ({ default: mod.FixTreadmillDialog })));
+const CustomWorkoutDialog = lazy(() => import('@/components/custom-workout-dialog').then(mod => ({ default: mod.CustomWorkoutDialog })));
 
 export default function WorkoutHistoryPage() {
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
@@ -45,6 +46,8 @@ export default function WorkoutHistoryPage() {
   const [isLinkerOpen, setIsLinkerOpen] = useState(false);
   const [sessionToFix, setSessionToFix] = useState<WorkoutSession | null>(null);
   const [isFixOpen, setIsFixOpen] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isLogWorkoutOpen, setIsLogWorkoutOpen] = useState(false);
 
   const refreshSessions = async () => {
     const auth = await getAuthInstance();
@@ -73,6 +76,7 @@ export default function WorkoutHistoryPage() {
       const auth = await getAuthInstance();
       const unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (user) {
+          setUserId(user.uid);
           try {
             const result = await getPaginatedUserSessions(user.uid, 20);
             setSessions(result.sessions);
@@ -212,9 +216,17 @@ export default function WorkoutHistoryPage() {
   return (
     <>
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Workout History</h1>
-        <p className="text-muted-foreground">Track your progress and review past workouts.</p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Workout History</h1>
+          <p className="text-muted-foreground">Track your progress and review past workouts.</p>
+        </div>
+        {userId && (
+          <Button onClick={() => setIsLogWorkoutOpen(true)} className="shrink-0">
+            <PlusSquare className="mr-2 h-4 w-4" />
+            Log New Workout
+          </Button>
+        )}
       </div>
 
       {/* Stats Overview */}
@@ -649,6 +661,17 @@ export default function WorkoutHistoryPage() {
             // Refresh so the re-linked (corrected) activity shows immediately
             await refreshSessions();
           }}
+        />
+      </Suspense>
+    )}
+
+    {userId && (
+      <Suspense fallback={null}>
+        <CustomWorkoutDialog
+          isOpen={isLogWorkoutOpen}
+          setIsOpen={setIsLogWorkoutOpen}
+          userId={userId}
+          onLogged={refreshSessions}
         />
       </Suspense>
     )}
