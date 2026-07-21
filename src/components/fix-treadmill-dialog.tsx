@@ -121,6 +121,11 @@ export function FixTreadmillDialog({
 }: FixTreadmillDialogProps) {
   const [activity, setActivity] = useState<ActivitySummary | null>(activityProp ?? null);
   const [loadingActivity, setLoadingActivity] = useState(false);
+  // Set when the live Strava lookup failed — typically because the user
+  // deleted the original activity to clear Strava's duplicate-upload block.
+  // The fix itself still works (the server cached what it needs on the first
+  // attempt), so this only affects what the summary badge can show.
+  const [activityStale, setActivityStale] = useState(false);
   const [drafts, setDrafts] = useState<TreadmillSegmentDraft[]>([]);
   const [name, setName] = useState('');
   const [alignRealtime, setAlignRealtime] = useState(false);
@@ -147,6 +152,7 @@ export function FixTreadmillDialog({
     setStep('edit');
     setResult(null);
     setDuplicateUrl(null);
+    setActivityStale(false);
 
     if (activityProp) {
       setActivity(activityProp);
@@ -171,13 +177,25 @@ export function FixTreadmillDialog({
           average_heartrate: data.average_heartrate,
         });
       } catch (err) {
-        logger.error('FixTreadmillDialog: failed to load activity', err);
-        toast({
-          title: 'Error',
-          description: err instanceof Error ? err.message : 'Failed to load activity.',
-          variant: 'destructive',
-        });
-        setIsOpen(false);
+        logger.warn('FixTreadmillDialog: live activity lookup failed, falling back', err);
+        // Most likely cause: the user already deleted the original on Strava
+        // to clear a duplicate-upload block from an earlier attempt. The fix
+        // itself doesn't need this — the server cached the original's start
+        // time and sensor streams the first time it read them — so fall back
+        // to the summary saved on the session at link time (if any) instead
+        // of blocking the user from retrying.
+        setActivityStale(true);
+        if (session.stravaActivity) {
+          setActivity({
+            id: session.stravaId!,
+            name: session.stravaActivity.name || session.workoutTitle || 'Treadmill Run',
+            moving_time: session.stravaActivity.moving_time || 0,
+            elapsed_time: session.stravaActivity.moving_time || 0,
+            distance: session.stravaActivity.distance || 0,
+          });
+        } else {
+          setActivity(null);
+        }
       } finally {
         setLoadingActivity(false);
       }
@@ -447,6 +465,19 @@ export function FixTreadmillDialog({
                       </span>
                     )}
                   </div>
+                )}
+
+                {activityStale && (
+                  <Alert className="py-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      {activity
+                        ? "Couldn't reach the original Strava activity — showing the details saved when it was linked."
+                        : "Couldn't reach the original Strava activity, and no saved details are available."}{' '}
+                      This is expected if you deleted it to clear a duplicate-upload block; the fix can
+                      still proceed using the data read the first time you tried.
+                    </AlertDescription>
+                  </Alert>
                 )}
 
                 <div className="space-y-1.5">

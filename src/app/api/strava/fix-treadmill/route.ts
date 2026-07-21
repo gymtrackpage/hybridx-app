@@ -15,6 +15,15 @@
 // Strava also rejects uploads that overlap an existing activity's time window
 // as duplicates. When that happens we return 409 with code DUPLICATE so the
 // client can tell the user to delete the original first and retry.
+//
+// That creates a catch-22 if handled naively: the retry needs the original
+// activity's start time and sensor streams, but the user was just told to
+// delete that very activity to clear the duplicate block. So the first time
+// we successfully read the original activity, we cache its start time, name
+// and (downsampled) sensor streams in a side collection keyed by session id.
+// Every subsequent attempt for the same original activity — including the
+// retry after deletion — reads from that cache instead of hitting Strava
+// again. The cache is cleared once the fix succeeds.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
@@ -93,6 +102,30 @@ async function fetchSensorPoints(activityId: string, accessToken: string): Promi
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+interface FixCache {
+  originalStravaId: string;
+  startDate: string;
+  name: string;
+  sensorPoints: SensorPoint[];
+  cachedAt: string;
+}
+
+const MAX_CACHED_SENSOR_POINTS = 3000;
+
+/** Stride-based downsample so the cached doc stays well under Firestore's
+ *  1MiB limit even for very long activities. buildActivity() interpolates
+ *  linearly between points anyway, so losing some resolution on slow-moving
+ *  signals like HR/cadence costs negligible accuracy. */
+function capSensorPoints(points: SensorPoint[]): SensorPoint[] {
+  if (points.length <= MAX_CACHED_SENSOR_POINTS) return points;
+  const stride = Math.ceil(points.length / MAX_CACHED_SENSOR_POINTS);
+  const out: SensorPoint[] = [];
+  for (let i = 0; i < points.length; i += stride) out.push(points[i]);
+  const last = points[points.length - 1];
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as FixRequestBody;
@@ -155,29 +188,61 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Original activity: gives us the true start time and the sensor streams
+    // Original activity: gives us the true start time and the sensor streams.
+    // Reuse the cached copy from a prior attempt (if any) so a retry works
+    // even after the user has deleted the original on Strava to clear a
+    // duplicate-upload block — see the file header comment.
+    const fixCacheRef = adminDb.collection('treadmillFixCache').doc(sessionId);
+    const cachedDoc = await fixCacheRef.get();
+    const cached = cachedDoc.exists ? (cachedDoc.data() as FixCache) : null;
+
     let originalStart: Date;
     let originalName = '';
-    try {
-      const actRes = await axios.get(
-        `https://www.strava.com/api/v3/activities/${originalActivityId}`,
-        { headers: { Authorization: `Bearer ${accessToken}` }, params: { include_all_efforts: false } },
-      );
-      originalStart = new Date(actRes.data.start_date);
-      originalName = actRes.data.name || '';
-      if (isNaN(originalStart.getTime())) throw new Error('Invalid start_date');
-    } catch (err) {
-      logger.error('fix-treadmill: could not fetch original activity', {
-        originalActivityId,
-        status: (err as any).response?.status,
-      });
-      return NextResponse.json(
-        { error: 'Could not read the original Strava activity. It may have been deleted.' },
-        { status: 404 },
-      );
-    }
+    let sensorPoints: SensorPoint[];
 
-    const sensorPoints = await fetchSensorPoints(originalActivityId, accessToken);
+    if (cached && cached.originalStravaId === originalActivityId) {
+      originalStart = new Date(cached.startDate);
+      originalName = cached.name;
+      sensorPoints = cached.sensorPoints;
+      logger.info('fix-treadmill: reusing cached original activity data', { originalActivityId, sessionId });
+    } else {
+      try {
+        const actRes = await axios.get(
+          `https://www.strava.com/api/v3/activities/${originalActivityId}`,
+          { headers: { Authorization: `Bearer ${accessToken}` }, params: { include_all_efforts: false } },
+        );
+        originalStart = new Date(actRes.data.start_date);
+        originalName = actRes.data.name || '';
+        if (isNaN(originalStart.getTime())) throw new Error('Invalid start_date');
+      } catch (err) {
+        logger.error('fix-treadmill: could not fetch original activity', {
+          originalActivityId,
+          status: (err as any).response?.status,
+        });
+        return NextResponse.json(
+          { error: 'Could not read the original Strava activity. It may have been deleted.' },
+          { status: 404 },
+        );
+      }
+
+      sensorPoints = await fetchSensorPoints(originalActivityId, accessToken);
+
+      // Best-effort cache write — if it fails, the fix still proceeds; a
+      // retry after deleting the original would just fail with the 404
+      // above instead of using the cache.
+      try {
+        const cachePayload: FixCache = {
+          originalStravaId: originalActivityId,
+          startDate: originalStart.toISOString(),
+          name: originalName,
+          sensorPoints: capSensorPoints(sensorPoints),
+          cachedAt: new Date().toISOString(),
+        };
+        await fixCacheRef.set(cachePayload);
+      } catch (cacheErr) {
+        logger.warn('fix-treadmill: failed to cache original activity data', { sessionId, cacheErr });
+      }
+    }
 
     const name = (typeof body.name === 'string' && body.name.trim())
       ? body.name.trim().slice(0, 120)
@@ -286,6 +351,11 @@ export async function POST(req: NextRequest) {
         fixedAt: new Date(),
       },
     });
+
+    // Cache no longer needed now the session points at the corrected activity.
+    fixCacheRef.delete().catch((err) =>
+      logger.warn('fix-treadmill: failed to clear fix cache', { sessionId, err }),
+    );
 
     return NextResponse.json({
       success: true,
