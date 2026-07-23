@@ -690,16 +690,10 @@ export default function DashboardPage() {
                     </Link>
                 </Button>
               ) : showGenerateWorkoutButton ? (
-                  <div className="w-full flex flex-col md:flex-row gap-2">
-                      <Button variant="accent" className="w-full" onClick={handleGenerateWorkout} disabled={isGeneratingWorkout}>
-                          {isGeneratingWorkout ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                          {isGeneratingWorkout ? 'Generating...' : 'Generate AI Workout'}
-                      </Button>
-                      <Button variant="outline" className="w-full" onClick={() => setIsCustomWorkoutDialogOpen(true)}>
-                           <PlusSquare className="mr-2 h-4 w-4" />
-                           Log Custom Workout
-                      </Button>
-                  </div>
+                  <Button variant="accent" className="w-full" onClick={handleGenerateWorkout} disabled={isGeneratingWorkout}>
+                      {isGeneratingWorkout ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+                      {isGeneratingWorkout ? 'Generating...' : 'Generate AI Workout'}
+                  </Button>
               ) : (
                   <div className="w-full flex flex-col md:flex-row gap-2">
                       <Button variant="accent" className="w-full" onClick={handleStartWorkout} disabled={!todaysWorkout?.workout}>
@@ -717,6 +711,10 @@ export default function DashboardPage() {
                       )}
                   </div>
               )}
+              <Button variant="outline" className="w-full" onClick={() => setIsCustomWorkoutDialogOpen(true)}>
+                   <PlusSquare className="mr-2 h-4 w-4" />
+                   Log New Workout
+              </Button>
             </CardFooter>
           </Card>
 
@@ -840,6 +838,7 @@ export default function DashboardPage() {
             isOpen={isCustomWorkoutDialogOpen}
             setIsOpen={setIsCustomWorkoutDialogOpen}
             userId={user.id}
+            onLogged={refreshData}
          />
         </Suspense>
       )}

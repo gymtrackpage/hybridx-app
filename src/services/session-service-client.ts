@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger';
 
 import { collection, doc, getDocs, addDoc, updateDoc, query, where, Timestamp, limit, orderBy, getDoc, startAfter, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db, getAuthInstance } from '@/lib/firebase';
-import type { WorkoutSession, WorkoutDay, Exercise, ProgramType } from '@/models/types';
+import type { WorkoutSession, WorkoutDay, Exercise, ProgramType, PlannedRun } from '@/models/types';
 import type { StravaActivity } from './strava-service';
 
 // Re-export WorkoutSession type for convenience
@@ -195,26 +195,92 @@ export async function getOrCreateProgramSessionsForDay(
     return results;
 }
 
-export async function createCustomWorkoutSession(userId: string, title: string, type: ProgramType, description: string, duration?: string): Promise<void> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+export interface ManualWorkoutInput {
+    /** Day the workout happened (normalized to local midnight before saving). */
+    date: Date;
+    title: string;
+    type: 'running' | 'hyrox';
+    /** Free-text duration, e.g. "45" (minutes) — matches WorkoutSession.duration's existing format. */
+    duration?: string;
+    notes?: string;
+    /** Required (and used) when type === 'running'. */
+    run?: PlannedRun;
+    /** Required (and used) when type === 'hyrox'. */
+    exercises?: Exercise[];
+}
+
+/**
+ * Logs a workout the user did outside their training plan — e.g. an extra
+ * run or gym session on a day that already has (or doesn't have) a
+ * program-scheduled workout. Unlike getOrCreateWorkoutSession, this always
+ * creates a NEW session document rather than finding-and-overwriting one for
+ * the day, so it never clobbers an existing session; sibling sessions'
+ * sessionCount is kept in sync so "Session X of Y" badges stay correct.
+ * The session is saved already completed (finishedAt set) since it records
+ * something the user already did.
+ */
+export async function logManualWorkoutSession(userId: string, input: ManualWorkoutInput): Promise<WorkoutSession> {
+    const dayStart = new Date(input.date);
+    dayStart.setHours(0, 0, 0, 0);
 
     const q = query(
         sessionsCollection,
         where('userId', '==', userId),
-        where('workoutDate', '==', Timestamp.fromDate(today)),
-        limit(1)
+        where('workoutDate', '==', Timestamp.fromDate(dayStart)),
     );
     const snapshot = await getDocs(q);
+    const sessionIndex = snapshot.size;
+    const sessionCount = snapshot.size + 1;
 
-    const workout: WorkoutDay = {
-        title,
-        day: 0,
-        exercises: [{ name: 'Custom Activity', details: description }],
-        programType: 'hyrox',
+    const workoutDetails: WorkoutDay = input.type === 'running'
+        ? { day: 0, title: input.title, runs: input.run ? [input.run] : [], programType: 'running', exercises: [] }
+        : { day: 0, title: input.title, exercises: input.exercises || [], programType: 'hyrox' };
+
+    const completedAt = new Date(dayStart);
+    completedAt.setHours(12, 0, 0, 0);
+
+    const newSessionData = {
+        userId,
+        programId: 'manual-log',
+        workoutDate: Timestamp.fromDate(dayStart),
+        workoutTitle: input.title,
+        programType: input.type as ProgramType,
+        startedAt: Timestamp.fromDate(completedAt),
+        finishedAt: Timestamp.fromDate(completedAt),
+        notes: input.notes || '',
+        duration: input.duration || null,
+        extendedExercises: [],
+        workoutDetails,
+        skipped: false,
+        sessionIndex,
+        sessionCount,
     };
 
-    await getOrCreateWorkoutSession(userId, 'custom-workout', today, workout, true, duration);
+    const docRef = await addDoc(sessionsCollection, newSessionData);
+
+    // Keep sibling docs' sessionCount in sync so "Session X of Y" badges
+    // (history, calendar, dashboard) stay correct for the whole day.
+    if (snapshot.size > 0) {
+        await Promise.all(snapshot.docs.map(d => updateDoc(d.ref, { sessionCount })));
+    }
+
+    return {
+        id: docRef.id,
+        userId,
+        programId: 'manual-log',
+        workoutDate: dayStart,
+        workoutTitle: input.title,
+        programType: input.type,
+        startedAt: completedAt,
+        finishedAt: completedAt,
+        notes: newSessionData.notes,
+        duration: input.duration,
+        extendedExercises: [],
+        workoutDetails,
+        skipped: false,
+        sessionIndex,
+        sessionCount,
+    };
 }
 
 
