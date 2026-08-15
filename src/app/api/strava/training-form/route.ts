@@ -3,94 +3,82 @@
 // training summary for the Training Form page.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getUser, updateUserAdmin } from '@/services/user-service';
+import { getUser } from '@/services/user-service';
 import { computeTrainingFormSummary } from '@/services/training-load-service';
-import axios from 'axios';
-import type { StravaTokens } from '@/models/types';
 import { getAdminAuth } from '@/lib/firebase-admin';
+import { getValidStravaToken } from '@/lib/strava-token';
+import { fetchRecentActivities, mapStravaError, describeStravaError } from '@/lib/strava-api';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { cookies } from 'next/headers';
 
 export async function GET(req: NextRequest) {
+  let userId: string | undefined;
+
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('__session')?.value;
 
     if (!sessionCookie) {
-      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+      return NextResponse.json({ error: 'Authentication required.', code: 'SESSION_EXPIRED' }, { status: 401 });
     }
 
     const adminAuth = getAdminAuth();
     const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const userId = decodedToken.uid;
+    userId = decodedToken.uid;
 
-    const user = await getUser(userId);
-    if (!user) {
-      return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+    // 10 requests per minute per user — the page refetches on every mount and
+    // each miss costs us Strava request allowance.
+    const rl = checkRateLimit(`strava-training-form:${userId}`, 60_000, 10);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait a moment and try again.', code: 'STRAVA_RATE_LIMITED' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+      );
     }
 
-    const stravaTokens = user?.strava;
-    if (!stravaTokens?.accessToken || !stravaTokens.refreshToken) {
-      return NextResponse.json({ error: 'Strava account not connected.' }, { status: 400 });
-    }
+    const accessToken = await getValidStravaToken(userId);
 
-    // Refresh token if needed
-    let accessToken = stravaTokens.accessToken;
-    const now = new Date();
-    if (
-      stravaTokens.expiresAt instanceof Date &&
-      stravaTokens.expiresAt.getTime() < now.getTime() + 300000
-    ) {
-      const refreshResponse = await axios.post('https://www.strava.com/oauth/token', {
-        client_id: process.env.NEXT_PUBLIC_STRAVA_CLIENT_ID,
-        client_secret: process.env.STRAVA_CLIENT_SECRET,
-        grant_type: 'refresh_token',
-        refresh_token: stravaTokens.refreshToken,
-      });
+    // 120 days so the 42-day CTL average has run-up before the charted window.
+    const { activities, pagesFetched, partial, rateLimit } = await fetchRecentActivities(accessToken, {
+      days: 120,
+      perPage: 100,
+      maxPages: 3,
+    });
 
-      const newTokens: StravaTokens = {
-        ...stravaTokens,
-        accessToken: refreshResponse.data.access_token,
-        refreshToken: refreshResponse.data.refresh_token,
-        expiresAt: new Date(refreshResponse.data.expires_at * 1000),
-      };
+    console.info('[training-form] fetched Strava activities', {
+      userId,
+      count: activities.length,
+      pagesFetched,
+      partial,
+      rateLimit,
+    });
 
-      await updateUserAdmin(userId, { strava: newTokens });
-      accessToken = newTokens.accessToken;
-    }
-
-    // Fetch more activities for the 90-day PMC window — 3 pages of 50
-    const [page1, page2, page3] = await Promise.all([
-      axios.get('https://www.strava.com/api/v3/athlete/activities', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        params: { per_page: 50, page: 1 },
-      }),
-      axios.get('https://www.strava.com/api/v3/athlete/activities', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        params: { per_page: 50, page: 2 },
-      }),
-      axios.get('https://www.strava.com/api/v3/athlete/activities', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        params: { per_page: 50, page: 3 },
-      }),
-    ]);
-
-    const activities = [...page1.data, ...page2.data, ...page3.data];
     const summary = computeTrainingFormSummary(activities);
 
-    return NextResponse.json(summary);
+    return NextResponse.json(
+      { ...summary, partial },
+      { headers: { 'Cache-Control': 'private, max-age=300' } },
+    );
   } catch (error) {
-    console.error('Training form API error:', error instanceof Error ? error.message : String(error));
-    let status = 500;
-    let message = 'Failed to compute training form data.';
-
-    if (axios.isAxiosError(error)) {
-      status = error.response?.status ?? 500;
-      message = error.response?.data?.message || message;
-    } else if ((error as any).code === 'auth/session-cookie-expired') {
-      status = 401;
-      message = 'Session expired. Please log in again.';
+    // Strava answers 403 both for a missing activity-read grant and for an
+    // exhausted daily allowance — the stored scope separates the two.
+    let scope: string | undefined;
+    if (userId) {
+      try {
+        scope = (await getUser(userId))?.strava?.scope;
+      } catch {
+        // best-effort only — never let the diagnostic lookup mask the real error
+      }
     }
 
-    return NextResponse.json({ error: message }, { status });
+    const mapped = mapStravaError(error, 'Failed to compute training form data.', scope);
+    console.error('[training-form] request failed', {
+      userId,
+      code: mapped.code,
+      scope,
+      ...describeStravaError(error),
+    });
+
+    return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status });
   }
 }
