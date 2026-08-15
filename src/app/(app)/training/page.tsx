@@ -256,6 +256,7 @@ export default function TrainingPage() {
   const [data, setData] = useState<TrainingFormSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
 
   // AI analysis
   const [aiAnalysis, setAiAnalysis] = useState<TrainingLoadAnalysisOutput | null>(null);
@@ -271,6 +272,7 @@ export default function TrainingPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setErrorCode(null);
     try {
       const auth = await getAuthInstance();
       const currentUser = auth.currentUser;
@@ -291,6 +293,7 @@ export default function TrainingPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (body.code) setErrorCode(body.code);
         throw new Error(body.error || 'Failed to load training data');
       }
 
@@ -334,18 +337,36 @@ export default function TrainingPage() {
   );
 
   if (error || !data || data.activitiesAnalysed === 0) {
+    const needsReconnect = errorCode === 'STRAVA_REAUTH' || errorCode === 'STRAVA_SCOPE_MISSING';
+    const heading = needsReconnect
+      ? 'Strava needs reconnecting'
+      : errorCode === 'STRAVA_RATE_LIMITED'
+        ? 'Strava is busy right now'
+        : errorCode === 'STRAVA_UNAVAILABLE'
+          ? "Couldn't reach Strava"
+          : error
+            ? "Couldn't load your training data"
+            : 'No training data available';
+
     return (
       <div className="max-w-4xl mx-auto space-y-6">
         <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" /> Dashboard
         </Link>
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-12 text-center space-y-3">
-          <Activity className="h-10 w-10 text-muted-foreground/40" />
-          <p className="font-semibold">No training data available</p>
-          <p className="text-sm text-muted-foreground">
+          {needsReconnect ? <AlertTriangle className="h-10 w-10 text-orange-500/60" /> : <Activity className="h-10 w-10 text-muted-foreground/40" />}
+          <p className="font-semibold">{heading}</p>
+          <p className="text-sm text-muted-foreground max-w-sm">
             {error ?? 'Connect Strava and log some activities to see your training report.'}
           </p>
-          <Button variant="outline" size="sm" onClick={fetchData}>Try again</Button>
+          <div className="flex items-center gap-2">
+            {needsReconnect && (
+              <Link href="/profile">
+                <Button size="sm">Reconnect Strava</Button>
+              </Link>
+            )}
+            <Button variant="outline" size="sm" onClick={fetchData}>Try again</Button>
+          </div>
         </div>
       </div>
     );
