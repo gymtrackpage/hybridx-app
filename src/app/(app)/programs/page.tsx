@@ -2,12 +2,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { CheckCircle, Dumbbell, Route, Trash2, Calendar, Zap } from 'lucide-react';
+import { CheckCircle, Dumbbell, Route, Trash2, Calendar, Zap, UserCheck } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getAllPrograms, getPersonalPrograms, deletePersonalProgram } from '@/services/program-service-client';
+import { getAllPrograms, getAssignedPrograms, getPersonalPrograms, deletePersonalProgram } from '@/services/program-service-client';
 import { getUserClient, updateUser } from '@/services/user-service-client';
 import type { Program, User } from '@/models/types';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation';
 export default function ProgramsPage() {
   const [programs, setPrograms] = useState<Program[]>([]);
   const [personalPrograms, setPersonalPrograms] = useState<Program[]>([]);
+  const [assignedPrograms, setAssignedPrograms] = useState<Program[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -40,6 +41,11 @@ export default function ProgramsPage() {
             // Fetch Personal Programs
             const personal = await getPersonalPrograms(firebaseUser.uid);
             setPersonalPrograms(personal);
+
+            // Custom programs an admin has assigned to this athlete. Kept in a
+            // separate collection, so they need their own query.
+            const assigned = await getAssignedPrograms(firebaseUser.uid);
+            setAssignedPrograms(assigned);
           }
           setLoading(false);
         });
@@ -141,6 +147,57 @@ export default function ProgramsPage() {
     });
   }
 
+  // Programs an admin has assigned specifically to this athlete. Shown above the
+  // tabs so they are not buried among the public programs.
+  const renderAssignedPrograms = () => {
+    if (assignedPrograms.length === 0) return null;
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <UserCheck className="h-4 w-4 text-primary" />
+          <h2 className="font-semibold">Assigned to you</h2>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {assignedPrograms.map(program => {
+            const isCurrentProgram = user?.programId === program.id;
+            return (
+              <Card key={program.id} className="flex flex-col border-primary/30 bg-primary/5">
+                <CardHeader>
+                  <div className="flex justify-between items-start gap-4">
+                    <CardTitle className="text-lg">{program.name}</CardTitle>
+                    <Badge variant="outline" className="shrink-0 bg-background">Assigned</Badge>
+                  </div>
+                  <CardDescription className="line-clamp-3 h-[60px]">{program.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow">
+                  <div className="flex items-center text-sm text-muted-foreground gap-4">
+                    <div className="flex items-center gap-1.5">
+                      {program.programType === 'running' ? <Route className="h-4 w-4" /> : <Dumbbell className="h-4 w-4" />}
+                      <span>{program.workouts.length} workouts</span>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  {isCurrentProgram ? (
+                    <Button className="w-full" disabled>
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Currently Active
+                    </Button>
+                  ) : (
+                    <Button className="w-full" asChild>
+                      <Link href={`/programs/${program.id}/view`}>View Program</Link>
+                    </Button>
+                  )}
+                </CardFooter>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const renderPersonalPrograms = () => {
       if (personalPrograms.length === 0) {
           return (
@@ -226,6 +283,8 @@ export default function ProgramsPage() {
             <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Browse Programs</h1>
             <p className="text-muted-foreground">Find the perfect training plan to match your goals and schedule.</p>
         </div>
+
+        {renderAssignedPrograms()}
 
         <Tabs defaultValue="my-plans">
             <TabsList className="grid w-full grid-cols-3 md:w-[600px]">

@@ -15,9 +15,18 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import type { Program, Workout, Exercise, RunningProgram, RunningWorkout, PlannedRun, PaceZone, ProgramType } from '@/models/types';
-import { createProgram, getProgramClient, updateProgram } from '@/services/program-service-client';
+import type { Program, Workout, Exercise, RunningProgram, RunningWorkout, PlannedRun, PaceZone, ProgramType, ProgramVisibility } from '@/models/types';
+import {
+  createProgram,
+  createCustomProgram,
+  findProgram,
+  updateProgram,
+  updateCustomProgram,
+  type ProgramCollection,
+} from '@/services/program-service-client';
 import { isUnifiedCsv, rowsToProgram } from '@/lib/program-csv';
+import { ProgramAudiencePicker } from '@/components/program-audience-picker';
+import { Separator } from '@/components/ui/separator';
 
 interface ProgramImportDialogProps {
   isOpen: boolean;
@@ -56,9 +65,21 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
   const [parsedProgram, setParsedProgram] = useState<Omit<Program, 'id'> | null>(null);
   const [targetProgramId, setTargetProgramId] = useState<string | null>(null);
   const [targetProgramName, setTargetProgramName] = useState<string | null>(null);
+  const [targetCollection, setTargetCollection] = useState<ProgramCollection>('programs');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [visibility, setVisibility] = useState<ProgramVisibility>('public');
+  const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
+  /** The audience the target program already has, so an update only calls the
+   *  assignment API when the admin actually changed something. */
+  const [targetAudience, setTargetAudience] = useState<{ visibility: ProgramVisibility; assignedUserIds: string[] } | null>(null);
   const { toast } = useToast();
+
+  const audienceChanged =
+    !targetAudience ||
+    targetAudience.visibility !== visibility ||
+    targetAudience.assignedUserIds.length !== assignedUserIds.length ||
+    targetAudience.assignedUserIds.some(id => !assignedUserIds.includes(id));
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -77,16 +98,30 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
     if (!id) {
       setTargetProgramId(null);
       setTargetProgramName(null);
+      setTargetCollection('programs');
+      setTargetAudience(null);
       return;
     }
     try {
-      const existing = await getProgramClient(id);
+      const existing = await findProgram(id);
       if (existing) {
         setTargetProgramId(id);
-        setTargetProgramName(existing.name);
+        setTargetProgramName(existing.program.name);
+        setTargetCollection(existing.collection);
+        // Start from the program's current audience so re-importing a CSV does
+        // not silently widen access.
+        const current = {
+          visibility: (existing.program.visibility === 'custom' ? 'custom' : 'public') as ProgramVisibility,
+          assignedUserIds: existing.program.assignedUserIds ?? [],
+        };
+        setVisibility(current.visibility);
+        setAssignedUserIds(current.assignedUserIds);
+        setTargetAudience(current);
       } else {
         setTargetProgramId(null);
         setTargetProgramName(null);
+        setTargetCollection('programs');
+        setTargetAudience(null);
         toast({
           title: 'Program not found',
           description: `No program with id "${id}" exists. A new program will be created instead.`,
@@ -96,6 +131,8 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
       logger.error('Failed to look up existing program:', err);
       setTargetProgramId(null);
       setTargetProgramName(null);
+      setTargetCollection('programs');
+      setTargetAudience(null);
     }
   };
 
@@ -221,16 +258,44 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
       };
   }
 
+  /** Push the chosen audience through the admin API. Only the server can decide
+   *  whether an athlete being removed keeps access because it is their active
+   *  plan, and only the server can move a program between the public and custom
+   *  collections. */
+  const saveAudience = async (programId: string) => {
+    const res = await fetch('/api/admin/programs/assignments', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ programId, visibility, assignedUserIds }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Program saved, but updating who it applies to failed.');
+    }
+  };
+
   const handleImport = async () => {
     if (!parsedProgram) return;
 
     setIsLoading(true);
     try {
       if (targetProgramId) {
-        await updateProgram(targetProgramId, parsedProgram);
+        if (targetCollection === 'customPrograms') {
+          await updateCustomProgram(targetProgramId, parsedProgram);
+        } else {
+          await updateProgram(targetProgramId, parsedProgram);
+        }
+        if (audienceChanged) await saveAudience(targetProgramId);
         toast({
           title: 'Program updated',
           description: `"${parsedProgram.name}" has been updated successfully.`,
+        });
+      } else if (visibility === 'custom') {
+        await createCustomProgram(parsedProgram, assignedUserIds);
+        toast({
+          title: 'Custom program created',
+          description: `"${parsedProgram.name}" is now visible to ${assignedUserIds.length} athlete(s).`,
         });
       } else {
         await createProgram(parsedProgram);
@@ -258,6 +323,10 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
     setParsedProgram(null);
     setTargetProgramId(null);
     setTargetProgramName(null);
+    setTargetCollection('programs');
+    setTargetAudience(null);
+    setVisibility('public');
+    setAssignedUserIds([]);
     setError(null);
     setIsLoading(false);
   }
@@ -340,11 +409,36 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
                     </p>
                 </div>
             )}
+
+            {parsedProgram && (
+                <>
+                    <Separator />
+                    <div className="space-y-3">
+                        <div>
+                            <h4 className="text-sm font-semibold">Who is this program for?</h4>
+                            <p className="text-xs text-muted-foreground">
+                                Custom programs are visible only to the athletes you assign. They appear in
+                                those athletes&apos; program list for them to start.
+                            </p>
+                        </div>
+                        <ProgramAudiencePicker
+                            visibility={visibility}
+                            onVisibilityChange={setVisibility}
+                            selectedUserIds={assignedUserIds}
+                            onSelectedUserIdsChange={setAssignedUserIds}
+                            disabled={isLoading}
+                        />
+                    </div>
+                </>
+            )}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={() => handleOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleImport} disabled={!parsedProgram || isLoading}>
+          <Button
+            onClick={handleImport}
+            disabled={!parsedProgram || isLoading || (visibility === 'custom' && assignedUserIds.length === 0)}
+          >
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {targetProgramId ? 'Update Program' : 'Import Program'}
           </Button>

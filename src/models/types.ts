@@ -117,12 +117,29 @@ export type ProgramType = 'hyrox' | 'running' | 'hybrid';
 
 export type SessionType = 'run' | 'strength' | 'cardio' | 'rest';
 
+/** Who a program is available to.
+ *  'public' (or absent, for programs created before custom programs existed) —
+ *  every signed-in athlete can browse and start it.
+ *  'custom' — only the athletes in `assignedUserIds` can see or start it. */
+export type ProgramVisibility = 'public' | 'custom';
+
 export interface Program {
   id: string;
   name: string;
   description: string;
   programType: ProgramType;
   workouts: (Workout | RunningWorkout)[];
+  /** Absent means 'public' — existing programs keep working untouched. */
+  visibility?: ProgramVisibility;
+  /** Athletes this custom program is assigned to. Only meaningful when
+   *  visibility is 'custom'. */
+  assignedUserIds?: string[];
+  /** Athletes who were unassigned while this was their active program. They
+   *  keep read access so their dashboard and calendar keep working, but the
+   *  program no longer appears in their program list, so they cannot restart
+   *  it once they move on. Managed server-side — see
+   *  `src/lib/program-visibility.ts`. */
+  retainedUserIds?: string[];
 }
 
 export type TargetRace = 'mile' | '5k' | '10k' | 'half-marathon' | 'marathon' | 'ultra';

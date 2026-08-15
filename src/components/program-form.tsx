@@ -27,7 +27,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
 import type { Program } from '@/models/types';
-import { createProgram, updateProgram } from '@/services/program-service-client';
+import { createProgram, updateProgram, updateCustomProgram } from '@/services/program-service-client';
+import { isCustomProgram } from '@/lib/program-visibility';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from './ui/scroll-area';
 
@@ -192,7 +193,13 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
       };
 
       if (program) {
-        await updateProgram(program.id, programData);
+        // Custom programs live in their own collection — writing them through
+        // updateProgram would create a stray public copy instead.
+        if (isCustomProgram(program)) {
+          await updateCustomProgram(program.id, programData);
+        } else {
+          await updateProgram(program.id, programData);
+        }
         toast({ title: 'Success', description: 'Program updated successfully.' });
       } else {
         await createProgram(programData);
