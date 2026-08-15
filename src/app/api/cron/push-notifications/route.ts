@@ -104,7 +104,12 @@ export async function GET(request: Request) {
               ? user.startDate.toDate()
               : new Date(user.startDate as any);
 
-          const programDoc = await db.collection('programs').doc(user.programId).get();
+          // Programs live in `programs` (public) or `customPrograms` (assigned
+          // to specific athletes) and share an id space — check both.
+          let programDoc = await db.collection('programs').doc(user.programId).get();
+          if (!programDoc.exists) {
+            programDoc = await db.collection('customPrograms').doc(user.programId).get();
+          }
           if (programDoc.exists) {
             const workouts = programDoc.data()?.workouts as (Workout | RunningWorkout)[];
             const customWorkouts = user.customProgram;

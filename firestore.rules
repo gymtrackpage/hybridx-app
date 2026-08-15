@@ -59,8 +59,30 @@ service cloud.firestore {
       }
     }
 
+    // Public programs — readable by every signed-in athlete, as before.
     match /programs/{programId} {
       allow read: if request.auth != null;
+      allow write: if request.auth != null && isAdmin();
+    }
+
+    // User-specific programs. Kept in their own collection so the public
+    // /programs listing above stays an unrestricted query: Firestore fails an
+    // entire list query when any document it returns is off-limits, so mixing
+    // restricted programs into /programs would break every athlete's program
+    // list. See src/lib/program-visibility.ts.
+    //
+    // Readable by the athletes it is assigned to, by athletes grandfathered in
+    // because it is still their active plan (retainedUserIds), and by admins.
+    // Athletes list these with a where('assignedUserIds','array-contains',uid)
+    // query, so every document such a query returns already satisfies the rule.
+    // Conditions are ordered cheapest-first — isAdmin() costs a document read,
+    // the array checks only inspect the program being returned.
+    match /customPrograms/{programId} {
+      allow read: if request.auth != null && (
+                     request.auth.uid in resource.data.get('assignedUserIds', [])
+                     || request.auth.uid in resource.data.get('retainedUserIds', [])
+                     || isAdmin()
+                  );
       allow write: if request.auth != null && isAdmin();
     }
 

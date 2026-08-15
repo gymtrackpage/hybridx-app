@@ -48,12 +48,26 @@ export async function GET(request: Request) {
   const missedUsers = usersSnap.docs.filter(d => !trainedYesterday.has(d.id) && d.data().programId);
   const uniqueProgramIds = [...new Set(missedUsers.map(d => d.data().programId as string))];
 
+  // Programs live in `programs` (public) or `customPrograms` (assigned to
+  // specific athletes) and share an id space, so both are checked. Custom
+  // programs are the rarer case, so they are only looked up for the ids the
+  // public collection did not resolve.
   const programSnaps = await Promise.all(
     uniqueProgramIds.map(id => db.collection('programs').doc(id).get())
   );
   const programCache = new Map(
     programSnaps.filter(s => s.exists).map(s => [s.id, s.data()])
   );
+
+  const unresolvedIds = uniqueProgramIds.filter(id => !programCache.has(id));
+  if (unresolvedIds.length > 0) {
+    const customSnaps = await Promise.all(
+      unresolvedIds.map(id => db.collection('customPrograms').doc(id).get())
+    );
+    for (const snap of customSnaps) {
+      if (snap.exists) programCache.set(snap.id, snap.data());
+    }
+  }
 
   const updatePromises = usersSnap.docs.map(async (userDoc) => {
     try {

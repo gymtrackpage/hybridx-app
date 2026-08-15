@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { PlusCircle, MoreHorizontal, Trash2, Edit, Upload } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Trash2, Edit, Upload, Users, UserCheck } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -18,7 +18,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { getAllPrograms, deleteProgram } from '@/services/program-service-client';
+import {
+  getAllPrograms,
+  getAllCustomPrograms,
+  deleteProgram,
+  deleteCustomProgram,
+} from '@/services/program-service-client';
+import { Badge } from '@/components/ui/badge';
+import { ProgramAccessDialog } from '@/components/program-access-dialog';
+import { isCustomProgram } from '@/lib/program-visibility';
 import type { Program } from '@/models/types';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -43,13 +51,20 @@ export default function AdminProgramsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
+  const [accessProgram, setAccessProgram] = useState<Program | null>(null);
+  const [isAccessOpen, setIsAccessOpen] = useState(false);
   const { toast } = useToast();
 
   const fetchPrograms = async () => {
     setLoading(true);
     try {
-      const fetchedPrograms = await getAllPrograms();
-      setPrograms(fetchedPrograms);
+      // Custom programs live in their own collection so the public listing can
+      // stay an unrestricted query — admins see both here.
+      const [publicPrograms, customPrograms] = await Promise.all([
+        getAllPrograms(),
+        getAllCustomPrograms(),
+      ]);
+      setPrograms([...publicPrograms, ...customPrograms]);
     } catch (error) {
       console.error('Failed to fetch programs:', error);
       toast({
@@ -76,9 +91,18 @@ export default function AdminProgramsPage() {
     setIsFormOpen(true);
   };
 
-  const handleDelete = async (programId: string) => {
+  const handleManageAccess = (program: Program) => {
+    setAccessProgram(program);
+    setIsAccessOpen(true);
+  };
+
+  const handleDelete = async (program: Program) => {
     try {
-      await deleteProgram(programId);
+      if (isCustomProgram(program)) {
+        await deleteCustomProgram(program.id);
+      } else {
+        await deleteProgram(program.id);
+      }
       toast({
         title: 'Success',
         description: 'Program deleted successfully.',
@@ -135,13 +159,14 @@ export default function AdminProgramsPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead className="w-[170px]">Available to</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center">
+                  <TableCell colSpan={4} className="text-center">
                     Loading programs...
                   </TableCell>
                 </TableRow>
@@ -150,6 +175,19 @@ export default function AdminProgramsPage() {
                   <TableRow key={program.id}>
                     <TableCell className="font-medium">{program.name}</TableCell>
                     <TableCell className="text-muted-foreground max-w-md truncate">{program.description}</TableCell>
+                    <TableCell>
+                      {isCustomProgram(program) ? (
+                        <Badge variant="outline" className="gap-1.5 font-normal">
+                          <UserCheck className="h-3 w-3" />
+                          {(program.assignedUserIds ?? []).length} athlete(s)
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="gap-1.5 font-normal">
+                          <Users className="h-3 w-3" />
+                          Everyone
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -162,6 +200,10 @@ export default function AdminProgramsPage() {
                           <DropdownMenuItem onClick={() => handleEdit(program)}>
                             <Edit className="mr-2 h-4 w-4" />
                             Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleManageAccess(program)}>
+                            <UserCheck className="mr-2 h-4 w-4" />
+                            Manage access
                           </DropdownMenuItem>
                           <ProgramExportButton program={program} />
                           <AlertDialog>
@@ -180,7 +222,7 @@ export default function AdminProgramsPage() {
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(program.id)}>
+                                <AlertDialogAction onClick={() => handleDelete(program)}>
                                   Delete
                                 </AlertDialogAction>
                               </AlertDialogFooter>
@@ -193,7 +235,7 @@ export default function AdminProgramsPage() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center">
+                  <TableCell colSpan={4} className="text-center">
                     No programs found.
                   </TableCell>
                 </TableRow>
@@ -214,6 +256,12 @@ export default function AdminProgramsPage() {
         setIsOpen={setIsImportOpen}
         onSuccess={handleImportSuccess}
        />
+      <ProgramAccessDialog
+        program={accessProgram}
+        isOpen={isAccessOpen}
+        setIsOpen={setIsAccessOpen}
+        onSuccess={fetchPrograms}
+      />
     </div>
   );
 }
