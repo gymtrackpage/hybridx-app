@@ -89,6 +89,9 @@ export async function enrolSubscriber(
       enteredAt: FieldValue.serverTimestamp(),
       history: [],
     });
+    tx.update(db.collection(JOURNEYS).doc(journey.id), {
+      'stats.entered': FieldValue.increment(1),
+    });
 
     return 'enrolled';
   });
@@ -263,7 +266,10 @@ export function matchesDerivedTrigger(
     }
 
     case 'raceDateApproaching': {
-      const race = toDate(user.startDate);
+      // user.raceDate is stamped by /api/ai/generate-race-plan. Note this is
+      // NOT user.startDate — that is the date the athlete started their
+      // current programme, which is in the past by definition.
+      const race = toDate(user.raceDate);
       if (!race) return false;
       const until = (race.getTime() - Date.now()) / 86_400_000;
       return until <= days && until > days - 1;
@@ -334,6 +340,9 @@ export async function advanceRuns(limit = 200): Promise<AdvanceResult> {
         exitReason: exit,
         completedAt: FieldValue.serverTimestamp(),
       });
+      await db.collection(JOURNEYS).doc(journey.id).update({
+        'stats.exitedEarly': FieldValue.increment(1),
+      }).catch(() => undefined);
       result.exited++;
       continue;
     }
@@ -363,12 +372,15 @@ export async function advanceRuns(limit = 200): Promise<AdvanceResult> {
         exitReason: outcome.reason,
         completedAt: FieldValue.serverTimestamp(),
       });
+      await db.collection(JOURNEYS).doc(journey.id).update({
+        'stats.exitedEarly': FieldValue.increment(1),
+      }).catch(() => undefined);
       result.exited++;
       continue;
     }
 
     await doc.ref.update({
-      currentStep: run.currentStep + 1,
+      currentStep: outcome.toStep ?? run.currentStep + 1,
       nextRunAt: outcome.nextRunAt,
       history: FieldValue.arrayUnion(step.id),
     });
@@ -379,7 +391,13 @@ export async function advanceRuns(limit = 200): Promise<AdvanceResult> {
 }
 
 type StepOutcome =
-  | { kind: 'advance'; nextRunAt: Date }
+  | {
+      kind: 'advance';
+      nextRunAt: Date;
+      /** Explicit next step index. Absent means the following step. A branch
+       *  whose condition fails uses this to jump past its thenSteps. */
+      toStep?: number;
+    }
   | { kind: 'hold'; retryInMs: number }
   | { kind: 'exit'; reason: string };
 
@@ -412,14 +430,20 @@ async function executeStep(
 
     case 'branch': {
       const matched = await evaluateBranch(run, step);
-      // A simple if/else: when the condition fails, skip the branch's steps by
-      // jumping past them. Anything more elaborate belongs in a graph model,
-      // which this deliberately is not.
+      // A simple if/else, not a graph: `thenSteps` are the contiguous steps
+      // immediately after the branch (validateJourney enforces this). Matched
+      // runs fall into them; unmatched runs jump to the step after the last
+      // one, so the branch body is genuinely skipped.
       if (!matched && step.thenSteps.length) {
-        const skipTo = journey.steps.findIndex((s) => s.id === step.thenSteps[step.thenSteps.length - 1]);
-        if (skipTo >= 0) {
-          return { kind: 'advance', nextRunAt: now };
+        const lastThen = journey.steps.findIndex(
+          (s) => s.id === step.thenSteps[step.thenSteps.length - 1],
+        );
+        if (lastThen >= 0) {
+          return { kind: 'advance', nextRunAt: now, toStep: lastThen + 1 };
         }
+        // A branch pointing at missing steps should never go live
+        // (validateJourney blocks it), but if one does, falling through to the
+        // next step is the least-wrong behaviour.
       }
       return { kind: 'advance', nextRunAt: now };
     }

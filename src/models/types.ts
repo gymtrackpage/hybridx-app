@@ -81,6 +81,10 @@ export interface User {
   pendingGarminAuth?: PendingGarminAuth;
   garminPlanSync?: GarminPlanSync;
   customProgram?: (Workout | RunningWorkout)[] | null;
+  /** Target race, stamped server-side when a race plan is generated. Read by
+   *  the raceDateApproaching marketing trigger. */
+  raceDate?: Date;
+  raceName?: string;
   isAdmin?: boolean;
   subscriptionStatus?: SubscriptionStatus;
   stripeCustomerId?: string;

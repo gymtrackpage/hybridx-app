@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { ComposeJourneyOutput } from '@/ai/flows/marketing/compose-journey';
 import { composePlan, draftPlanEmail, saveJourney } from '@/lib/marketing/studio-actions';
 import { TRIGGER_DESCRIPTIONS, type TriggerType } from '@/lib/marketing/journeys';
+import type { SegmentDefinition } from '@/lib/marketing/segments';
 import type { EmailBlock } from '@/lib/marketing/blocks';
 import type { ValidationIssue } from '@/lib/marketing/validate';
 import { EmailDraftCard, type DraftedEmail } from './email-draft-card';
@@ -137,11 +138,42 @@ export function CampaignStudio({
       };
     });
 
+    // Carry the whole audience across — tag filters AND athlete predicates.
+    // The planner's subscriptionStatus values arrive as plain strings, so
+    // constrain them to the statuses that actually exist before saving.
+    const VALID_STATUSES = ['trial', 'active', 'canceled', 'expired', 'incomplete', 'paused'];
+    const subscriptionStatus = plan.audience.subscriptionStatus?.filter((v) =>
+      VALID_STATUSES.includes(v),
+    ) as NonNullable<SegmentDefinition['athlete']>['subscriptionStatus'];
+
+    const hasAthletePredicates =
+      (subscriptionStatus?.length ?? 0) > 0 ||
+      plan.audience.maxCompletedWorkouts !== undefined ||
+      plan.audience.inactiveForDays !== undefined;
+
+    const audience: SegmentDefinition = {
+      anyTags: plan.audience.anyTags,
+      noneTags: plan.audience.noneTags,
+      ...(hasAthletePredicates
+        ? {
+            athlete: {
+              ...(subscriptionStatus?.length ? { subscriptionStatus } : {}),
+              ...(plan.audience.maxCompletedWorkouts !== undefined
+                ? { maxCompletedWorkouts: plan.audience.maxCompletedWorkouts }
+                : {}),
+              ...(plan.audience.inactiveForDays !== undefined
+                ? { inactiveForDays: plan.audience.inactiveForDays }
+                : {}),
+            },
+          }
+        : {}),
+    };
+
     const result = await saveJourney({
       name: plan.name,
       goal: plan.goal,
       trigger: { type: plan.trigger.type as TriggerType, days: plan.trigger.days, tag: plan.trigger.tag },
-      audience: { anyTags: plan.audience.anyTags, noneTags: plan.audience.noneTags },
+      audience,
       exitOnConversion: plan.exitOnConversion,
       steps,
     });

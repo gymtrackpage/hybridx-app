@@ -60,10 +60,19 @@ export async function POST(request: Request) {
         }
     }
 
-    return NextResponse.json({ 
-        success: true, 
+    // Persist the race date on the athlete record. Until now it existed only
+    // inside this request, which left the raceDateApproaching marketing
+    // trigger with nothing real to read. Best-effort: a failed stamp must not
+    // fail the plan the athlete asked for.
+    await db.collection('users').doc(auth.uid).update({
+        raceDate,
+        raceName: eventName ?? null,
+    }).catch((err) => console.error('Could not persist raceDate:', err));
+
+    return NextResponse.json({
+        success: true,
         programName: `Prep for ${eventName}`,
-        workouts: customWorkouts 
+        workouts: customWorkouts
     });
 
   } catch (error) {

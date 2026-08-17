@@ -176,11 +176,18 @@ export async function drainCampaign(campaignId: string, limit: number): Promise<
     const send = { id: doc.id, ...doc.data() } as Send;
 
     // Claim the row. If another drain got there first the transaction returns
-    // false and we move on without sending.
+    // false and we move on without sending. The claim is stamped with its own
+    // time — recovery keys on claimedAt, and measuring staleness from any
+    // earlier timestamp would let an overlapping cron invocation "recover" a
+    // row this one claimed seconds ago, sending it twice.
     const claimed = await db.runTransaction(async (tx) => {
       const fresh = await tx.get(doc.ref);
       if (fresh.data()?.status !== 'pending') return false;
-      tx.update(doc.ref, { status: 'sending', attempts: FieldValue.increment(1) });
+      tx.update(doc.ref, {
+        status: 'sending',
+        attempts: FieldValue.increment(1),
+        claimedAt: FieldValue.serverTimestamp(),
+      });
       return true;
     });
     if (!claimed) continue;
@@ -291,8 +298,14 @@ export async function finaliseIfDone(campaignId: string): Promise<boolean> {
  * Requeue rows left in `sending` by a drain that was killed mid-batch.
  *
  * Safe because a claimed-but-unsent row has, by definition, not been handed to
- * SMTP — the claim happens first precisely so this recovery is possible. The
- * age threshold avoids stealing rows from a drain that is still running.
+ * SMTP — the claim happens first precisely so this recovery is possible.
+ *
+ * Staleness is measured from `claimedAt`, never from `queuedAt`. The send cron
+ * fires every minute with a five-minute budget, so overlapping invocations are
+ * normal; on any campaign older than the threshold, an enqueue-time measure
+ * would let invocation B recover rows invocation A claimed seconds ago — and
+ * then both would send. A row claimed by a *live* drain is always fresher than
+ * the threshold, so it is never stolen.
  */
 export async function recoverStalledSends(campaignId: string, olderThanMs = 10 * 60_000): Promise<number> {
   const campaignRef = getAdminDb().collection(CAMPAIGNS).doc(campaignId);
@@ -304,8 +317,8 @@ export async function recoverStalledSends(campaignId: string, olderThanMs = 10 *
 
   for (const doc of stalled.docs) {
     const data = doc.data() as Send;
-    const queuedMs = (data.queuedAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
-    if (queuedMs && queuedMs > cutoff) continue;
+
+    if (!isStalled(data, cutoff)) continue;
 
     if ((data.attempts ?? 0) >= MAX_ATTEMPTS) {
       writer.update(doc.ref, { status: 'failed', lastError: 'Stalled and out of attempts' });
@@ -318,6 +331,23 @@ export async function recoverStalledSends(campaignId: string, olderThanMs = 10 *
   await writer.close();
   if (recovered) logger.log(`[marketing] recovered ${recovered} stalled sends for ${campaignId}`);
   return recovered;
+}
+
+/**
+ * Whether a `sending` row is genuinely abandoned, judged by claim time.
+ *
+ * Exported for tests. A row with no `claimedAt` at all predates this field (or
+ * was written by a version that crashed between status and stamp) — treat it as
+ * stalled, since the alternative is a row stuck in `sending` forever.
+ */
+export function isStalled(row: Pick<Send, 'claimedAt'>, cutoffMs: number): boolean {
+  const claimed = row.claimedAt as { toMillis?: () => number } | Date | null | undefined;
+  const claimedMs =
+    claimed instanceof Date
+      ? claimed.getTime()
+      : (claimed?.toMillis?.() ?? 0);
+
+  return !claimedMs || claimedMs <= cutoffMs;
 }
 
 /** Campaigns the drain should work on: actively sending, or scheduled and now due. */

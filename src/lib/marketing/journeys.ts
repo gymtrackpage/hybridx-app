@@ -288,16 +288,36 @@ export function validateJourney(journey: Pick<Journey, 'steps' | 'trigger' | 'na
   const ids = journey.steps.map((s) => s.id);
   if (new Set(ids).size !== ids.length) problems.push('Step ids must be unique.');
 
-  // A branch pointing at a step that does not exist would strand every run that
-  // took it.
+  // Branch semantics are "if/else over the next N steps": a run that matches
+  // falls into the thenSteps, a run that does not jumps past the last of them.
+  // That only works when thenSteps are exactly the contiguous steps following
+  // the branch — so enforce it here rather than trusting every author (human
+  // or AI) to arrange them correctly.
   const idSet = new Set(ids);
-  for (const step of journey.steps) {
-    if (step.type === 'branch') {
-      for (const target of step.thenSteps) {
-        if (!idSet.has(target)) problems.push(`Branch "${step.description}" points at a missing step.`);
+  journey.steps.forEach((step, index) => {
+    if (step.type !== 'branch') return;
+
+    if (!step.thenSteps.length) {
+      problems.push(`Branch "${step.description}" has no steps to run when it matches.`);
+      return;
+    }
+    for (const target of step.thenSteps) {
+      if (!idSet.has(target)) {
+        problems.push(`Branch "${step.description}" points at a missing step.`);
+        return;
       }
     }
-  }
+
+    const following = journey.steps.slice(index + 1, index + 1 + step.thenSteps.length).map((s) => s.id);
+    const contiguous =
+      following.length === step.thenSteps.length &&
+      following.every((id, i) => id === step.thenSteps[i]);
+    if (!contiguous) {
+      problems.push(
+        `Branch "${step.description}" must be immediately followed by its own steps, in order.`,
+      );
+    }
+  });
 
   if (journey.trigger.type === 'tagAdded' && !journey.trigger.tag) {
     problems.push('A tagAdded trigger needs a tag.');

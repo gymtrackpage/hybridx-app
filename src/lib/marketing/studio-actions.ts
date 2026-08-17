@@ -18,6 +18,7 @@ import { draftEmail, type DraftEmailResult } from '@/ai/flows/marketing/draft-em
 import { reviseBlock } from '@/ai/flows/marketing/revise-block';
 import { subjectVariants, type SubjectVariantsOutput } from '@/ai/flows/marketing/subject-variants';
 import { blocksToText, type EmailBlock } from './blocks';
+import type { SegmentDefinition } from './segments';
 import { getKnowledgeSnapshot } from './knowledge';
 import {
   JOURNEYS,
@@ -127,7 +128,10 @@ export interface SaveJourneyInput {
   name: string;
   goal: string;
   trigger: Journey['trigger'];
-  audience: { anyTags?: string[]; noneTags?: string[] };
+  /** Full segment definition — tags AND athlete predicates. Earlier versions
+   *  carried only the tag filters, silently discarding predicates like
+   *  "subscription is trial" that the planner had chosen. */
+  audience: SegmentDefinition;
   exitOnConversion: 'subscriptionActive' | 'workoutLogged' | 'programStarted' | 'none';
   steps: Array<
     | { kind: 'wait'; hours: number }

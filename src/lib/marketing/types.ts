@@ -165,6 +165,12 @@ export interface Send {
   attempts: number;
   lastError?: string;
   queuedAt: Stamp;
+  /**
+   * When a drain claimed this row. Stall recovery keys on this, not on
+   * `queuedAt` — enqueue time says nothing about whether the drain that
+   * claimed the row is still alive.
+   */
+  claimedAt?: Stamp;
   sentAt: Stamp;
   /** First genuine open. Bot and prefetch opens are counted in `openRaw` only. */
   opened: boolean;

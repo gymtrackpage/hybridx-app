@@ -123,6 +123,65 @@ describe('validateJourney', () => {
     expect(problems.some((p) => p.includes('missing step'))).toBe(true);
   });
 
+  describe('branch contiguity — what makes skip-past-thenSteps sound', () => {
+    const wait: JourneyStep = { id: 'w1', type: 'wait', hours: 24 };
+
+    it('accepts a branch immediately followed by its own steps, in order', () => {
+      const problems = validateJourney({
+        name: 'Good branch',
+        trigger: { type: 'signup' },
+        steps: [
+          { id: 'b', type: 'branch', condition: {}, description: 'trialists', thenSteps: ['s1', 'w1'] },
+          emailStep,
+          wait,
+          { id: 's2', type: 'sendEmail', campaignId: 'c2' },
+        ],
+      });
+      expect(problems).toEqual([]);
+    });
+
+    it('rejects thenSteps that are not the steps immediately following', () => {
+      // The engine skips a failed branch by jumping past the last thenStep;
+      // if the thenSteps live elsewhere in the list that jump would skip the
+      // wrong steps entirely.
+      const problems = validateJourney({
+        name: 'Scattered branch',
+        trigger: { type: 'signup' },
+        steps: [
+          { id: 'b', type: 'branch', condition: {}, description: 'trialists', thenSteps: ['s2'] },
+          emailStep, // s1 sits between the branch and its target
+          { id: 's2', type: 'sendEmail', campaignId: 'c2' },
+        ],
+      });
+      expect(problems.some((p) => p.includes('immediately followed'))).toBe(true);
+    });
+
+    it('rejects thenSteps listed out of order', () => {
+      const problems = validateJourney({
+        name: 'Reordered branch',
+        trigger: { type: 'signup' },
+        steps: [
+          { id: 'b', type: 'branch', condition: {}, description: 'trialists', thenSteps: ['w1', 's1'] },
+          emailStep,
+          wait,
+        ],
+      });
+      expect(problems.some((p) => p.includes('immediately followed'))).toBe(true);
+    });
+
+    it('rejects a branch with nothing to run when it matches', () => {
+      const problems = validateJourney({
+        name: 'Empty branch',
+        trigger: { type: 'signup' },
+        steps: [
+          { id: 'b', type: 'branch', condition: {}, description: 'trialists', thenSteps: [] },
+          emailStep,
+        ],
+      });
+      expect(problems.some((p) => p.includes('no steps to run'))).toBe(true);
+    });
+  });
+
   it('requires a tag for a tagAdded trigger and days for a derived one', () => {
     expect(
       validateJourney({ name: 'X', trigger: { type: 'tagAdded' }, steps: [emailStep] }),
