@@ -1,8 +1,11 @@
 // src/app/api/admin/list-programs/route.ts
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { requireAdmin } from '@/lib/admin-auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request, { bucket: 'admin:programs:list' });
+  if ('response' in auth) return auth.response;
   try {
     const db = getAdminDb();
     const programsSnapshot = await db.collection('programs').get();

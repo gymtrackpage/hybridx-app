@@ -1,6 +1,7 @@
 // src/app/api/admin/enhance-programs-phase2/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { requireAdmin } from '@/lib/admin-auth';
 
 // ===================================================================
 // PHASE 2 ENHANCEMENT COMPONENTS
@@ -410,6 +411,8 @@ const HYROX_PROGRAMS = [
 ];
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request, { bucket: 'admin:programs:enhance2', max: 5 });
+  if ('response' in auth) return auth.response;
   try {
     const body = await request.json();
     const { mode = 'pilot', programIds } = body;

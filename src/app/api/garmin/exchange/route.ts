@@ -10,6 +10,7 @@ import { fetchGarminUserId } from '@/lib/garmin/training-api';
 import { logger } from '@/lib/logger';
 import type { GarminTokens } from '@/models/types';
 import { FieldValue } from 'firebase-admin/firestore';
+import { emitMarketingEventAsync } from '@/lib/marketing/events';
 
 export async function GET(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
@@ -112,6 +113,9 @@ export async function GET(req: NextRequest) {
       garminConnectedAt: new Date(),
       pendingGarminAuth: FieldValue.delete(),
     });
+
+    // After the write, so a failed connection never raises the trigger.
+    emitMarketingEventAsync('garminConnected', { userId });
 
     return back({ garmin: 'success' });
   } catch (err) {

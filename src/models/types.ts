@@ -81,6 +81,10 @@ export interface User {
   pendingGarminAuth?: PendingGarminAuth;
   garminPlanSync?: GarminPlanSync;
   customProgram?: (Workout | RunningWorkout)[] | null;
+  /** Target race, stamped server-side when a race plan is generated. Read by
+   *  the raceDateApproaching marketing trigger. */
+  raceDate?: Date;
+  raceName?: string;
   isAdmin?: boolean;
   subscriptionStatus?: SubscriptionStatus;
   stripeCustomerId?: string;
@@ -111,6 +115,15 @@ export interface User {
   acquisitionContent?: string;
   acquisitionLandingPage?: string;
   acquisitionReferrer?: string;
+  // Marketing email consent. Distinct from transactional mail (verification,
+  // onboarding nudges, receipts), which is sent regardless because it is
+  // necessary to the service the athlete signed up for. Only campaigns and
+  // journeys honour this flag. Mirrored onto the athlete's
+  // `marketingSubscribers` record so a send never has to join across
+  // collections to decide whether it may mail someone.
+  marketingConsent?: boolean;
+  marketingConsentAt?: Date;
+  marketingUnsubscribedAt?: Date;
 }
 
 export type ProgramType = 'hyrox' | 'running' | 'hybrid';
