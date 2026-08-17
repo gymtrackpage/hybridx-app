@@ -27,6 +27,7 @@ import {
   upsertSubscriber,
 } from './subscribers';
 import { emitMarketingEventAsync } from './events';
+import { createSegment, deleteSegment, getSegment, updateSegment } from './segment-store';
 import { syncAthletesToSubscribers } from './sync';
 import { isTokenSecretConfigured } from './tokens';
 import { isBulkTransportConfigured, sendBulkMessage, verifyBulkTransport } from './transport';
@@ -575,6 +576,66 @@ export async function findSubscriber(email: string): Promise<ActionResult<Subscr
     };
   } catch (err) {
     return fail(err, 'Lookup failed.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Saved segments
+// ---------------------------------------------------------------------------
+
+export async function saveSegment(input: {
+  name: string;
+  description?: string;
+  definition: SegmentDefinition;
+}): Promise<ActionResult<{ id: string }>> {
+  try {
+    await assertAdmin('marketing:segment:create');
+
+    if (!input.name.trim()) return { success: false, error: 'Give the segment a name.' };
+
+    // Store the size alongside it, so the list is scannable without resolving
+    // every segment on every page load.
+    const audience = await resolveSegment(input.definition);
+    const id = await createSegment({
+      name: input.name.trim(),
+      description: input.description,
+      definition: input.definition,
+      count: audience.subscribers.length,
+    });
+
+    revalidatePath(`${MARKETING_PATH}/segments`);
+    return { success: true, data: { id } };
+  } catch (err) {
+    return fail(err, 'Could not save the segment.');
+  }
+}
+
+export async function removeSegment(id: string): Promise<ActionResult> {
+  try {
+    await assertAdmin('marketing:segment:delete');
+    await deleteSegment(id);
+    revalidatePath(`${MARKETING_PATH}/segments`);
+    return { success: true };
+  } catch (err) {
+    return fail(err, 'Could not delete the segment.');
+  }
+}
+
+/** Recount a saved segment — sizes drift as athletes move between states. */
+export async function refreshSegmentCount(id: string): Promise<ActionResult<{ count: number }>> {
+  try {
+    await assertAdmin('marketing:segment:refresh');
+
+    const segment = await getSegment(id);
+    if (!segment) return { success: false, error: 'Segment not found.' };
+
+    const audience = await resolveSegment(segment.definition);
+    await updateSegment(id, { lastCount: audience.subscribers.length });
+
+    revalidatePath(`${MARKETING_PATH}/segments`);
+    return { success: true, data: { count: audience.subscribers.length } };
+  } catch (err) {
+    return fail(err, 'Could not recount the segment.');
   }
 }
 

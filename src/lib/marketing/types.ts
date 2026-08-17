@@ -123,6 +123,8 @@ export interface Campaign {
   segment?: unknown;
   /** Plain-text alternative, derived from `blocks` alongside `htmlBody`. */
   plainBody?: string;
+  /** Subject-line A/B configuration. Absent means a single subject. */
+  abTest?: unknown;
   scheduledAt: Stamp;
   sentAt: Stamp;
   recipientCount: number;
@@ -182,6 +184,8 @@ export interface Send {
   openedAt: Stamp;
   /** Every recorded open including scanners and Apple Mail Privacy Protection prefetch. */
   openRaw?: number;
+  /** A/B variant this send carried; -1 means held back for the winner. */
+  variant?: number;
   clicked: boolean;
   clickedAt: Stamp;
   unsubscribed?: boolean;

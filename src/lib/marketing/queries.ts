@@ -213,3 +213,38 @@ export async function listTags(): Promise<Array<{ tag: string; count: number }>>
     .map(([tag, count]) => ({ tag, count }))
     .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
+
+export interface CampaignConversions {
+  /** Athletes whose first-touch attribution names this campaign. */
+  signups: number;
+  trials: number;
+  paying: number;
+}
+
+/**
+ * Signups this campaign produced.
+ *
+ * Tracked links carry `utm_campaign=<campaignId>` (see
+ * `withCampaignAttribution` in personalise.ts), and the app already records
+ * first-touch UTM data onto `acquisitionCampaign` at signup. Joining the two
+ * turns "12% clicked" into "this campaign produced nine trials", which is the
+ * only figure that answers whether a campaign was worth sending.
+ *
+ * First-touch, so a campaign gets credit only where it was the visitor's first
+ * contact — it will under-count rather than over-claim.
+ */
+export async function getCampaignConversions(campaignId: string): Promise<CampaignConversions> {
+  const users = getAdminDb().collection('users').where('acquisitionCampaign', '==', campaignId);
+
+  const [signups, trials, paying] = await Promise.all([
+    users.count().get(),
+    users.where('subscriptionStatus', '==', 'trial').count().get(),
+    users.where('subscriptionStatus', '==', 'active').count().get(),
+  ]);
+
+  return {
+    signups: signups.data().count,
+    trials: trials.data().count,
+    paying: paying.data().count,
+  };
+}

@@ -65,6 +65,38 @@ export function htmlToPlainText(html: string): string {
     .trim();
 }
 
+/**
+ * Stamp UTM parameters onto a link so a signup can be traced back to the
+ * campaign that drove it.
+ *
+ * The app already captures first-touch attribution from UTM parameters into
+ * `acquisitionCampaign` on the athlete record (src/lib/attribution.ts), so
+ * adding them here is the whole of the conversion loop — reports can then join
+ * athletes to the campaign that brought them in, which turns "12% clicked" into
+ * "this campaign produced nine trials".
+ *
+ * Hand-written UTM parameters are never overwritten: if the author set
+ * utm_campaign deliberately, that is the more specific intent.
+ */
+export function withCampaignAttribution(href: string, campaignId: string): string {
+  try {
+    const url = new URL(href);
+
+    // Only tag our own destinations. Adding UTM parameters to a third-party
+    // link is noise in someone else's analytics, and can break signed URLs.
+    const host = url.hostname.toLowerCase();
+    if (!host.endsWith('hybridx.club') && host !== 'localhost') return href;
+
+    if (!url.searchParams.has('utm_source')) url.searchParams.set('utm_source', 'email');
+    if (!url.searchParams.has('utm_medium')) url.searchParams.set('utm_medium', 'campaign');
+    if (!url.searchParams.has('utm_campaign')) url.searchParams.set('utm_campaign', campaignId);
+
+    return url.toString();
+  } catch {
+    return href;
+  }
+}
+
 export interface RenderedEmail {
   subject: string;
   html: string;
@@ -114,7 +146,8 @@ export function renderForSubscriber(opts: RenderOptions): RenderedEmail {
       if (href.includes('/api/marketing/unsubscribe')) return;
       if (!/^https?:\/\//i.test(href)) return;
 
-      const url = `${appUrl}/api/marketing/track/click?t=${encodeURIComponent(trackToken)}&url=${encodeURIComponent(href)}`;
+      const destination = withCampaignAttribution(href, campaignId);
+      const url = `${appUrl}/api/marketing/track/click?t=${encodeURIComponent(trackToken)}&url=${encodeURIComponent(destination)}`;
       link.setAttribute('href', url);
     });
 

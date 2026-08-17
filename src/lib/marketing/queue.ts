@@ -21,6 +21,15 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { logger } from '@/lib/logger';
+import {
+  assignVariant,
+  HELD_VARIANT,
+  isReadyToDecide,
+  pickWinner,
+  subjectForSend,
+  type AbTestConfig,
+  type VariantResult,
+} from './ab-testing';
 import { renderForSubscriber } from './personalise';
 import { resolveSegment, type SegmentDefinition } from './segments';
 import { SUBSCRIBERS } from './subscribers';
@@ -82,6 +91,7 @@ export async function enqueueCampaign(
 
   const audience = await resolveSegment(segment);
   const sendsRef = campaignRef.collection('sends');
+  const abTest = campaign.abTest as AbTestConfig | undefined;
 
   let queued = 0;
   let alreadyQueued = 0;
@@ -112,6 +122,10 @@ export async function enqueueCampaign(
         openRaw: 0,
         clicked: false,
         clickedAt: null,
+        // Assigned at enqueue and never recomputed. Deterministic on
+        // (campaign, subscriber), so a retry cannot hand someone a different
+        // subject than their first attempt carried.
+        ...(abTest ? { variant: assignVariant(campaignId, sub.id, abTest) } : {}),
       };
       writer.set(refs[idx], row);
       queued++;
@@ -164,6 +178,10 @@ export async function drainCampaign(campaignId: string, limit: number): Promise<
   const settings = await getSettings();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
 
+  // An A/B test in progress may need its winner picking before the held
+  // remainder can go out.
+  const abTest = await resolveAbWinner(campaignId, campaign);
+
   const pending = await campaignRef
     .collection('sends')
     .where('status', '==', 'pending')
@@ -174,6 +192,12 @@ export async function drainCampaign(campaignId: string, limit: number): Promise<
 
   for (const doc of pending.docs) {
     const send = { id: doc.id, ...doc.data() } as Send;
+
+    // Held recipients wait for the test to conclude. Left pending, so the next
+    // drain after the decision picks them up.
+    if (abTest && send.variant === HELD_VARIANT && abTest.winnerIndex === undefined) {
+      continue;
+    }
 
     // Claim the row. If another drain got there first the transaction returns
     // false and we move on without sending. The claim is stamped with its own
@@ -211,7 +235,9 @@ export async function drainCampaign(campaignId: string, limit: number): Promise<
 
     const rendered = renderForSubscriber({
       campaignId,
-      subject: campaign.subject,
+      subject: abTest
+        ? subjectForSend(abTest, send.variant ?? HELD_VARIANT, campaign.subject)
+        : campaign.subject,
       htmlBody: campaign.htmlBody,
       subscriber: sub,
       appUrl,
@@ -277,6 +303,8 @@ export async function finaliseIfDone(campaignId: string): Promise<boolean> {
     campaignRef.collection('sends').where('status', '==', 'pending').limit(1).get(),
     campaignRef.collection('sends').where('status', '==', 'sending').limit(1).get(),
   ]);
+  // Held A/B recipients are still `pending`, so this correctly refuses to
+  // finalise a campaign whose remainder has not gone out yet.
   if (!pending.empty || !inFlight.empty) return false;
 
   const snap = await campaignRef.get();
@@ -365,4 +393,58 @@ export async function findDueCampaigns(): Promise<string[]> {
   ]);
 
   return [...sending.docs, ...scheduled.docs].map((d) => d.id);
+}
+
+/**
+ * Decide an A/B test if it is due, and return the live config.
+ *
+ * Called at the top of every drain: the decision has to happen between batches
+ * rather than on a schedule of its own, because the held remainder can only be
+ * released once a winner exists.
+ */
+export async function resolveAbWinner(
+  campaignId: string,
+  campaign: Campaign,
+): Promise<AbTestConfig | undefined> {
+  const abTest = campaign.abTest as AbTestConfig | undefined;
+  if (!abTest || abTest.variants.length < 2) return undefined;
+  if (abTest.winnerIndex !== undefined) return abTest;
+
+  const startedMs =
+    (campaign.sendState?.startedAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+  if (!startedMs || !isReadyToDecide(startedMs, abTest.decideAfterHours)) return abTest;
+
+  const campaignRef = getAdminDb().collection(CAMPAIGNS).doc(campaignId);
+
+  // Tally per variant from the sends themselves — the campaign's own openCount
+  // aggregates every variant together and cannot answer this.
+  const results: VariantResult[] = [];
+  for (const [index, variant] of abTest.variants.entries()) {
+    const [sent, opened] = await Promise.all([
+      campaignRef.collection('sends').where('variant', '==', index).where('status', '==', 'sent').count().get(),
+      campaignRef.collection('sends').where('variant', '==', index).where('opened', '==', true).count().get(),
+    ]);
+
+    const sentCount = sent.data().count;
+    results.push({
+      index,
+      subject: variant.subject,
+      sent: sentCount,
+      opened: opened.data().count,
+      openRate: sentCount ? opened.data().count / sentCount : 0,
+    });
+  }
+
+  const { winnerIndex, confident, reason } = pickWinner(results);
+
+  await campaignRef.update({
+    'abTest.winnerIndex': winnerIndex,
+    'abTest.decidedAt': FieldValue.serverTimestamp(),
+    'abTest.decisionReason': reason,
+    'abTest.confident': confident,
+    'abTest.results': results,
+  });
+
+  logger.log(`[marketing] A/B decided for ${campaignId}: ${reason}`);
+  return { ...abTest, winnerIndex };
 }

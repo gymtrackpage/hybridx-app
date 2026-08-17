@@ -48,6 +48,8 @@ the Admin SDK.
 | `marketingJourneyRuns` | Doc id `${journeyId}_${subscriberId}`, which is what enforces `onceOnly` |
 | `marketingEvents` | The trigger bus; pruned after 30 days |
 | `marketingPlans` | Archived HXMailer planner output |
+| `marketingSegments` | Saved, named audiences reusable across campaigns and journeys |
+| `marketingBriefs` | Weekly snapshots; each run diffs against the previous |
 | `marketingSettings/config` | Sender, batch size, frequency cap, sending switch |
 
 ## Environment
@@ -104,6 +106,33 @@ gcloud scheduler jobs create http marketing-send \
 
 Send doc ids are `${campaignId}_${subscriberId}`, which makes the whole pipeline
 idempotent: re-enqueueing or re-draining cannot produce a second send.
+
+## Subject A/B testing
+
+A campaign with `abTest` sends each variant to a small slice of the audience,
+picks a winner on open rate, and sends the winning subject to the remainder —
+usually the large majority. That is worth more than an even split: the point is
+not to measure precisely, it is to send the better subject to most people.
+
+Assignment is a hash of `${campaignId}:${subscriberId}`, so it is deterministic
+(a retry cannot hand someone a different subject than their first attempt
+carried) and rotates which people are in the test group between campaigns.
+
+The winner is decided at the top of a drain rather than on its own schedule,
+because the held remainder can only be released once one exists. Below 20 sends
+per variant no winner is declared and the original subject is used — at that
+sample a single extra open moves the rate five points, which is noise. A gap
+under two points is reported as "no clear winner" but still picks the leader, so
+the send always completes.
+
+## Conversion attribution
+
+Tracked links to hybridx.club carry `utm_campaign=<campaignId>`, and the app
+already records first-touch UTM data onto `acquisitionCampaign` at signup.
+Joining the two turns "12% clicked" into "this campaign produced nine trials",
+which is the only figure that answers whether a campaign was worth sending. It
+is first-touch, so it under-counts rather than over-claims, and third-party
+links are never tagged.
 
 ## Consent
 

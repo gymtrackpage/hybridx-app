@@ -4,7 +4,7 @@ import { ChevronLeft, AlertTriangle, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { getCampaignReport } from '@/lib/marketing/queries';
+import { getCampaignConversions, getCampaignReport } from '@/lib/marketing/queries';
 import { CampaignStatusBadge } from '@/components/marketing/campaign-status-badge';
 
 export const dynamic = 'force-dynamic';
@@ -19,7 +19,10 @@ export default async function CampaignReportPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const report = await getCampaignReport(id);
+  const [report, conversions] = await Promise.all([
+    getCampaignReport(id),
+    getCampaignConversions(id),
+  ]);
   if (!report) notFound();
 
   const { campaign, linkClicks, failures } = report;
@@ -113,6 +116,32 @@ export default async function CampaignReportPage({
           </Card>
         ))}
       </div>
+
+      {(conversions.signups > 0 || campaign.status === 'sent') && (
+        <Card>
+          <CardHeader>
+            <CardTitle>What it produced</CardTitle>
+            <CardDescription>
+              Athletes whose first contact with HYBRIDX was a link in this campaign. First-touch,
+              so this under-counts rather than over-claims.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-8 text-sm">
+            <div>
+              <div className="text-2xl font-bold">{conversions.signups.toLocaleString()}</div>
+              <p className="text-muted-foreground">signed up</p>
+            </div>
+            <div>
+              <div className="text-2xl font-bold">{conversions.trials.toLocaleString()}</div>
+              <p className="text-muted-foreground">on a trial</p>
+            </div>
+            <div>
+              <div className="text-2xl font-bold">{conversions.paying.toLocaleString()}</div>
+              <p className="text-muted-foreground">paying</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
