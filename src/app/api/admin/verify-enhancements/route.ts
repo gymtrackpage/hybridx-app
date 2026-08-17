@@ -1,8 +1,11 @@
 // src/app/api/admin/verify-enhancements/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { requireAdmin } from '@/lib/admin-auth';
 
 export async function GET(request: NextRequest) {
+  const auth = await requireAdmin(request, { bucket: 'admin:programs:verify', max: 30 });
+  if ('response' in auth) return auth.response;
   try {
     const { searchParams } = new URL(request.url);
     const programId = searchParams.get('programId') || 'JrHDGwFm0Cn4sRJosApH';

@@ -14,10 +14,17 @@ service cloud.firestore {
     // NOTE: trialStartDate / trialEndDate are included — the trial window is
     // derived from trialStartDate, so allowing client updates would let a user
     // extend their own trial indefinitely.
+    // NOTE: marketingConsent and its timestamps are included. The athlete does
+    // control this setting, but it must be changed through
+    // /api/marketing/preferences so the mirrored `marketingSubscribers` record
+    // is updated in the same operation. A direct client write would leave the
+    // two collections disagreeing about who may be emailed — and the subscriber
+    // record is the one the send path actually reads.
     function isWritingProtectedUserField() {
       let protected = ['isAdmin', 'subscriptionStatus', 'subscriptionTier',
                        'stripeCustomerId', 'stripeSubscriptionId', 'subscriptionId',
-                       'trialEndsAt', 'trialEndDate', 'trialStartDate'];
+                       'trialEndsAt', 'trialEndDate', 'trialStartDate',
+                       'marketingConsent', 'marketingConsentAt', 'marketingUnsubscribedAt'];
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(protected);
     }
 
@@ -118,6 +125,75 @@ service cloud.firestore {
       // Unauthenticated visitors can write anonymous events (e.g. signup page view before account exists)
       allow create: if request.resource.data.userId == 'anonymous';
       // No client reads, updates, or deletes — admin SDK only
+    }
+
+    // ===================================================================
+    // Marketing
+    // ===================================================================
+    // Every marketing collection is admin-read, never client-write. All writes
+    // go through the Admin SDK, which bypasses these rules entirely — so the
+    // write deny below is not an inconvenience to the app, it is the guarantee
+    // that nothing but server code can touch a subscriber list, a consent
+    // record, or a queued send.
+    //
+    // The admin UI reads these collections directly from the client for live
+    // tables, which is why read is allowed for admins rather than being denied
+    // outright.
+    //
+    // Note `isAdmin()` costs a document read per evaluation. That is acceptable
+    // here: these collections are only ever queried by the handful of admins
+    // using the marketing console, never by athletes on the hot path.
+
+    match /marketingSubscribers/{subscriberId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /marketingCampaigns/{campaignId} {
+      allow read: if isAdmin();
+      allow write: if false;
+
+      // Per-recipient send rows and per-URL click counters.
+      match /sends/{sendId} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+      match /linkClicks/{urlHash} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+    }
+
+    match /marketingJourneys/{journeyId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /marketingJourneyRuns/{runId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /marketingSegments/{segmentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /marketingPlans/{planId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /marketingSettings/{document} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // The trigger bus. Written only by server code; not readable from the
+    // client at all, since event payloads can carry athlete detail that has no
+    // reason to reach a browser.
+    match /marketingEvents/{eventId} {
+      allow read, write: if false;
     }
   }
 }

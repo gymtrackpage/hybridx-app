@@ -1,14 +1,25 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ChevronLeft, Settings, Users, BookOpen, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/icons";
+import { getAdminUser } from "@/lib/admin-auth";
 import { cn } from "@/lib/utils";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
 }
 
-export default function AdminLayout({ children }: AdminLayoutProps) {
+// Admin pages read and write every athlete's data, so the gate belongs here at
+// the layout — it covers every current and future page under /admin in one
+// place, rather than relying on each page to remember to check.
+export const dynamic = 'force-dynamic';
+
+export default async function AdminLayout({ children }: AdminLayoutProps) {
+  if (!(await getAdminUser())) {
+    redirect('/dashboard');
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">

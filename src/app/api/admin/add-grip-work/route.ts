@@ -1,6 +1,7 @@
 // src/app/api/admin/add-grip-work/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { requireAdmin } from '@/lib/admin-auth';
 
 const GRIP_WORK = {
   carries: {
@@ -178,6 +179,8 @@ const HYROX_PROGRAMS = [
 ];
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAdmin(request, { bucket: 'admin:programs:grip-work', max: 5 });
+  if ('response' in auth) return auth.response;
   try {
     const body = await request.json();
     const { mode = 'all' } = body;
