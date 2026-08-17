@@ -3,6 +3,33 @@
 The HXMailer mailing system, merged into this codebase. Campaigns, subscribers,
 automated journeys and delivery all live under `/admin/marketing`.
 
+## The three properties
+
+HYBRIDX spans three Next.js apps in three Firebase projects. Knowing which is
+which explains most of the architecture below.
+
+| Property | Repo | Firebase project | Owns |
+|---|---|---|---|
+| `hybridx.club` | `gymtrackpage/hybridx-web` | `hybridx-hub` | Marketing site, lead magnets, SEO |
+| `app.hybridx.club` | `gymtrackpage/hybridx-app` | `hyroxedgeai` | The app, and **this** marketing system |
+| — | `gymtrackpage/HXMailer` | `studio-2581739992-b1f46` | The old mailer, being retired |
+
+**The campaign manager is in the app**, at `app.hybridx.club/admin/marketing`,
+behind the admin layout guard (`users/{uid}.isAdmin`). The marketing site has
+its own unrelated admin at `hybridx.club/admin/leads` gated by `ADMIN_EMAILS`,
+which shows that project's raw `leads` collection — a local view of its own
+capture, not a second campaign tool.
+
+What connects them:
+
+- **GA4 cross-domain linker** (`src/app/layout.tsx`) stitches a visitor's
+  session across both domains.
+- **`TrackedLink`** on the marketing site forwards UTM params onto absolute
+  cross-domain CTAs, so `captureAttribution` on the app records first-touch
+  attribution and campaigns get credit for the signups they drive.
+- **The lead bridge** (below) pushes captured leads into this system and shares
+  one suppression list.
+
 ## Layout
 
 ```
@@ -64,6 +91,7 @@ the Admin SDK.
 | `MARKETING_BRIEF_RECIPIENT` | Where the weekly brief is emailed. Falls back to `EMAIL_FROM`. |
 | `CRON_SECRET` | Shared bearer secret for the cron endpoints. |
 | `BREVO_WEBHOOK_SECRET` | Shared secret for Brevo's delivery webhook. The endpoint rejects everything without it, so bounces and complaints would go unrecorded. |
+| `LEAD_BRIDGE_SECRET` | Server-to-server credential for the marketing-site bridge. Must be the SAME value in `hyroxedgeai` and `hybridx-hub`. Minimum 32 characters; unset fails closed. |
 | `HXMAILER_SERVICE_ACCOUNT_KEY` | Migration only. Remove after cutover. |
 
 ## Scheduled jobs
@@ -185,16 +213,90 @@ historical figures and are not directly comparable.
 
 The Gmail OAuth `refreshToken` is deliberately not carried across.
 
-### Cutover
+### Cutover — ordered
 
-1. Deploy. The console is admin-only, so nothing is public.
-2. Run the migration dry-run, reconcile, then run it live.
-3. Spot-check a historical campaign report.
-4. Send one real campaign to an internal tag.
-5. Add the Cloud Scheduler entries above.
-6. Set HXMailer's App Hosting `maxInstances: 0` and keep the old project
-   read-only for a month before deleting anything.
-7. Remove `HXMAILER_SERVICE_ACCOUNT_KEY`.
+The steps below have real dependencies. Doing them out of order either
+double-mails people or silently sends nothing.
+
+**1 — Secrets, before any deploy**
+
+| Secret | Project | Note |
+|---|---|---|
+| `MARKETING_TOKEN_SECRET` | `hyroxedgeai` | 32+ chars. Sending fails closed without it. |
+| `BREVO_WEBHOOK_SECRET` | `hyroxedgeai` | Bounces and complaints go unrecorded without it. |
+| `LEAD_BRIDGE_SECRET` | **both** `hyroxedgeai` and `hybridx-hub` | **Same value in both.** The app verifies it; the site sends it. |
+| `SMTP_USER` / `SMTP_PASSWORD` | `hybridx-hub` | Point at the Brevo credentials. |
+
+Authenticate the campaign sender (SPF/DKIM/DMARC) in Brevo and set
+`MARKETING_EMAIL_FROM`. Warm it before the first large send.
+
+**2 — Deploy both apps.** Everything is admin-gated, so nothing is public and
+nothing sends yet: no scheduler jobs exist and every journey is a draft.
+
+**3 — Verify before trusting anything.** Open `/admin/marketing/settings`; all
+five health checks must be green. They read from the running process, so this
+catches a secret that was created but not bound.
+
+**4 — Migrate.** Dry-run `scripts/migrate-hxmailer.ts`, reconcile the counts
+against the HXMailer admin, then run it live. Spot-check a historical report.
+
+**5 — Switch the marketing site to Brevo.** Send a test magnet from
+`hybridx.club` and confirm it arrives. **Only then** remove `RESEND_API_KEY` —
+while that secret exists the code still prefers Resend, which is the rollback.
+
+**6 — Retire the legacy drips, in this order:**
+   a. Delete the old Cloud Scheduler jobs for `onboarding-nudge` and
+      `re-engagement`. Those routes no longer exist.
+   b. `firebase deploy --only functions` — deploying the now-empty function set
+      is what removes `dailyEmailCampaigns` and its scheduler job.
+   c. `npx tsx scripts/seed-journeys.ts`, read each seeded journey, test-send
+      each email, then activate. **Never before (a) and (b)** — otherwise two
+      systems mail the same athletes the same nudges.
+
+**7 — Add the Cloud Scheduler jobs** from the table above, and point the Brevo
+webhook at `/api/marketing/webhooks/brevo?token=$BREVO_WEBHOOK_SECRET`.
+
+**8 — First real send.** One campaign to an internal tag. Check the raw headers
+carry `List-Unsubscribe`, click the unsubscribe, confirm the subscriber flips.
+
+**9 — Afterwards.** Remove `HXMAILER_SERVICE_ACCOUNT_KEY`. Leave HXMailer
+read-only (`maxInstances: 0`) for a month before deleting the project.
+
+## The lead bridge
+
+The marketing site captures the top of the funnel — the VO2max guide, the
+race-day card, the free plan — into its own `leads` collection in `hybridx-hub`.
+Two endpoints connect that to this system:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/marketing/leads` | Takes a lead at write time, so someone is mailable seconds after submitting rather than after a manual export. Magnet names become tags, UTMs become first-touch attribution. |
+| `GET /api/marketing/suppression?email=` | One suppression list across both properties. Reports `suppressed` and, separately, `complained`. |
+
+Both authenticate with `LEAD_BRIDGE_SECRET`, compared in constant time and
+failing closed when unset. Deliberately **not** `CRON_SECRET`: the marketing
+site should not hold a credential that also unlocks the send cron. The secret
+must be identical in both Firebase projects — the app verifies it, the site
+sends it.
+
+**Consent is carried, not assumed.** Single opt-in magnets forward with consent,
+because those forms state that signing up means ongoing email. The race-card
+magnet uses confirmed opt-in, so its pending write forwards *without* consent
+and only the confirmation click grants it — someone who has been sent a
+confirmation link has not yet given one.
+
+**Only complaints block the marketing site's own sends.** Everything it sends
+was requested seconds earlier; withholding a guide because the person once
+unsubscribed from a campaign fails them while solving nothing. A complaint is
+different, because mailing a complainant again endangers delivery for everyone
+on a domain both properties share. The check fails open, so a bridge outage
+cannot break lead magnets.
+
+**One ESP.** The marketing site sends through the same Brevo relay and sending
+domain as the app, so one sender reputation is built rather than two. Its
+`RESEND_API_KEY` binding is commented out rather than deleted: `getEmailProvider()`
+prefers Resend whenever that key is present, which makes re-adding the secret
+the rollback.
 
 ## Delivery feedback
 
