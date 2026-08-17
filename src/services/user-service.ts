@@ -8,6 +8,7 @@ import { getAdminDb } from '@/lib/firebase-admin'; // Use Admin SDK for server-s
 import { getAuth } from 'firebase-admin/auth';
 import type { User, SubscriptionStatus } from '@/models/types';
 import { sendWelcomeEmail } from '@/lib/email-service';
+import { emitMarketingEventAsync } from '@/lib/marketing/events';
 
 // Helper function to safely convert Firestore timestamp to Date
 function safeToDate(timestamp: any): Date | undefined {
@@ -110,6 +111,11 @@ export async function getUser(userId: string): Promise<User | null> {
                 sendWelcomeEmail(newUser.email).catch(e => 
                     logger.error(`Failed to send welcome email to ${newUser.email}:`, e)
                 );
+
+                // Raise the marketing trigger so a welcome journey can enrol.
+                // Fire-and-forget by design — a marketing automation must never
+                // be able to fail account creation.
+                emitMarketingEventAsync('signup', { userId, email: newUser.email });
             }
             
             return {

@@ -26,6 +26,7 @@ import {
   suppressSubscriber,
   upsertSubscriber,
 } from './subscribers';
+import { emitMarketingEventAsync } from './events';
 import { syncAthletesToSubscribers } from './sync';
 import { isTokenSecretConfigured } from './tokens';
 import { isBulkTransportConfigured, sendBulkMessage, verifyBulkTransport } from './transport';
@@ -447,10 +448,25 @@ export async function addSubscriber(input: {
 export async function setSubscriberTags(id: string, tags: string[]): Promise<ActionResult> {
   try {
     await assertAdmin('marketing:subscriber:tags');
-    await getAdminDb().collection(SUBSCRIBERS).doc(id).update({
-      tags: Array.from(new Set(tags)),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+
+    const ref = getAdminDb().collection(SUBSCRIBERS).doc(id);
+    const existing = (await ref.get()).data() as Subscriber | undefined;
+    const before = existing?.tags ?? [];
+    const next = Array.from(new Set(tags));
+
+    await ref.update({ tags: next, updatedAt: FieldValue.serverTimestamp() });
+
+    // One event per newly-applied tag, so a tagAdded journey enrols. Emitted
+    // only for tags that were not already present — re-saving an unchanged tag
+    // list should not re-trigger anything. The email is what lets the bus
+    // resolve which subscriber the event belongs to; without it the event is
+    // recorded but never matched to anyone.
+    if (existing?.email) {
+      for (const tag of next.filter((t) => !before.includes(t))) {
+        emitMarketingEventAsync('tagAdded', { email: existing.email, payload: { tag } });
+      }
+    }
+
     revalidatePath(`${MARKETING_PATH}/subscribers`);
     return { success: true };
   } catch (err) {

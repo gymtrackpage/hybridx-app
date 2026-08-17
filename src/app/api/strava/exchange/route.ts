@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import axios from 'axios';
 import type { StravaTokens } from '@/models/types';
 import { logger } from '@/lib/logger';
+import { emitMarketingEventAsync } from '@/lib/marketing/events';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -75,6 +76,10 @@ export async function GET(req: NextRequest) {
             strava: stravaTokens,
             stravaConnectedAt: new Date(),
         });
+
+        // After the write, so a failed connection never raises the trigger.
+        // Fire-and-forget: marketing must not be able to fail an OAuth callback.
+        emitMarketingEventAsync('stravaConnected', { userId });
 
         return NextResponse.redirect(new URL('/profile?strava=success', appUrl));
 

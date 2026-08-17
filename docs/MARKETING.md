@@ -183,10 +183,53 @@ for hard bounce, invalid email, blocked, spam and unsubscribe events.
 | `soft_bounce`, `deferred` | Nothing. Transient conditions; the queue's own retry handles them, and suppressing here would steadily delete real subscribers whose mailbox was briefly full |
 | `delivered`, `opened`, `click` | Nothing. Engagement is tracked through our own signed endpoints, which filter bots |
 
-## Known follow-up
+## Consolidation — one email system
 
-`functions/src/index.ts` is a legacy Cloud Functions drip that still sends via
-Gmail using the deprecated `functions.config()` API, overlapping
-`/api/cron/onboarding-nudge`. Once journeys are live it should be retired and
-its drips rebuilt as authored journeys — otherwise two systems email the same
-athletes the same nudges.
+Three systems could previously email the same athlete: the journeys engine,
+`/api/cron/onboarding-nudge` + `/api/cron/re-engagement` (copy hard-coded in
+`email-service.ts`), and `functions/src/index.ts` (a Cloud Functions drip on
+Gmail using the deprecated `functions.config()` API). None shared a suppression
+list, a consent check or a frequency cap with the others.
+
+All three are now one. The onboarding nudges and the re-engagement email are
+seeded as journeys:
+
+```bash
+FIREBASE_SERVICE_ACCOUNT_KEY='<json>' npx tsx scripts/seed-journeys.ts --dry-run
+```
+
+Seeded journeys are created **paused**, and re-running never touches one that
+has since been activated. Before activating:
+
+1. Read the copy in `/admin/marketing/journeys` — carried across from the old
+   templates, and now editable without a deploy.
+2. Send yourself a test of each email.
+3. Delete the old Cloud Scheduler jobs for `onboarding-nudge` and
+   `re-engagement` — those routes no longer exist.
+4. Run `firebase deploy --only functions` so the retired `dailyEmailCampaigns`
+   scheduled function and its scheduler job are actually removed.
+5. Only then activate. Never with the old crons still running.
+
+What the journeys gain over what they replace: consent and unsubscribe are
+honoured, the shared frequency cap applies, copy is editable in the console,
+opens and clicks are attributed per campaign, and delivery goes through the
+authenticated hybridx.club domain rather than a Gmail account.
+
+## Triggers wired into the app
+
+| Event | Raised from |
+|---|---|
+| `signup` | `src/services/user-service.ts`, where the user document is created |
+| `subscriptionCanceled`, `paymentFailed` | `src/app/api/stripe/webhook/route.ts` |
+| `stravaConnected` | `src/app/api/strava/exchange/route.ts` |
+| `garminConnected` | `src/app/api/garmin/exchange/route.ts` |
+| `tagAdded` | `setSubscriberTags` in `actions.ts`, for newly-applied tags only |
+
+All are emitted fire-and-forget through `emitMarketingEventAsync`, *after* the
+write they describe. A marketing automation must never be able to fail a signup,
+an OAuth callback, or a Stripe webhook that Stripe would then retry.
+
+Derived triggers (`trialEndingSoon`, `onboardingStalled`, `noWorkoutAfterNDays`,
+`churnRisk`, `raceDateApproaching`) are not events — nothing "happens" when a
+trial starts running out — so the daily `?derived=1` sweep evaluates them
+instead.
