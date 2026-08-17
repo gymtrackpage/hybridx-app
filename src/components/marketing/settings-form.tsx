@@ -14,6 +14,7 @@ import type { MarketingSettings } from '@/lib/marketing/types';
 interface Health {
   transportConfigured: boolean;
   tokenSecretConfigured: boolean;
+  bridgeConfigured: boolean;
   appUrl: string | null;
   fromAddress: string | null;
 }
@@ -83,6 +84,13 @@ export function MarketingSettingsForm({
       detail: health.tokenSecretConfigured
         ? 'Configured'
         : 'Missing MARKETING_TOKEN_SECRET — unsubscribe links cannot be signed, so sending is blocked.',
+    },
+    {
+      ok: health.bridgeConfigured,
+      label: 'Marketing-site bridge',
+      detail: health.bridgeConfigured
+        ? 'Configured — hybridx.club can push leads in and read the suppression list.'
+        : 'LEAD_BRIDGE_SECRET is unset, so leads captured on hybridx.club will not reach this list.',
     },
     {
       ok: !!health.appUrl,

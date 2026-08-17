@@ -63,3 +63,9 @@ env:
   # every request, so bounces and complaints would go unrecorded.
   - variable: BREVO_WEBHOOK_SECRET
     secret: BREVO_WEBHOOK_SECRET
+  # Server-to-server credential for hybridx.club (the marketing site) to push
+  # captured leads in and check the shared suppression list. Deliberately not
+  # CRON_SECRET: the marketing site should not hold a credential that also
+  # unlocks the send cron. Minimum 32 characters; unset fails closed.
+  - variable: LEAD_BRIDGE_SECRET
+    secret: LEAD_BRIDGE_SECRET
