@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { headers } from 'next/headers';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { User, SubscriptionStatus } from '@/models/types';
+import { emitMarketingEventAsync } from '@/lib/marketing/events';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20',
@@ -111,4 +112,13 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription, event
 
     await userRef.update(userData as { [key: string]: any });
     console.log(`[Stripe Webhook] Successfully updated subscription for user ${firebaseUID} to status ${userData.subscriptionStatus}`);
+
+    // Raise marketing triggers so winback and dunning journeys can enrol.
+    // Fire-and-forget by design: a marketing automation must never be able to
+    // fail a Stripe webhook, which Stripe would then retry.
+    if (userData.subscriptionStatus === 'expired') {
+        emitMarketingEventAsync('subscriptionCanceled', { userId: firebaseUID });
+    } else if (eventType === 'invoice.payment_failed') {
+        emitMarketingEventAsync('paymentFailed', { userId: firebaseUID });
+    }
 }
