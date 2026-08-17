@@ -56,3 +56,7 @@ env:
   # marketing sends fail closed without it rather than emitting forgeable links.
   - variable: MARKETING_TOKEN_SECRET
     secret: MARKETING_TOKEN_SECRET
+  # Shared secret for Brevo's delivery webhook. Without it the endpoint rejects
+  # every request, so bounces and complaints would go unrecorded.
+  - variable: BREVO_WEBHOOK_SECRET
+    secret: BREVO_WEBHOOK_SECRET

@@ -60,6 +60,7 @@ the Admin SDK.
 | `MARKETING_EMAIL_FROM_NAME` | Display name, defaults to HYBRIDX. |
 | `MARKETING_PRICE_LABEL` | Price shown in AI-drafted copy. Defaults to `£5/month`. |
 | `CRON_SECRET` | Shared bearer secret for the cron endpoints. |
+| `BREVO_WEBHOOK_SECRET` | Shared secret for Brevo's delivery webhook. The endpoint rejects everything without it, so bounces and complaints would go unrecorded. |
 | `HXMAILER_SERVICE_ACCOUNT_KEY` | Migration only. Remove after cutover. |
 
 ## Scheduled jobs
@@ -163,6 +164,24 @@ The Gmail OAuth `refreshToken` is deliberately not carried across.
 6. Set HXMailer's App Hosting `maxInstances: 0` and keep the old project
    read-only for a month before deleting anything.
 7. Remove `HXMAILER_SERVICE_ACCOUNT_KEY`.
+
+## Delivery feedback
+
+SMTP acceptance is not delivery: a message the relay accepts can bounce minutes
+later, and a recipient can report spam days later. `/api/marketing/webhooks/brevo`
+ingests those events.
+
+Point a Brevo transactional webhook at
+`https://app.hybridx.club/api/marketing/webhooks/brevo?token=$BREVO_WEBHOOK_SECRET`
+for hard bounce, invalid email, blocked, spam and unsubscribe events.
+
+| Event | Effect |
+|---|---|
+| `hard_bounce`, `invalid_email`, `blocked` | Subscriber marked `bounced`; the send row is marked failed |
+| `spam`, `complaint` | Subscriber marked `complained` — the one status the UI cannot reverse |
+| `unsubscribed` | Subscriber marked `unsubscribed` |
+| `soft_bounce`, `deferred` | Nothing. Transient conditions; the queue's own retry handles them, and suppressing here would steadily delete real subscribers whose mailbox was briefly full |
+| `delivered`, `opened`, `click` | Nothing. Engagement is tracked through our own signed endpoints, which filter bots |
 
 ## Known follow-up
 
