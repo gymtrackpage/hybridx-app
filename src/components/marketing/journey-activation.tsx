@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Loader2, Send, Zap } from 'lucide-react';
+import { AlertTriangle, Loader2, PlayCircle, Send, Zap } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { sendTestEmail } from '@/lib/marketing/actions';
-import { activateJourney } from '@/lib/marketing/studio-actions';
+import { activateJourney, runManualJourney } from '@/lib/marketing/studio-actions';
 
 interface Props {
   journeyId: string;
@@ -43,7 +43,16 @@ export function JourneyActivation({
   const [reviewed, setReviewed] = useState(false);
   const [activating, setActivating] = useState(false);
 
+  const isManual = trigger === 'manual' || trigger === 'scheduled';
+
   if (status === 'live') {
+    // A manual journey is live but inert until someone runs it — the engine
+    // only enrols from events and derived triggers, so this button is the only
+    // way a broadcast-style journey ever starts.
+    if (isManual) {
+      return <ManualRunCard journeyId={journeyId} />;
+    }
+
     return (
       <Alert>
         <Zap className="h-4 w-4" />
@@ -58,7 +67,7 @@ export function JourneyActivation({
 
   if (status === 'archived') return null;
 
-  const isAutomated = trigger !== 'manual' && trigger !== 'scheduled';
+  const isAutomated = !isManual;
   const blocked = problems.length > 0 || (isAutomated && !reviewed);
 
   const handleTest = async () => {
@@ -161,6 +170,63 @@ export function JourneyActivation({
             <Zap className="mr-2 h-4 w-4" />
           )}
           Activate journey
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Sends a live manual journey to its audience.
+ *
+ * Enrolment is idempotent under `onceOnly`, so running twice does not mail
+ * anyone twice — but the confirmation copy says what will happen, because
+ * "Run" on a screen full of statistics should never be ambiguous about whether
+ * real email goes out.
+ */
+function ManualRunCard({ journeyId }: { journeyId: string }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [running, setRunning] = useState(false);
+
+  const handleRun = async () => {
+    setRunning(true);
+    const result = await runManualJourney(journeyId);
+    setRunning(false);
+
+    if (result.success) {
+      toast({
+        title: result.data.enrolled ? 'Journey started' : 'Nobody new to enrol',
+        description: result.data.enrolled
+          ? `${result.data.enrolled.toLocaleString()} enrolled of ${result.data.audienceSize.toLocaleString()} matched. The send cron delivers them.`
+          : `All ${result.data.audienceSize.toLocaleString()} matching people have already been through this journey.`,
+      });
+      router.refresh();
+    } else {
+      toast({ title: 'Could not run', description: result.error, variant: 'destructive' });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-green-500" />
+          Live — ready to run
+        </CardTitle>
+        <CardDescription>
+          This journey is sent by hand. Running it enrols everyone in its audience and begins
+          sending; anyone who has already been through is skipped.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button onClick={handleRun} disabled={running}>
+          {running ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <PlayCircle className="mr-2 h-4 w-4" />
+          )}
+          Run now
         </Button>
       </CardContent>
     </Card>

@@ -15,6 +15,8 @@ import { assertAdmin } from '@/lib/admin-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { logger } from '@/lib/logger';
 import { renderForSubscriber } from './personalise';
+import { renderBlocks, renderBlocksAsText } from './render';
+import type { EmailBlock } from './blocks';
 import { CAMPAIGNS, enqueueCampaign, getSettings, SETTINGS_DOC } from './queue';
 import { resolveSegment, type SegmentDefinition } from './segments';
 import {
@@ -96,6 +98,73 @@ export async function updateCampaign(
     return { success: true };
   } catch (err) {
     return fail(err, 'Could not update the campaign.');
+  }
+}
+
+/**
+ * Save a campaign's structured content.
+ *
+ * Kept apart from updateCampaign because `blocks` is not a plain field: the
+ * rendered HTML and plain-text parts are derived from it, and letting a caller
+ * write blocks without re-rendering would leave the campaign's content and its
+ * rendered body describing different emails.
+ */
+export async function updateCampaignContent(
+  campaignId: string,
+  content: { subject: string; previewText: string; blocks: EmailBlock[] },
+): Promise<ActionResult> {
+  try {
+    await assertAdmin('marketing:campaign:content');
+
+    const ref = getAdminDb().collection(CAMPAIGNS).doc(campaignId);
+    const status = (await ref.get()).data()?.status as Campaign['status'] | undefined;
+
+    if (status === 'sending' || status === 'sent') {
+      return { success: false, error: `A ${status} campaign cannot be edited.` };
+    }
+
+    await ref.update({
+      subject: content.subject,
+      previewText: content.previewText,
+      blocks: content.blocks,
+      htmlBody: renderBlocks(content.blocks, { previewText: content.previewText }),
+      plainBody: renderBlocksAsText(content.blocks),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    revalidatePath(`${MARKETING_PATH}/campaigns/${campaignId}`);
+    return { success: true };
+  } catch (err) {
+    return fail(err, 'Could not save the campaign content.');
+  }
+}
+
+/**
+ * Save the audience a campaign will be sent to.
+ *
+ * Stored on the campaign so the send flow, the pre-send checklist and the
+ * eventual enqueue all resolve the same definition — the alternative is the
+ * count shown in the UI drifting from the audience actually mailed.
+ */
+export async function setCampaignAudience(
+  campaignId: string,
+  segment: SegmentDefinition,
+): Promise<ActionResult> {
+  try {
+    await assertAdmin('marketing:campaign:audience');
+
+    const ref = getAdminDb().collection(CAMPAIGNS).doc(campaignId);
+    const status = (await ref.get()).data()?.status as Campaign['status'] | undefined;
+
+    if (status === 'sending' || status === 'sent') {
+      return { success: false, error: `A ${status} campaign's audience cannot be changed.` };
+    }
+
+    await ref.update({ segment, updatedAt: FieldValue.serverTimestamp() });
+    revalidatePath(`${MARKETING_PATH}/campaigns/${campaignId}`);
+    return { success: true };
+  } catch (err) {
+    return fail(err, 'Could not save the audience.');
   }
 }
 

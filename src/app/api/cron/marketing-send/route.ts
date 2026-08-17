@@ -72,9 +72,14 @@ export async function GET(request: Request) {
 
       // A scheduled campaign has no send rows yet.
       if (campaign.status === 'scheduled') {
-        const segment: SegmentDefinition = campaign.targetTags?.length
-          ? { anyTags: campaign.targetTags }
-          : {};
+        // The stored segment is what the admin actually chose and saw a count
+        // for, including athlete predicates. `targetTags` is the older,
+        // tags-only shape kept for campaigns migrated from HXMailer; reading it
+        // in preference would silently widen the audience of any scheduled
+        // campaign whose segment used predicates.
+        const segment: SegmentDefinition =
+          (campaign.segment as SegmentDefinition | undefined) ??
+          (campaign.targetTags?.length ? { anyTags: campaign.targetTags } : {});
         try {
           const enqueued = await enqueueCampaign(campaignId, segment);
           logger.log(`[cron/marketing-send] enqueued scheduled campaign ${campaignId}: ${enqueued.queued}`);

@@ -118,6 +118,11 @@ export interface Campaign {
   targetTags?: string[];
   /** Saved segment this campaign targets, if any. */
   segmentId?: string;
+  /** Inline audience definition. What the send flow, the pre-send checklist and
+   *  the enqueue all resolve, so the count shown cannot drift from who is mailed. */
+  segment?: unknown;
+  /** Plain-text alternative, derived from `blocks` alongside `htmlBody`. */
+  plainBody?: string;
   scheduledAt: Stamp;
   sentAt: Stamp;
   recipientCount: number;

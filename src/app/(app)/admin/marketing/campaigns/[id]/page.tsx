@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ChevronLeft, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, AlertTriangle, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -63,6 +63,15 @@ export default async function CampaignReportPage({
           <p className="mt-1 text-sm text-muted-foreground">
             Sent {new Date(campaign.sentAt).toLocaleString()}
           </p>
+        )}
+
+        {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
+          <Button asChild className="mt-4">
+            <Link href={`/admin/marketing/campaigns/${campaign.id}/edit`}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit and send
+            </Link>
+          </Button>
         )}
       </div>
 

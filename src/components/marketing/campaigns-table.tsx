@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { Archive, MoreHorizontal, Pause, Play, Search, XCircle } from 'lucide-react';
+import { Archive, MoreHorizontal, Pause, Pencil, Play, Search, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -170,6 +170,14 @@ export function CampaignsTable({ campaigns }: { campaigns: SerialisableCampaign[
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        {(c.status === 'draft' || c.status === 'scheduled') && (
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin/marketing/campaigns/${c.id}/edit`}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit and send
+                            </Link>
+                          </DropdownMenuItem>
+                        )}
                         {c.status === 'scheduled' && (
                           <DropdownMenuItem
                             onClick={() => run('Schedule cancelled', () => cancelSchedule(c.id))}

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { getDashboardStats, listCampaigns } from '@/lib/marketing/queries';
 import { CampaignStatusBadge } from '@/components/marketing/campaign-status-badge';
+import { NewCampaignButton } from '@/components/marketing/new-campaign-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,7 @@ export default async function MarketingDashboardPage() {
             Campaigns, subscribers and delivery for HYBRIDX.
           </p>
         </div>
+        <NewCampaignButton />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -92,7 +94,8 @@ export default async function MarketingDashboardPage() {
         <CardContent>
           {campaigns.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No campaigns yet.
+              No campaigns yet. Describe what you want to send in the studio, or start a blank
+              draft.
             </p>
           ) : (
             <ul className="divide-y">

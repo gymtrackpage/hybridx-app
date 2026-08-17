@@ -18,7 +18,8 @@ import { draftEmail, type DraftEmailResult } from '@/ai/flows/marketing/draft-em
 import { reviseBlock } from '@/ai/flows/marketing/revise-block';
 import { subjectVariants, type SubjectVariantsOutput } from '@/ai/flows/marketing/subject-variants';
 import { blocksToText, type EmailBlock } from './blocks';
-import type { SegmentDefinition } from './segments';
+import { resolveSegment, type SegmentDefinition } from './segments';
+import { enrolSubscriber } from './engine';
 import { getKnowledgeSnapshot } from './knowledge';
 import {
   JOURNEYS,
@@ -263,6 +264,61 @@ export async function activateJourney(
     return { success: true, data: { activated: true } };
   } catch (err) {
     return fail(err, 'Could not activate the journey.');
+  }
+}
+
+/**
+ * Start everyone in a manual journey's audience.
+ *
+ * The engine only enrols from events and derived triggers, so a `manual`
+ * journey — the model a one-off broadcast uses — had no way to begin at all.
+ * This resolves its entry segment and enrols the audience in one go.
+ *
+ * `onceOnly` still applies, so running twice does not re-enrol anyone who has
+ * already been through. Enrolment writes runs; the journey cron does the
+ * sending, so a large audience does not block this request.
+ */
+export async function runManualJourney(
+  journeyId: string,
+): Promise<StudioResult<{ enrolled: number; skipped: number; audienceSize: number }>> {
+  try {
+    await assertAdmin('marketing:studio:run');
+
+    const snap = await getAdminDb().collection(JOURNEYS).doc(journeyId).get();
+    if (!snap.exists) return { success: false, error: 'Journey not found.' };
+
+    const journey = { id: snap.id, ...snap.data() } as Journey;
+
+    if (journey.status !== 'live') {
+      return { success: false, error: 'Activate the journey before running it.' };
+    }
+    if (journey.trigger.type !== 'manual' && journey.trigger.type !== 'scheduled') {
+      return {
+        success: false,
+        error: 'This journey enrols people automatically from its trigger; it cannot be run by hand.',
+      };
+    }
+
+    const audience = await resolveSegment(journey.entryRules?.segment ?? {});
+
+    let enrolled = 0;
+    let skipped = 0;
+
+    for (const subscriber of audience.subscribers) {
+      const result = await enrolSubscriber(journey, subscriber.id, subscriber.userId);
+      if (result === 'enrolled') enrolled++;
+      else skipped++;
+    }
+
+    logger.log(`[marketing/studio] manual run of ${journeyId}: ${enrolled} enrolled, ${skipped} skipped`);
+    revalidatePath(`/admin/marketing/journeys/${journeyId}`);
+
+    return {
+      success: true,
+      data: { enrolled, skipped, audienceSize: audience.subscribers.length },
+    };
+  } catch (err) {
+    return fail(err, 'Could not run the journey.');
   }
 }
 

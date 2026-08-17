@@ -1,5 +1,6 @@
 import { listCampaigns } from '@/lib/marketing/queries';
 import { CampaignsTable } from '@/components/marketing/campaigns-table';
+import { NewCampaignButton } from '@/components/marketing/new-campaign-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,7 @@ export default async function CampaignsPage() {
             Drafts, scheduled sends and delivery reports.
           </p>
         </div>
+        <NewCampaignButton />
       </div>
 
       <CampaignsTable campaigns={campaigns} />

@@ -1,6 +1,7 @@
 import { listSubscribers, listTags } from '@/lib/marketing/queries';
 import { SubscribersTable } from '@/components/marketing/subscribers-table';
 import { AddSubscriberDialog } from '@/components/marketing/add-subscriber-dialog';
+import { ImportSubscribersDialog } from '@/components/marketing/import-subscribers-dialog';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,10 @@ export default async function SubscribersPage() {
             Athletes and leads. Only active subscribers who have consented receive campaigns.
           </p>
         </div>
-        <AddSubscriberDialog />
+        <div className="flex gap-2">
+          <ImportSubscribersDialog />
+          <AddSubscriberDialog />
+        </div>
       </div>
 
       <SubscribersTable subscribers={subscribers} tags={tags} />
