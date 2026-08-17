@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/icons';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { TRIAL_DAYS } from '@/lib/trial';
+import { MarketingCaptureForm } from '@/components/marketing-capture-form';
 
 const FEATURES = [
   {
@@ -188,6 +189,21 @@ export default async function WelcomePage() {
           <Button asChild size="lg" variant="accent" className="mt-8">
             <Link href="/signup">Get started free</Link>
           </Button>
+        </div>
+      </section>
+
+      {/* Newsletter capture — for visitors not ready to sign up yet. Without
+          this, the only way to hear from a visitor was an account, so every
+          other lead left no trace. */}
+      <section className="border-t bg-muted/40 py-16">
+        <div className="mx-auto w-full max-w-2xl px-4 text-center sm:px-6">
+          <h2 className="font-headline text-2xl font-bold sm:text-3xl">
+            Not ready to start training yet?
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            Get HYROX race guides, pacing strategy and training tips in your inbox.
+          </p>
+          <MarketingCaptureForm placement="homepage-footer" className="mt-6 text-left" />
         </div>
       </section>
 

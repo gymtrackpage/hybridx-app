@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { Loader2, Link as LinkIcon, Bell, Settings, CheckCircle2, XCircle, AlertTriangle, ExternalLink } from 'lucide-react';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 import { GarminIntegrationCard } from '@/components/garmin-integration-card';
+import { MarketingPreferencesCard } from '@/components/marketing-preferences-card';
 import {
   Dialog,
   DialogContent,
@@ -595,6 +596,11 @@ export default function ProfilePage() {
                     </form>
                 </Form>
             </Card>
+
+            {/* Email preferences */}
+            <div className="lg:col-span-2">
+              <MarketingPreferencesCard />
+            </div>
 
             {/* Theme Settings */}
             <div className="lg:col-span-2">

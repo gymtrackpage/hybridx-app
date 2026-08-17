@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { mailer as transporter, getFromAddress, isEmailConfigured } from '@/lib/email-service';
+import { captureLead } from '@/lib/marketing/capture';
 import { promises as fs } from 'fs';
 import path from 'path';
 
@@ -89,6 +90,22 @@ export async function POST(request: NextRequest) {
       });
       console.log(`Beta testing admin notification sent for ${email}`);
     }
+
+    // Persist the lead. Until now this endpoint emailed a confirmation and then
+    // discarded the address, so every beta request it ever handled was lost.
+    //
+    // Recorded without marketing consent: asking to join the Android beta is a
+    // request for that build, not agreement to receive campaigns. The address
+    // is on the list and taggable; the send path will skip it until the person
+    // opts in.
+    await captureLead({
+      email,
+      name,
+      source: 'beta-request',
+      tags: ['source:beta-request', 'interest:android'],
+      consent: false,
+      consentMethod: 'beta-request-form',
+    });
 
     return NextResponse.json({
       success: true,
