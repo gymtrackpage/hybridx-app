@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, Settings, Users, BookOpen, BarChart2 } from "lucide-react";
+import { ChevronLeft, Settings, Users, BookOpen, BarChart2, Mail, Send, Contact } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/icons";
 import { getAdminUser } from "@/lib/admin-auth";
@@ -52,6 +52,23 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
             </AdminNavLink>
             <AdminNavLink href="/admin/analytics" icon={BarChart2}>
               Analytics
+            </AdminNavLink>
+
+            <div className="flex items-center gap-2 px-2 pb-1 pt-4 text-sm font-medium text-muted-foreground">
+              <Mail className="h-4 w-4" />
+              Marketing
+            </div>
+            <AdminNavLink href="/admin/marketing" icon={BarChart2}>
+              Overview
+            </AdminNavLink>
+            <AdminNavLink href="/admin/marketing/campaigns" icon={Send}>
+              Campaigns
+            </AdminNavLink>
+            <AdminNavLink href="/admin/marketing/subscribers" icon={Contact}>
+              Subscribers
+            </AdminNavLink>
+            <AdminNavLink href="/admin/marketing/settings" icon={Settings}>
+              Settings
             </AdminNavLink>
           </div>
         </nav>
