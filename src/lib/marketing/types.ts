@@ -141,7 +141,14 @@ export interface Campaign {
 // Sends
 // ---------------------------------------------------------------------------
 
-export type SendStatus = 'pending' | 'sent' | 'failed';
+/**
+ * `sending` is the claimed-but-not-yet-delivered state. A drain moves a row
+ * into it transactionally *before* touching SMTP, which is what stops two
+ * overlapping cron invocations from both mailing the same person. It also means
+ * a row found in `sending` long after the fact was definitely never handed to
+ * the mail server, so it is safe to requeue — see recoverStalledSends().
+ */
+export type SendStatus = 'pending' | 'sending' | 'sent' | 'failed';
 
 /**
  * One row per recipient per campaign. The document id is

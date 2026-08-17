@@ -18,6 +18,15 @@ env:
   - variable: EMAIL_FROM_NAME
     value: "HybridX Training"
 
+  # Marketing sender. Kept separate from the transactional address above so a
+  # campaign that draws spam complaints cannot damage delivery of verification
+  # and coaching email. Point this at an authenticated sender on the domain
+  # (e.g. news@hybridx.club) and warm it gradually before the first large send.
+  - variable: MARKETING_EMAIL_FROM
+    value: "training@hybridx.club"
+  - variable: MARKETING_EMAIL_FROM_NAME
+    value: "HYBRIDX"
+
   # Secrets (stored in Google Secret Manager)
   - variable: FIREBASE_SERVICE_ACCOUNT_KEY
     secret: FIREBASE_SERVICE_ACCOUNT_KEY
@@ -43,3 +52,7 @@ env:
     secret: BREVO_SMTP_USER
   - variable: BREVO_SMTP_KEY
     secret: BREVO_SMTP_KEY
+  # Signs unsubscribe and tracking links. Must be at least 32 characters;
+  # marketing sends fail closed without it rather than emitting forgeable links.
+  - variable: MARKETING_TOKEN_SECRET
+    secret: MARKETING_TOKEN_SECRET
