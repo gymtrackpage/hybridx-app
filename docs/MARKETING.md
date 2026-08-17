@@ -59,6 +59,7 @@ the Admin SDK.
 | `MARKETING_EMAIL_FROM` | Campaign From address. Keep separate from `EMAIL_FROM` so a bad campaign cannot damage delivery of verification email. |
 | `MARKETING_EMAIL_FROM_NAME` | Display name, defaults to HYBRIDX. |
 | `MARKETING_PRICE_LABEL` | Price shown in AI-drafted copy. Defaults to `£5/month`. |
+| `MARKETING_BRIEF_RECIPIENT` | Where the weekly brief is emailed. Falls back to `EMAIL_FROM`. |
 | `CRON_SECRET` | Shared bearer secret for the cron endpoints. |
 | `BREVO_WEBHOOK_SECRET` | Shared secret for Brevo's delivery webhook. The endpoint rejects everything without it, so bounces and complaints would go unrecorded. |
 | `HXMAILER_SERVICE_ACCOUNT_KEY` | Migration only. Remove after cutover. |
@@ -73,6 +74,7 @@ All require `Authorization: Bearer $CRON_SECRET`.
 | `/api/cron/marketing-journeys` | every 5 minutes | Enrols from events, advances runs whose next step is due |
 | `/api/cron/marketing-journeys?derived=1` | daily | Also evaluates derived triggers and prunes processed events |
 | `/api/cron/marketing-sync` | daily | Reconciles the athlete roster into the subscriber list |
+| `/api/cron/marketing-brief` | weekly | Compiles the week, drafts proposals, emails the brief |
 
 Example Cloud Scheduler entry:
 
@@ -182,6 +184,32 @@ for hard bounce, invalid email, blocked, spam and unsubscribe events.
 | `unsubscribed` | Subscriber marked `unsubscribed` |
 | `soft_bounce`, `deferred` | Nothing. Transient conditions; the queue's own retry handles them, and suppressing here would steadily delete real subscribers whose mailbox was briefly full |
 | `delivered`, `opened`, `click` | Nothing. Engagement is tracked through our own signed endpoints, which filter bots |
+
+## The weekly brief
+
+`/api/cron/marketing-brief` is the semi-automated half of the system. Once a
+week it:
+
+1. Compiles the period — list growth, unsubscribes, bounces, complaints,
+   campaign performance, journey completions — into a `marketingBriefs`
+   document. Each run measures against the previous snapshot, so the brief
+   reports *change* rather than lifetime totals. The first run says so rather
+   than presenting a lifetime figure as a week's work.
+2. Derives plain-language observations. These are computed arithmetically, not
+   asked of the model: they are threshold comparisons, and a language model adds
+   nothing to them but the chance of getting them wrong.
+3. Asks `propose-campaigns` for one to three campaigns worth running, grounded
+   in those figures and constrained to segments that exist.
+4. Drives each proposal through the same `composeJourney` + `draftEmail` flows
+   the studio uses, saving a full **draft** journey tagged `aiProposed`.
+5. Emails the brief to `MARKETING_BRIEF_RECIPIENT` through the *transactional*
+   transport — internal correspondence must not be subject to the marketing
+   frequency cap or appear in campaign statistics.
+
+**Nothing it produces can send.** Every journey is a draft, and activation still
+requires reading it, sending a test and confirming, exactly as if a person had
+written it. A proposal that fails to draft still reaches the inbox as a prompt
+that can be pasted into the studio.
 
 ## Consolidation — one email system
 

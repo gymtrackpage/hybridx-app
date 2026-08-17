@@ -26,6 +26,9 @@ env:
     value: "training@hybridx.club"
   - variable: MARKETING_EMAIL_FROM_NAME
     value: "HYBRIDX"
+  # Where the weekly marketing brief is sent. Falls back to EMAIL_FROM.
+  - variable: MARKETING_BRIEF_RECIPIENT
+    value: "training@hybridx.club"
 
   # Secrets (stored in Google Secret Manager)
   - variable: FIREBASE_SERVICE_ACCOUNT_KEY
