@@ -1,45 +1,38 @@
 // src/app/api/strava/activities/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { updateUserAdmin } from '@/services/user-service';
+import { getUser, updateUserAdmin } from '@/services/user-service';
 import axios from 'axios';
 import { getAdminAuth } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 import { getValidStravaToken } from '@/lib/strava-token';
+import { mapStravaError, describeStravaError } from '@/lib/strava-api';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { logger } from '@/lib/logger';
 
 export async function GET(req: NextRequest) {
+  let userId: string | undefined;
+
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('__session')?.value;
 
     if (!sessionCookie) {
-      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+      return NextResponse.json({ error: 'Authentication required.', code: 'SESSION_EXPIRED' }, { status: 401 });
     }
 
     const adminAuth = getAdminAuth();
     const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const userId = decodedToken.uid;
+    userId = decodedToken.uid;
 
     // 20 requests per minute per user
     const rl = checkRateLimit(`strava-activities:${userId}`, 60_000, 20);
     if (!rl.allowed) {
-        return NextResponse.json({ error: 'Too many requests. Please wait before syncing again.' }, {
-            status: 429,
-            headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
-        });
+        return NextResponse.json(
+          { error: 'Too many requests. Please wait before syncing again.', code: 'STRAVA_RATE_LIMITED' },
+          { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+        );
     }
 
-    let accessToken: string;
-    try {
-      accessToken = await getValidStravaToken(userId);
-    } catch (tokenErr: any) {
-      if (tokenErr.code === 'STRAVA_NOT_CONNECTED') {
-        return NextResponse.json({ error: 'Strava account not connected. Please connect it in your profile.' }, { status: 400 });
-      }
-      // STRAVA_REFRESH_FAILED — token expired/revoked, user must reconnect
-      return NextResponse.json({ error: 'Strava connection expired. Please reconnect your account.' }, { status: 401 });
-    }
+    const accessToken = await getValidStravaToken(userId);
 
     const page = Math.max(1, parseInt(req.nextUrl.searchParams.get('page') ?? '1', 10));
     const activitiesResponse = await axios.get('https://www.strava.com/api/v3/athlete/activities', {
@@ -53,23 +46,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ activities, hasMore: activities.length === 30 });
 
   } catch (error) {
-    let status = 500;
-    let message = 'Failed to fetch activities from Strava.';
-    
-    if (axios.isAxiosError(error)) {
-        if (error.response?.status === 401) {
-            status = 401;
-            message = 'Strava authorization expired. Please reconnect your account.';
-        } else if (error.response?.status) {
-            status = error.response.status;
-            message = error.response.data?.message || message;
-        }
-    } else if ((error as any).code === 'auth/session-cookie-expired' || (error as any).code === 'auth/argument-error') {
-        status = 401;
-        message = 'Your session has expired. Please log in again.';
+    // Strava answers 403 both for a missing activity-read grant and for an
+    // exhausted daily allowance — the stored scope separates the two.
+    let scope: string | undefined;
+    if (userId) {
+      try {
+        scope = (await getUser(userId))?.strava?.scope;
+      } catch {
+        // best-effort only — never let the diagnostic lookup mask the real error
+      }
     }
 
-    logger.error('Strava activities fetch error:', { message: error instanceof Error ? error.message : String(error), code: (error as any).code });
-    return NextResponse.json({ error: message }, { status });
+    const mapped = mapStravaError(error, 'Failed to fetch activities from Strava.', scope);
+    // console, not logger — logger.error strips the payload to a generic line
+    // in production, and this diagnosis is the whole point of the log.
+    console.error('[strava-activities] request failed', {
+      userId,
+      code: mapped.code,
+      scope,
+      ...describeStravaError(error),
+    });
+
+    return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status });
   }
 }
