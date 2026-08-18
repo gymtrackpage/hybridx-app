@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { cookies } from 'next/headers';
 import { getValidStravaToken } from '@/lib/strava-token';
+import { mapStravaError, describeStravaError } from '@/lib/strava-api';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { getUser } from '@/services/user-service';
 import axios from 'axios';
 import type { WorkoutSession, ProgramType } from '@/models/types';
 import { hasRuns } from '@/lib/type-guards';
@@ -40,6 +42,8 @@ function mapActivityTypeToStrava(programType: ProgramType): string {
 
 
 export async function POST(req: NextRequest) {
+  let userId: string | undefined;
+
   try {
     const { sessionId } = await req.json();
     
@@ -56,26 +60,18 @@ export async function POST(req: NextRequest) {
     }
 
     const decodedToken = await getAuth().verifySessionCookie(sessionCookie, true);
-    const userId = decodedToken.uid;
+    userId = decodedToken.uid;
 
     // 5 uploads per minute per user
     const rl = checkRateLimit(`strava-upload:${userId}`, 60_000, 5);
     if (!rl.allowed) {
-        return NextResponse.json({ error: 'Too many upload requests. Please wait before trying again.' }, {
-            status: 429,
-            headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
-        });
+        return NextResponse.json(
+          { error: 'Too many upload requests. Please wait before trying again.', code: 'STRAVA_RATE_LIMITED' },
+          { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+        );
     }
 
-    let accessToken: string;
-    try {
-      accessToken = await getValidStravaToken(userId);
-    } catch (tokenErr: any) {
-      if (tokenErr.code === 'STRAVA_NOT_CONNECTED') {
-        return NextResponse.json({ error: 'Strava account not connected.' }, { status: 400 });
-      }
-      return NextResponse.json({ error: 'Strava connection expired. Please reconnect your account.' }, { status: 401 });
-    }
+    const accessToken = await getValidStravaToken(userId);
 
     // Fetch workout session from your database
     const adminDb = getAdminDb();
@@ -164,19 +160,27 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    logger.error('Strava upload error:', {
-      message: error instanceof Error ? error.message : String(error),
-      response: (error as any).response?.data,
-      status: (error as any).response?.status
+    // Strava answers 403 both for a missing activity-write grant and for an
+    // exhausted daily allowance — the stored scope separates the two.
+    let scope: string | undefined;
+    if (userId) {
+      try {
+        scope = (await getUser(userId))?.strava?.scope;
+      } catch {
+        // best-effort only — never let the diagnostic lookup mask the real error
+      }
+    }
+
+    const mapped = mapStravaError(error, 'Failed to upload to Strava.', scope);
+    // console, not logger — logger.error strips the payload to a generic line
+    // in production, and this diagnosis is the whole point of the log.
+    console.error('[strava-upload] request failed', {
+      userId,
+      code: mapped.code,
+      scope,
+      ...describeStravaError(error),
     });
 
-    if ((error as any).response?.status === 401) {
-      return NextResponse.json({ error: 'Strava authorization expired' }, { status: 401 });
-    } else {
-      return NextResponse.json({
-        error: 'Failed to upload to Strava',
-        details: (error as any).response?.data?.message || (error instanceof Error ? error.message : String(error))
-      }, { status: 500 });
-    }
+    return NextResponse.json({ error: mapped.message, code: mapped.code }, { status: mapped.status });
   }
 }
