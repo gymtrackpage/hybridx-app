@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getAllPrograms, getAssignedPrograms, getPersonalPrograms, deletePersonalProgram } from '@/services/program-service-client';
 import { getUserClient, updateUser } from '@/services/user-service-client';
+import { clearFutureProgramSessions } from '@/services/session-service';
 import type { Program, User } from '@/models/types';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getAuthInstance } from '@/lib/firebase';
@@ -99,6 +100,16 @@ export default function ProgramsPage() {
               startDate: new Date(),
           });
           setUser(prev => prev ? ({ ...prev, programId: program.id }) : null);
+
+          // Clear any leftover per-day session docs from a previously assigned program so they
+          // don't keep shadowing this newly started plan's workouts on the same calendar dates.
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          try {
+              await clearFutureProgramSessions({ userId: user.id, fromDate: today });
+          } catch (err) {
+              console.error('Failed to clear stale program sessions:', err);
+          }
 
           // If Garmin is connected, push the new plan immediately (fire-and-forget).
           if (user.garminConnectedAt) {

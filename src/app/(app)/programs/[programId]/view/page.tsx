@@ -14,6 +14,7 @@ import { auth } from '@/lib/firebase';
 import type { Program, User, PaceZone, WorkoutDay } from '@/models/types';
 import { getProgramClient, getPersonalProgram } from '@/services/program-service-client'; // IMPORTED getPersonalProgram
 import { getUserClient, updateUser } from '@/services/user-service-client';
+import { clearFutureProgramSessions } from '@/services/session-service';
 import { useToast } from '@/hooks/use-toast';
 import { calculateTrainingPaces, formatPace } from '@/lib/pace-utils';
 import { adjustTrainingPlan } from '@/ai/flows/adjust-training-plan';
@@ -341,6 +342,18 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
         }
 
         await updateUser(user.id, updateData);
+
+        // Clear any leftover per-day session docs from a previously assigned program (including
+        // drag-and-drop "cleared" markers) so they don't keep shadowing this newly scheduled
+        // program's workouts on the same calendar dates. Best-effort: a failure here shouldn't
+        // block the program from being scheduled.
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        try {
+            await clearFutureProgramSessions({ userId: user.id, fromDate: today });
+        } catch (err) {
+            console.error('Failed to clear stale program sessions:', err);
+        }
 
         // Refresh the UserContext to update Today's Workout on dashboard/workout pages
         await refreshData();
