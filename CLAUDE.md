@@ -3,10 +3,12 @@
 ## Infrastructure
 
 - **Firebase project ID:** `hyroxedgeai`
-- **Firebase App Hosting backend name:** `studio`
+- **Firebase App Hosting backend name:** `studio` (the only backend, as of 2026-08-19)
+  - Repository: `gymtrackpage-hybridx-app`, region `us-central1`.
+  - URL: `https://studio--hyroxedgeai.us-central1.hosted.app`
   - Used as `--backend studio` for commands like `firebase apphosting:secrets:grantaccess`.
   - Confirm with `firebase apphosting:backends:list --project hyroxedgeai` if a deploy
-    ever shows more than one backend — this note assumes there's still just the one.
+    ever shows more than one backend.
 
 ## Deploy gotchas
 
