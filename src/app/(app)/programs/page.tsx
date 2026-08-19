@@ -37,15 +37,28 @@ export default function ProgramsPage() {
           if (firebaseUser) {
             const currentUser = await getUserClient(firebaseUser.uid);
             setUser(currentUser);
-            
-            // Fetch Personal Programs
-            const personal = await getPersonalPrograms(firebaseUser.uid);
-            setPersonalPrograms(personal);
 
-            // Custom programs an admin has assigned to this athlete. Kept in a
-            // separate collection, so they need their own query.
-            const assigned = await getAssignedPrograms(firebaseUser.uid);
-            setAssignedPrograms(assigned);
+            // Personal and assigned programs are fetched independently and never
+            // allowed to block the page: a permission error on one collection
+            // (e.g. rules not yet deployed for a new collection) must not leave
+            // every athlete stuck on the loading skeleton, since the public
+            // programs above have already loaded successfully by this point.
+            const [personalResult, assignedResult] = await Promise.allSettled([
+              getPersonalPrograms(firebaseUser.uid),
+              getAssignedPrograms(firebaseUser.uid),
+            ]);
+
+            if (personalResult.status === 'fulfilled') {
+              setPersonalPrograms(personalResult.value);
+            } else {
+              console.error('Failed to load personal programs:', personalResult.reason);
+            }
+
+            if (assignedResult.status === 'fulfilled') {
+              setAssignedPrograms(assignedResult.value);
+            } else {
+              console.error('Failed to load assigned programs:', assignedResult.reason);
+            }
           }
           setLoading(false);
         });
