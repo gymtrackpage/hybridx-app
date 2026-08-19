@@ -34,6 +34,7 @@ import { authedFetch } from '@/lib/client-auth';
 import type { WorkoutDay } from '@/models/types';
 import { hasRuns, hasExercises } from '@/lib/type-guards';
 import { updateUser } from '@/services/user-service-client';
+import { clearFutureProgramSessions } from '@/services/session-service';
 import { savePersonalProgram } from '@/services/program-service-client'; // IMPORTED
 import { useUser } from '@/contexts/user-context';
 
@@ -139,9 +140,19 @@ export function RacePrepDialog() {
               programId: programId,
               customProgram: sanitizedWorkouts, // Keep this for now as a fallback/cache
               startDate: new Date(),
-              goal: 'hybrid', 
+              goal: 'hybrid',
           });
-          
+
+          // Clear any leftover per-day session docs from a previously assigned program so they
+          // don't keep shadowing this newly activated plan's workouts on the same calendar dates.
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          try {
+              await clearFutureProgramSessions({ userId: user.id, fromDate: today });
+          } catch (err) {
+              console.error('Failed to clear stale program sessions:', err);
+          }
+
           toast({
               title: "Plan Activated!",
               description: `Training for ${eventName} starts now. Good luck!`,

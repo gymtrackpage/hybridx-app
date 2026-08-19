@@ -254,3 +254,47 @@ export async function saveScheduleChanges(input: SaveScheduleChangesInput): Prom
 
     await batch.commit();
 }
+
+const ClearFutureProgramSessionsInputSchema = z.object({
+  userId: z.string(),
+  fromDate: z.date(),
+});
+
+type ClearFutureProgramSessionsInput = z.infer<typeof ClearFutureProgramSessionsInputSchema>;
+
+/**
+ * Deletes persisted per-day program-schedule session docs (today onward) that aren't already
+ * finished. Call this whenever a user (re)assigns an active program.
+ *
+ * Session docs are keyed only by userId + workoutDate, not by programId, and both the calendar
+ * (buildDaySlots) and the dashboard (getOrCreateProgramSessionsForDay) treat any persisted doc for
+ * a date as fully authoritative over that date — including the content-less "cleared" rest-day
+ * markers saveScheduleChanges writes for drag-and-drop rearrangements. Left in place, those docs
+ * from a previous program keep shadowing the newly assigned program's schedule on the same dates
+ * forever, which is why a freshly (re)scheduled program can appear to have no workouts. One-off/
+ * custom-workout entries are logged extra activity, not schedule, so they're left untouched, and
+ * finished sessions are always preserved as workout history.
+ */
+export async function clearFutureProgramSessions(input: ClearFutureProgramSessionsInput): Promise<void> {
+    const { userId, fromDate } = ClearFutureProgramSessionsInputSchema.parse(input);
+    const adminDb = getAdminDb();
+    const sessionsCollection = adminDb.collection('workoutSessions');
+
+    const snapshot = await sessionsCollection
+        .where('userId', '==', userId)
+        .where('workoutDate', '>=', Timestamp.fromDate(fromDate))
+        .where('programId', 'not-in', ['one-off-ai', 'custom-workout'])
+        .get();
+
+    const batch = adminDb.batch();
+    let deletedCount = 0;
+    snapshot.docs.forEach(doc => {
+        if (doc.data().finishedAt) return; // preserve completed workout history
+        batch.delete(doc.ref);
+        deletedCount++;
+    });
+
+    if (deletedCount > 0) {
+        await batch.commit();
+    }
+}
