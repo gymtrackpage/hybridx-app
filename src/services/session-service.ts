@@ -280,16 +280,21 @@ export async function clearFutureProgramSessions(input: ClearFutureProgramSessio
     const adminDb = getAdminDb();
     const sessionsCollection = adminDb.collection('workoutSessions');
 
+    // Firestore rejects a query that combines an inequality/range filter on one field
+    // (workoutDate >=) with a not-in filter on a different field (programId), so the
+    // one-off/custom-workout and finished-session exclusions are applied after the fetch
+    // instead of in the query itself.
     const snapshot = await sessionsCollection
         .where('userId', '==', userId)
         .where('workoutDate', '>=', Timestamp.fromDate(fromDate))
-        .where('programId', 'not-in', ['one-off-ai', 'custom-workout'])
         .get();
 
     const batch = adminDb.batch();
     let deletedCount = 0;
     snapshot.docs.forEach(doc => {
-        if (doc.data().finishedAt) return; // preserve completed workout history
+        const data = doc.data();
+        if (['one-off-ai', 'custom-workout'].includes(data.programId)) return; // logged extra activity, not schedule
+        if (data.finishedAt) return; // preserve completed workout history
         batch.delete(doc.ref);
         deletedCount++;
     });
