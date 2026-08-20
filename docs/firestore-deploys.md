@@ -38,7 +38,10 @@ everything production relies on.
 ### 2. Add the `FIREBASE_SERVICE_ACCOUNT` secret
 
 Needs the `gcloud` and `gh` CLIs, both authenticated against an account that can
-administer the project. Run from anywhere:
+administer the project. Steps 1-3, 5 and 6 run from anywhere; **step 4 must run
+from the repository root**, because `firebase deploy` reads `firebase.json` to
+know which files to apply. Run it elsewhere and it exits with
+`Not in a Firebase app directory` — the verification is skipped, not passed.
 
 ```bash
 PROJECT_ID=hyroxedgeai
@@ -65,19 +68,25 @@ gcloud iam service-accounts keys create ./firebase-sa.json \
   --project="$PROJECT_ID"
 
 # 4. Prove the roles are sufficient BEFORE trusting CI with them.
-#    Run this only after step 1 above (the index export), or it may propose
-#    deleting indexes that production relies on.
-GOOGLE_APPLICATION_CREDENTIALS=./firebase-sa.json \
+#    Must run from the repo root (needs firebase.json), and only after step 1
+#    above (the index export), or it may propose deleting indexes that
+#    production relies on. Note the absolute path to the key.
+cd /path/to/hybridx-app
+GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/firebase-sa.json \
   npx --yes firebase-tools@14 deploy \
     --only firestore:rules,firestore:indexes \
     --project "$PROJECT_ID" --non-interactive
 
 # 5. Store it as the repository secret the workflow reads.
-gh secret set FIREBASE_SERVICE_ACCOUNT --repo "$REPO" < ./firebase-sa.json
+gh secret set FIREBASE_SERVICE_ACCOUNT --repo "$REPO" < /absolute/path/to/firebase-sa.json
 
 # 6. Delete the local copy — it is a long-lived credential.
-rm -f ./firebase-sa.json
+rm -f /absolute/path/to/firebase-sa.json
 ```
+
+If step 4 was skipped, the workflow run below is the verification instead — it
+performs the same deploy from a checkout, so a missing role surfaces there. That
+is a valid substitute; there is no need to mint a second key just to re-test.
 
 Then trigger the workflow once by hand to confirm it works end to end:
 
