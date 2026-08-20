@@ -423,6 +423,55 @@ name resolves to `website-other` rather than being rejected, so a new magnet
 does not require both projects to deploy in lockstep — the lead lands, tagged
 `route:unclassified`, which is the prompt to add a proper entry.
 
+## Building a new funnel
+
+The whole point of the registry is that this needs no deploy of this app.
+
+1. **On the marketing site**, add a page with the generic capture form and a
+   slug of your choosing:
+
+   ```tsx
+   <FunnelSignupForm source="spring-hyrox-challenge" formId="spring" placement="hero" />
+   ```
+
+   Slugs are `[a-z0-9][a-z0-9_-]{1,48}`. Keep one stable once it is live —
+   changing it starts a new route and orphans the journey attached to the old.
+
+2. **On the first lead**, the route registers itself and appears in
+   `/admin/marketing/routes` badged **New**.
+
+3. **Configure it there**: name, tags, consent posture. Then build a journey
+   with `trigger: { type: 'consentGranted', route: '<slug>' }` and activate it.
+
+That is the whole loop. Funnels that also hand over a file the visitor is
+waiting on still need their own server action for that delivery — but the
+capture, routing and nurture are all covered by the above.
+
+### The wire contract
+
+`GET /api/marketing/leads` (same bridge auth as the POST) returns the accepted
+payload, its field names and the response shape. Read it rather than copying an
+existing caller — a caller can be wrong, and one was.
+
+Both UTM spellings are accepted (`utm_source` and `source`) and normalised on
+receipt. This is not politeness: the marketing site sent the bare spelling while
+this app read the prefixed one, and every lead's first-touch attribution was
+discarded for months. Nothing failed, because two independently-declared shapes
+had each been checked only against themselves. `bridge-contract.ts` is now the
+single declaration, and `bridge-contract.test.ts` pins both spellings.
+
+### Verifying the link
+
+`GET /api/admin/bridge-check` on the marketing site (admin session required)
+performs the round trips and reports what happened: whether the bridge is
+configured, whether the shared secret authenticates, whether the suppression
+lookup answers, and whether the fields the site sends are still in the contract.
+It is read-only and writes no lead, so it is safe to run against production.
+
+This matters because the failures are silent by design — lead forwarding is
+fire-and-forget so an outage cannot cost a submission, which also means an
+outage looks exactly like success from the site's side.
+
 ## Triggers wired into the app
 
 | Event | Raised from |
