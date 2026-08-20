@@ -173,6 +173,11 @@ export async function upsertSubscriber(input: UpsertInput): Promise<UpsertResult
     if (input.lastName && !existing.lastName) update.lastName = input.lastName;
     if (input.userId && !existing.userId) update.userId = input.userId;
 
+    // Fills in a tombstone written by an unsubscribe that arrived before we
+    // knew the address. The id already proves these are the same person, so
+    // this only makes the record readable — it does not change who it is.
+    if (!existing.email) update.email = email;
+
     // Consent may be granted on a mailable record, and may always be withdrawn.
     // Granting it on a suppressed record would quietly undo an unsubscribe.
     const mayWriteConsent = !!input.consent && (!suppressed || input.consent.marketing === false);
@@ -207,12 +212,45 @@ export async function suppressSubscriber(
   id: string,
   status: Exclude<SubscriberStatus, 'active'>,
   reason?: string,
+  options: { createTombstone?: boolean } = {},
 ): Promise<boolean> {
   const ref = getAdminDb().collection(SUBSCRIBERS).doc(id);
   const snap = await ref.get();
   if (!snap.exists) {
-    logger.log(`[marketing] suppress: no subscriber ${id}`);
-    return false;
+    // An unsubscribe for an address we have no record of is not a no-op. It
+    // happens whenever mail goes out before the subscriber write lands — the
+    // marketing site sends a magnet within seconds of capture, and its forward
+    // to this system is deliberately fire-and-forget. Without a tombstone the
+    // opt-out is simply lost, and the forward that arrives a moment later
+    // creates the person as active: they unsubscribed, and we signed them up.
+    //
+    // The id is sha256(email), so a record written here collides with the
+    // eventual capture by construction, and upsertSubscriber refuses to grant
+    // consent to a suppressed record. The address itself is unknown — a hash
+    // cannot be reversed — which is fine: the id is all the send path needs.
+    if (!options.createTombstone) {
+      logger.log(`[marketing] suppress: no subscriber ${id}`);
+      return false;
+    }
+
+    await ref.set({
+      email: '',
+      firstName: '',
+      lastName: '',
+      tags: [],
+      status,
+      source: 'sync',
+      consent: { marketing: false, at: FieldValue.serverTimestamp(), method: 'pre-emptive-optout' },
+      ...(reason ? { statusReason: reason } : {}),
+      totalSent: 0,
+      openCount: 0,
+      clickCount: 0,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    logger.log(`[marketing] suppress: wrote tombstone for unknown subscriber ${id}`);
+    return true;
   }
 
   await ref.update({

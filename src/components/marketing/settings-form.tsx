@@ -15,6 +15,8 @@ interface Health {
   transportConfigured: boolean;
   tokenSecretConfigured: boolean;
   bridgeConfigured: boolean;
+  sharesTransactionalSender: boolean;
+  senderDomain: string | null;
   appUrl: string | null;
   fromAddress: string | null;
 }
@@ -101,6 +103,18 @@ export function MarketingSettingsForm({
       ok: !!health.fromAddress,
       label: 'From address',
       detail: health.fromAddress ?? 'No MARKETING_EMAIL_FROM or EMAIL_FROM configured.',
+    },
+    {
+      // Not a blocker — the fix is DNS and a warmed subdomain, which cannot be
+      // done from here. But it should be visible before a send rather than
+      // discovered when verification email stops arriving.
+      ok: !health.sharesTransactionalSender,
+      label: 'Separate bulk sender',
+      detail: health.sharesTransactionalSender
+        ? `Campaigns send from ${health.fromAddress}, the same address as verification email. ` +
+          'A campaign that draws complaints will degrade delivery of mail people are waiting for. ' +
+          'Point MARKETING_EMAIL_FROM at a dedicated, authenticated subdomain.'
+        : `Campaigns send from ${health.senderDomain ?? 'a separate address'}, apart from transactional mail.`,
     },
   ];
 

@@ -20,8 +20,22 @@ env:
 
   # Marketing sender. Kept separate from the transactional address above so a
   # campaign that draws spam complaints cannot damage delivery of verification
-  # and coaching email. Point this at an authenticated sender on the domain
-  # (e.g. news@hybridx.club) and warm it gradually before the first large send.
+  # and coaching email — the failure mode there is invisible until somebody
+  # cannot sign in.
+  #
+  # BEFORE CHANGING THIS VALUE, in Brevo:
+  #   1. Add mail.hybridx.club as a sending domain.
+  #   2. Publish the SPF, DKIM and Return-Path records it gives you.
+  #   3. Add a DMARC record on the subdomain, starting permissive:
+  #        _dmarc.mail.hybridx.club  TXT  "v=DMARC1; p=none; rua=mailto:training@hybridx.club"
+  #   4. Wait for Brevo to report the domain verified.
+  #   5. Warm it: a few hundred of your most engaged subscribers first, growing
+  #      over a fortnight. A cold subdomain sending thousands on day one is
+  #      indistinguishable from a spammer, because that is what spammers do.
+  #
+  # Until step 4 is done this must stay on the verified address, or every
+  # campaign fails authentication. The settings health panel reports whether
+  # bulk and transactional are still sharing one address.
   - variable: MARKETING_EMAIL_FROM
     value: "training@hybridx.club"
   - variable: MARKETING_EMAIL_FROM_NAME

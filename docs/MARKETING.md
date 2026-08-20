@@ -302,6 +302,61 @@ domain as the app, so one sender reputation is built rather than two. Its
 prefers Resend whenever that key is present, which makes re-adding the secret
 the rollback.
 
+## Sender identity
+
+Three roles, and they must not share an address:
+
+| Role | Variable | Should be |
+|---|---|---|
+| App transactional | `EMAIL_FROM` | `training@hybridx.club` |
+| Campaigns and journeys | `MARKETING_EMAIL_FROM` | a dedicated authenticated subdomain |
+| Marketing site mail | `EMAIL_FROM` (hybridx-hub) | the transactional identity |
+
+Reputation is scored per sending domain and increasingly per address. When bulk
+and transactional share one, a campaign that draws complaints degrades delivery
+of the mail people are *waiting* for — verification, password resets — and the
+failure is invisible until someone cannot sign in.
+
+The settings health panel reports whether they are still shared. It is a warning
+rather than a blocker, because the fix is DNS and a warmed subdomain: see the
+ordered steps in `apphosting.yaml` beside `MARKETING_EMAIL_FROM`. Do not point
+it at an unverified subdomain — every campaign would then fail authentication,
+which is worse than sharing.
+
+Warming matters. A cold subdomain sending thousands on day one is
+indistinguishable from a spammer, because that is what spammers do. Start with a
+few hundred of the most engaged subscribers and grow over a fortnight.
+
+## Unsubscribe across both properties
+
+Campaign mail carries `List-Unsubscribe` and `List-Unsubscribe-Post` from
+`transport.ts`. Marketing-site mail now does too, via
+`POST /api/marketing/unsubscribe-link` — the site asks this app to mint a signed
+one-click URL for an address and attaches it.
+
+The signing key stays here. Handing `MARKETING_TOKEN_SECRET` to the other
+project so it could mint its own would put the key that makes every unsubscribe
+and tracking link unforgeable in two places, to save one HTTP call on a few
+messages a minute.
+
+Before this, site mail offered only `mailto:`. That failed twice: Gmail and
+Yahoo have required a one-click HTTPS endpoint of bulk senders since February
+2024, and an opt-out arriving in a human inbox never reached the suppression
+list — so someone could unsubscribe from a magnet and keep receiving campaigns.
+
+`sendEmail` on the site attaches the headers automatically. Callers no longer
+opt in, because forgetting was how `send-training-plan.ts` came to send no
+unsubscribe header at all. Genuinely transactional messages pass
+`transactional: true`; a lead magnet does **not** qualify simply because it was
+requested seconds earlier — to a mailbox provider it is list mail.
+
+**Tombstones.** An unsubscribe for an address with no subscriber record writes
+one anyway, keyed by the same `sha256(email)`. This is not hypothetical: the
+site sends a magnet within seconds of capture and its forward to this app is
+deliberately fire-and-forget, so mail can precede the record. Without a
+tombstone the opt-out is lost and the forward that lands a moment later creates
+the person as active — they unsubscribed, and we signed them up.
+
 ## Delivery feedback
 
 SMTP acceptance is not delivery: a message the relay accepts can bounce minutes

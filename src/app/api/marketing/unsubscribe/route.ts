@@ -35,7 +35,12 @@ async function unsubscribe(token: string | null): Promise<{ ok: boolean; reason?
     const subSnap = await db.collection(SUBSCRIBERS).doc(subscriberId).get();
     const wasActive = subSnap.exists && (subSnap.data() as Subscriber).status === 'active';
 
-    await suppressSubscriber(subscriberId, 'unsubscribed', 'email-link');
+    // createTombstone: this endpoint also serves mail sent by the marketing
+    // site, which can go out before the subscriber write has landed. Without
+    // it, an opt-out on the very first email would be silently discarded.
+    await suppressSubscriber(subscriberId, 'unsubscribed', 'email-link', {
+      createTombstone: true,
+    });
 
     // Clear the athlete's own preference too, so the profile toggle reflects
     // reality rather than claiming they are still subscribed.

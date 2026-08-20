@@ -80,6 +80,32 @@ export function getMarketingFrom(senderName?: string): string {
   return `"${name}" <${address}>`;
 }
 
+/**
+ * Whether campaigns are sent from the same address as verification email.
+ *
+ * Reputation is scored per sending domain, and increasingly per address. When
+ * bulk and transactional share one, a campaign that draws complaints degrades
+ * delivery of the mail people are *waiting* for — password resets, email
+ * verification — and the failure is invisible until someone cannot sign in.
+ *
+ * Exported and surfaced in the settings health panel rather than enforced. The
+ * fix is DNS and a warmed subdomain, which cannot be done from code and should
+ * not be discovered mid-send.
+ */
+export function sharesTransactionalSender(): boolean {
+  const marketing = (process.env.MARKETING_EMAIL_FROM || '').trim().toLowerCase();
+  const transactional = (process.env.EMAIL_FROM || '').trim().toLowerCase();
+  if (!marketing || !transactional) return false;
+  return marketing === transactional;
+}
+
+/** The domain campaigns are sent from, for the health panel. */
+export function getMarketingSenderDomain(): string | null {
+  const address = process.env.MARKETING_EMAIL_FROM || process.env.EMAIL_FROM || '';
+  const at = address.lastIndexOf('@');
+  return at >= 0 ? address.slice(at + 1).trim().toLowerCase() : null;
+}
+
 export interface BulkMessage {
   to: string;
   subject: string;
