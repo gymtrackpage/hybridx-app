@@ -82,10 +82,17 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                 setTrainingPaces(paces);
             }
 
-            const sessions = await getAllUserSessions(userId);
-            setAllSessions(sessions);
-            const streak = calculateStreakData(sessions);
-            setStreakData(streak);
+            // Sessions drive streaks and history only. A failure here (a Firestore
+            // index still building, a transient network drop) must not stop today's
+            // workout resolving below: the difference is a stale streak versus the
+            // app looking like the user has no program at all.
+            try {
+                const sessions = await getAllUserSessions(userId);
+                setAllSessions(sessions);
+                setStreakData(calculateStreakData(sessions));
+            } catch (error) {
+                logger.error('Failed to load workout sessions for streaks:', error);
+            }
 
             // Update sync time
             OfflineCache.updateSyncTime();
@@ -97,7 +104,13 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
             today.setHours(0, 0, 0, 0);
 
             // Priority 1: Check for a one-off or custom workout for today
-            const oneOffSession = await getTodaysOneOffSession(userId, today);
+            let oneOffSession: WorkoutSession | null = null;
+            try {
+                oneOffSession = await getTodaysOneOffSession(userId, today);
+            } catch (error) {
+                // Treated as "no one-off today" so the program schedule below still runs.
+                logger.error("Failed to check for today's one-off workout:", error);
+            }
 
             if (oneOffSession) {
                 workoutSessions = [oneOffSession];
@@ -123,12 +136,26 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
                     // has nothing for today — a training-calendar rearrangement may have moved a workout
                     // INTO today from another day, which only shows up as a persisted session, not as
                     // anything from getWorkoutForDay's program-default lookup.
-                    workoutSessions = await getOrCreateProgramSessionsForDay(userId, currentProgram.id, today, scheduledWorkoutInfo.sessions);
-                    currentWorkoutInfo = {
-                        day: scheduledWorkoutInfo.day,
-                        workout: workoutSessions[0]?.workoutDetails ?? null,
-                        sessions: workoutSessions.map(s => s.workoutDetails).filter((w): w is WorkoutDay => !!w),
-                    };
+                    try {
+                        workoutSessions = await getOrCreateProgramSessionsForDay(userId, currentProgram.id, today, scheduledWorkoutInfo.sessions);
+                        currentWorkoutInfo = {
+                            day: scheduledWorkoutInfo.day,
+                            workout: workoutSessions[0]?.workoutDetails ?? null,
+                            sessions: workoutSessions.map(s => s.workoutDetails).filter((w): w is WorkoutDay => !!w),
+                        };
+                    } catch (error) {
+                        // The persisted layer is unavailable, so fall back to the program's
+                        // own schedule for today. Showing the planned workout (without the
+                        // start/finish state that lives on the session docs) beats rendering
+                        // "no workout scheduled" to someone who does have an active program.
+                        logger.error("Failed to resolve today's program sessions:", error);
+                        workoutSessions = [];
+                        currentWorkoutInfo = {
+                            day: scheduledWorkoutInfo.day,
+                            workout: scheduledWorkoutInfo.sessions[0] ?? null,
+                            sessions: scheduledWorkoutInfo.sessions,
+                        };
+                    }
                 }
             }
 
