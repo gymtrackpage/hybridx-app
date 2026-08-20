@@ -14,7 +14,6 @@
 import { NextResponse } from 'next/server';
 import { guardBridge } from '@/lib/marketing/bridge-auth';
 import { captureLead, type CaptureAttribution } from '@/lib/marketing/capture';
-import { resolveRoute } from '@/lib/marketing/sources';
 import { getSubscriberByEmail } from '@/lib/marketing/subscribers';
 import { UNMAILABLE_STATUSES } from '@/lib/marketing/types';
 import { logger } from '@/lib/logger';
@@ -49,12 +48,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Email is required.' }, { status: 400 });
   }
 
-  // The site sends its own vocabulary (`build_a_bigger_engine`); the registry
-  // maps it to a route, which decides tags and consent posture. An unrecognised
-  // name resolves to the unclassified route rather than being rejected — losing
-  // a real lead because the registry trails a deploy would be the worse failure.
-  const route = resolveRoute(body.source);
-
   // Tags come from another service, so they are constrained rather than
   // trusted — an unbounded tag write would let a compromised marketing site
   // place people into any segment. Route tags are applied by the registry, not
@@ -75,9 +68,13 @@ export async function POST(request: Request) {
     : undefined;
 
   const result = await captureLead({
+    // The site's own vocabulary: an established funnel's source name, or the
+    // slug of one launched since the last deploy. Either resolves; a new one
+    // registers itself rather than being swept into a shared bucket.
+    route: body.source ?? '',
+    routeHints: { property: 'website', seenFrom: 'lead-bridge' },
     email: body.email,
     name: body.name,
-    route: route.id,
     tags: safeTags,
     // Requesting a lead magnet is not the same as agreeing to ongoing
     // marketing. The marketing site knows what its own form said, so its answer

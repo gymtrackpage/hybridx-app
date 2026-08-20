@@ -185,6 +185,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Intake routes. Written by the Admin SDK only — including the
+    // auto-registration that happens when a new funnel sends its first lead,
+    // which arrives over the server-to-server lead bridge and never from a
+    // browser. A client that could write here could invent an origin for
+    // itself and land in whatever segment it liked.
+    match /marketingRoutes/{routeId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /marketingPlans/{planId} {
       allow read: if isAdmin();
       allow write: if false;

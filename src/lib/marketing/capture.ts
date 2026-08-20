@@ -22,7 +22,8 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { emitMarketingEventAsync } from './events';
-import { grantsConsentOnCapture, resolveRoute, tagsForRoute } from './sources';
+import { resolveRouteFor, type ResolveOptions } from './route-store';
+import { grantsConsentOnCapture, tagsForRoute } from './sources';
 import {
   SUBSCRIBERS,
   isPlausibleEmail,
@@ -53,10 +54,16 @@ export interface CaptureInput {
   firstName?: string;
   lastName?: string;
   /**
-   * Which intake route this is. Accepts a route id from the registry, or one of
-   * the marketing site's own source names, which the registry maps.
+   * Which intake route this is. Accepts a route id, one of the marketing site's
+   * own source names, or the slug of a funnel the registry has never seen — a
+   * new funnel registers itself on its first lead rather than needing a deploy.
    */
   route: string;
+  /**
+   * Where this capture came from, recorded if the route turns out to be new.
+   * Only used on first sight; an established route ignores it.
+   */
+  routeHints?: Pick<ResolveOptions, 'property' | 'seenFrom'>;
   /** Tags beyond the ones the route already implies. */
   tags?: string[];
   /**
@@ -106,7 +113,15 @@ export async function captureLead(input: CaptureInput): Promise<CaptureResult> {
     return { ok: false, error: 'That does not look like a valid email address.', status: 400 };
   }
 
-  const route = resolveRoute(input.route);
+  // Registers the route if this slug has never been seen, so a funnel launched
+  // this morning tags its leads correctly this morning. The caller's consent
+  // assertion is passed through because it becomes the new route's posture —
+  // a funnel whose form promised ongoing email should not start life as one
+  // that grants nothing.
+  const route = await resolveRouteFor(input.route, {
+    consentGranted: input.consent === true,
+    ...input.routeHints,
+  });
 
   // The route's posture unless the caller states otherwise. Requesting a lead
   // magnet is not the same as agreeing to ongoing marketing, and a confirmed

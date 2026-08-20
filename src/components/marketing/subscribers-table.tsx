@@ -29,12 +29,20 @@ import {
   unsubscribeSubscriber,
 } from '@/lib/marketing/actions';
 import type { SerialisableSubscriber } from '@/lib/marketing/queries';
-import { getRoute, routesByProperty } from '@/lib/marketing/sources';
+import type { IntakeProperty } from '@/lib/marketing/sources';
 import type { SubscriberStatus } from '@/lib/marketing/types';
+
+/** Trimmed route record, passed from the server so runtime routes are included. */
+interface RouteOption {
+  id: string;
+  label: string;
+  property: IntakeProperty;
+}
 
 interface Props {
   subscribers: SerialisableSubscriber[];
   tags: Array<{ tag: string; count: number }>;
+  routes: RouteOption[];
 }
 
 /** Marks records written before the intake registry existed. */
@@ -53,7 +61,7 @@ const STATUS_STYLES: Record<SubscriberStatus, string> = {
   complained: 'bg-destructive/15 text-destructive',
 };
 
-export function SubscribersTable({ subscribers, tags }: Props) {
+export function SubscribersTable({ subscribers, tags, routes }: Props) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState('');
@@ -62,7 +70,13 @@ export function SubscribersTable({ subscribers, tags }: Props) {
   const [route, setRoute] = useState('all');
   const [syncing, setSyncing] = useState(false);
 
-  const grouped = useMemo(() => routesByProperty(), []);
+  const grouped = useMemo(() => {
+    const byProperty: Record<IntakeProperty, RouteOption[]> = { website: [], app: [], admin: [] };
+    for (const r of routes) byProperty[r.property]?.push(r);
+    return byProperty;
+  }, [routes]);
+
+  const routeById = useMemo(() => new Map(routes.map((r) => [r.id, r])), [routes]);
 
   /** How many subscribers arrived by each route, so the filter shows its own weight. */
   const routeCounts = useMemo(() => {
@@ -252,7 +266,7 @@ export function SubscribersTable({ subscribers, tags }: Props) {
                   </TableCell>
                   <TableCell>
                     {(() => {
-                      const r = s.route ? getRoute(s.route) : undefined;
+                      const r = s.route ? routeById.get(s.route) : undefined;
                       if (r) {
                         return (
                           <span className="text-sm">

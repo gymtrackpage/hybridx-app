@@ -27,6 +27,12 @@ import {
 } from './subscribers';
 import { captureLead } from './capture';
 import { emitMarketingEventAsync } from './events';
+import {
+  archiveRoute,
+  seedBuiltInRoutes,
+  updateRoute,
+  type RoutePatch,
+} from './route-store';
 import { createSegment, deleteSegment, getSegment, updateSegment } from './segment-store';
 import { syncAthletesToSubscribers } from './sync';
 import { isTokenSecretConfigured } from './tokens';
@@ -678,5 +684,62 @@ export async function setSendingPaused(paused: boolean): Promise<ActionResult> {
     return { success: true };
   } catch (err) {
     return fail(err, 'Could not change the sending state.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Intake routes
+// ---------------------------------------------------------------------------
+
+/**
+ * Configure a route.
+ *
+ * The main use is turning an auto-registered funnel into a real one: a slug
+ * that appeared on its first lead arrives with a generated label and no tags,
+ * and this is where it gets a name, a segment vocabulary and a consent posture.
+ * Saving anything clears `unconfigured`, so the console's "needs attention"
+ * list empties as they are dealt with.
+ */
+export async function saveRoute(id: string, patch: RoutePatch): Promise<ActionResult> {
+  try {
+    await assertAdmin('marketing:route:save');
+    await updateRoute(id, patch);
+
+    revalidatePath(`${MARKETING_PATH}/routes`);
+    revalidatePath(`${MARKETING_PATH}/subscribers`);
+    return { success: true };
+  } catch (err) {
+    return fail(err, 'Could not save the route.');
+  }
+}
+
+/**
+ * Stop a route matching new leads, keeping the record.
+ *
+ * Never deletes: subscribers captured by this route still carry its id, and a
+ * dangling reference would make their origin unreadable in the console.
+ */
+export async function archiveMarketingRoute(id: string): Promise<ActionResult> {
+  try {
+    await assertAdmin('marketing:route:archive');
+    await archiveRoute(id);
+
+    revalidatePath(`${MARKETING_PATH}/routes`);
+    return { success: true };
+  } catch (err) {
+    return fail(err, 'Could not archive the route.');
+  }
+}
+
+/** Write the built-in routes into Firestore so all routes are editable in one place. */
+export async function seedRoutes(): Promise<ActionResult<{ created: number }>> {
+  try {
+    await assertAdmin('marketing:route:seed');
+    const result = await seedBuiltInRoutes();
+
+    revalidatePath(`${MARKETING_PATH}/routes`);
+    return { success: true, data: result };
+  } catch (err) {
+    return fail(err, 'Could not seed the built-in routes.');
   }
 }

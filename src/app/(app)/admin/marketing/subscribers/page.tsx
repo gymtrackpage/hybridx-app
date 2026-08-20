@@ -1,4 +1,5 @@
 import { listSubscribers, listTags } from '@/lib/marketing/queries';
+import { listRoutes } from '@/lib/marketing/route-store';
 import { SubscribersTable } from '@/components/marketing/subscribers-table';
 import { AddSubscriberDialog } from '@/components/marketing/add-subscriber-dialog';
 import { ImportSubscribersDialog } from '@/components/marketing/import-subscribers-dialog';
@@ -6,7 +7,13 @@ import { ImportSubscribersDialog } from '@/components/marketing/import-subscribe
 export const dynamic = 'force-dynamic';
 
 export default async function SubscribersPage() {
-  const [subscribers, tags] = await Promise.all([listSubscribers(), listTags()]);
+  // Routes come from the store rather than the code registry, so a funnel that
+  // registered itself since the last deploy is labelled here like any other.
+  const [subscribers, tags, routes] = await Promise.all([
+    listSubscribers(),
+    listTags(),
+    listRoutes(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -23,7 +30,11 @@ export default async function SubscribersPage() {
         </div>
       </div>
 
-      <SubscribersTable subscribers={subscribers} tags={tags} />
+      <SubscribersTable
+        subscribers={subscribers}
+        tags={tags}
+        routes={routes.map((r) => ({ id: r.id, label: r.label, property: r.property }))}
+      />
     </div>
   );
 }
