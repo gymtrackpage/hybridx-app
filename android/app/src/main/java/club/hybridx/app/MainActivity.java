@@ -22,10 +22,13 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // *** CRITICAL FIX FOR OVERLAP ***
-        // Set decorFitsSystemWindows to TRUE. This tells Android NOT to draw content
-        // behind the system bars (status bar, nav bar). The system will handle
-        // the window insets and push your WebView down automatically.
+        // Asks Android not to draw content behind the system bars, so the
+        // WebView is pushed below the status bar.
+        // NOTE: this (and setStatusBarColor below) is ignored on Android 15+
+        // when targeting SDK 35 — edge-to-edge is enforced there and the
+        // WebView always sits behind the status bar. The web layout handles
+        // that case itself via env(safe-area-inset-*); see the app header and
+        // the mobile sidebar drawer.
         WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
 
         // Set a solid background color for the status bar to match your app's header
