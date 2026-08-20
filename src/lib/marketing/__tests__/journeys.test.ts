@@ -5,9 +5,11 @@ import {
   isEventTrigger,
   journeyRunId,
   validateJourney,
+  type Journey,
   type JourneyStep,
 } from '../journeys';
-import { matchesDerivedTrigger } from '../engine';
+import { matchesDerivedTrigger, triggerMatchesEvent } from '../engine';
+import type { MarketingEvent } from '../events';
 import type { User } from '@/models/types';
 
 afterEach(() => vi.useRealTimers());
@@ -280,5 +282,46 @@ describe('matchesDerivedTrigger', () => {
 
   it('returns false for a trigger it does not handle', () => {
     expect(matchesDerivedTrigger(athlete(), 'signup', 3)).toBe(false);
+  });
+});
+
+describe('triggerMatchesEvent — narrowing a trigger to one intake route', () => {
+  const journey = (trigger: Journey['trigger']): Journey =>
+    ({ id: 'j1', trigger, steps: [] }) as unknown as Journey;
+
+  const event = (payload?: Record<string, unknown>): MarketingEvent =>
+    ({ id: 'e1', type: 'consentGranted', processed: false, at: null, payload }) as MarketingEvent;
+
+  it('matches any route when the trigger does not name one', () => {
+    const j = journey({ type: 'consentGranted' });
+    expect(triggerMatchesEvent(j, event({ route: 'magnet-vo2max' }))).toBe(true);
+    expect(triggerMatchesEvent(j, event())).toBe(true);
+  });
+
+  it('matches when the event carries the named route', () => {
+    const j = journey({ type: 'consentGranted', route: 'magnet-vo2max' });
+    expect(triggerMatchesEvent(j, event({ route: 'magnet-vo2max' }))).toBe(true);
+  });
+
+  it('does NOT enrol someone who arrived by a different route', () => {
+    // The whole point of route narrowing: a VO2max welcome sequence must not
+    // greet someone who came in through the race card.
+    const j = journey({ type: 'consentGranted', route: 'magnet-vo2max' });
+    expect(triggerMatchesEvent(j, event({ route: 'magnet-race-card' }))).toBe(false);
+  });
+
+  it('does not match an event with no route at all when one is required', () => {
+    const j = journey({ type: 'consentGranted', route: 'magnet-vo2max' });
+    expect(triggerMatchesEvent(j, event())).toBe(false);
+    expect(triggerMatchesEvent(j, event({}))).toBe(false);
+  });
+
+  it('applies the route filter alongside a tag filter, not instead of it', () => {
+    const j = journey({ type: 'tagAdded', tag: 'vip', route: 'app-homepage' });
+    expect(triggerMatchesEvent(j, { ...event({ route: 'app-homepage', tag: 'vip' }), type: 'tagAdded' })).toBe(true);
+    // Right route, wrong tag.
+    expect(triggerMatchesEvent(j, { ...event({ route: 'app-homepage', tag: 'other' }), type: 'tagAdded' })).toBe(false);
+    // Right tag, wrong route.
+    expect(triggerMatchesEvent(j, { ...event({ route: 'beta-android', tag: 'vip' }), type: 'tagAdded' })).toBe(false);
   });
 });

@@ -35,6 +35,7 @@ What connects them:
 ```
 src/lib/marketing/
   types.ts          data model
+  sources.ts        the intake registry — every route in, declared once
   subscribers.ts    the only write path for the subscriber list
   capture.ts        one entry point for every lead form
   sync.ts           users -> marketingSubscribers, nightly
@@ -374,10 +375,57 @@ honoured, the shared frequency cap applies, copy is editable in the console,
 opens and clicks are attributed per campaign, and delivery goes through the
 authenticated hybridx.club domain rather than a Gmail account.
 
+## Intake routes
+
+Every address enters through one **route**, declared once in
+`src/lib/marketing/sources.ts`. A route carries its label, the tags it applies,
+the property it belongs to, and — importantly — its consent posture. Adding an
+intake path is one registry entry rather than a scattering of literals across
+route handlers.
+
+| Route | Property | Consent | Arrives from |
+|---|---|---|---|
+| `magnet-free-plan` | hybridx.club | implied | Free HYROX plan download |
+| `magnet-vo2max` | hybridx.club | implied | Build a Bigger Engine guide |
+| `magnet-race-card` | hybridx.club | **confirmed** | Race day rules card |
+| `website-signup` | hybridx.club | implied | Direct sign-up, no magnet |
+| `website-other` | hybridx.club | none | Fallback for an unrecognised source |
+| `app-homepage` | app.hybridx.club | explicit | Homepage capture form |
+| `app-account` | app.hybridx.club | none | Account creation |
+| `beta-android` | app.hybridx.club | none | Android beta request |
+| `admin-manual` | admin | none | Added by hand in the console |
+| `admin-import` | admin | none | CSV import |
+| `account-sync` | admin | none | Nightly athlete reconciliation |
+| `migration` | admin | none | Carried over from HXMailer |
+
+Consent postures: `implied` (the form says signing up means ongoing email),
+`explicit` (a marketing checkbox was ticked), `confirmed` (nothing until the
+confirmation link is clicked), `none` (the address is known, not mailable).
+
+Every subscriber carries a `route:<id>` tag and a `route` field, so the console
+can filter by origin and any journey can be narrowed to one route. Route tags
+are applied by the registry, never taken from a request — the bridge strips
+`route:` from any tags the marketing site sends, so an origin cannot be forged.
+
+**Bulk intake raises events like any other.** A CSV import of 5,000 rows emits
+5,000 `subscriberCreated` events. That is correct — an imported contact should
+be as reachable by automation as any other — but it means a *route-less* welcome
+journey would enrol the whole file. The seeded welcome journeys are each scoped
+to a route, and none of them to `admin-import`, so an import matches nothing by
+default. Keep it that way, or pause journeys before a large import.
+
+**The marketing site keeps its own vocabulary.** It sends `source` values like
+`build_a_bigger_engine`; `aliases` on the registry map them. An unrecognised
+name resolves to `website-other` rather than being rejected, so a new magnet
+does not require both projects to deploy in lockstep — the lead lands, tagged
+`route:unclassified`, which is the prompt to add a proper entry.
+
 ## Triggers wired into the app
 
 | Event | Raised from |
 |---|---|
+| `subscriberCreated` | `captureLead()` — any route, the first time an address is seen |
+| `consentGranted` | `captureLead()` — when someone becomes mailable, including a confirmation click |
 | `signup` | `src/services/user-service.ts`, where the user document is created |
 | `subscriptionCanceled`, `paymentFailed` | `src/app/api/stripe/webhook/route.ts` |
 | `stravaConnected` | `src/app/api/strava/exchange/route.ts` |
@@ -387,6 +435,24 @@ authenticated hybridx.club domain rather than a Gmail account.
 All are emitted fire-and-forget through `emitMarketingEventAsync`, *after* the
 write they describe. A marketing automation must never be able to fail a signup,
 an OAuth callback, or a Stripe webhook that Stripe would then retry.
+
+**Use `consentGranted`, not `subscriberCreated`, for a nurture sequence.**
+Creation says we know someone; consent says we may mail them. On a single
+opt-in route the two fire together, but on the confirmed opt-in race-card route
+creation happens when the card is *requested* and consent only when the link is
+clicked. A welcome journey keyed on creation would enrol people who never
+confirmed, and then never send to them — the engine refuses to mail without
+consent, so the run would sit there looking active and doing nothing.
+
+Any event trigger can be narrowed with `trigger.route`, so "welcome the people
+who took the VO2max guide" and "welcome everyone" are the same journey with and
+without that field. A route-less welcome journey will overlap with every
+route-scoped one; the shared frequency cap prevents a pile-up, but scoping each
+journey to a route is the clearer design.
+
+The nightly athlete sync deliberately raises **no** events. It is
+reconciliation, not intake: emitting `subscriberCreated` for the existing roster
+would enrol the entire back catalogue into whatever welcome journey is live.
 
 Derived triggers (`trialEndingSoon`, `onboardingStalled`, `noWorkoutAfterNDays`,
 `churnRisk`, `raceDateApproaching`) are not events — nothing "happens" when a

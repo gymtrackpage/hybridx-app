@@ -24,8 +24,8 @@ import {
   resubscribe,
   subscriberId as hashEmail,
   suppressSubscriber,
-  upsertSubscriber,
 } from './subscribers';
+import { captureLead } from './capture';
 import { emitMarketingEventAsync } from './events';
 import { createSegment, deleteSegment, getSegment, updateSegment } from './segment-store';
 import { syncAthletesToSubscribers } from './sync';
@@ -430,14 +430,21 @@ export async function addSubscriber(input: {
   try {
     await assertAdmin('marketing:subscriber:add');
 
-    const result = await upsertSubscriber({
+    // Through captureLead rather than straight to the subscriber store, so an
+    // admin-added contact carries a route tag and raises the same events as any
+    // other intake — otherwise a person added by hand is invisible to every
+    // journey, which is exactly the surprise this registry exists to remove.
+    const result = await captureLead({
       email: input.email,
       firstName: input.firstName,
       lastName: input.lastName,
       tags: input.tags,
-      source: 'admin',
-      consent: { marketing: input.consent, method: 'admin-added' },
+      route: 'admin-manual',
+      consent: input.consent,
+      consentMethod: 'admin-added',
     });
+
+    if (!result.ok) return { success: false, error: result.error };
 
     revalidatePath(`${MARKETING_PATH}/subscribers`);
     return { success: true, data: { id: result.id, created: result.created } };
@@ -522,20 +529,21 @@ export async function importSubscribers(
     let skipped = 0;
 
     for (const row of rows) {
-      try {
-        const result = await upsertSubscriber({
-          email: row.email,
-          firstName: row.firstName,
-          lastName: row.lastName,
-          tags: [...(row.tags ?? []), ...(options.extraTag ? [options.extraTag] : [])],
-          source: 'import',
-          consent: { marketing: options.consent, method: 'csv-import' },
-        });
-        if (result.created) added++;
-        else merged++;
-      } catch {
-        skipped++; // Invalid address — reported in the summary rather than aborting the import.
-      }
+      const result = await captureLead({
+        email: row.email,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        tags: [...(row.tags ?? []), ...(options.extraTag ? [options.extraTag] : [])],
+        route: 'admin-import',
+        consent: options.consent,
+        consentMethod: 'csv-import',
+      });
+
+      // Invalid addresses are reported in the summary rather than aborting the
+      // import — one bad row in a thousand should not cost the other 999.
+      if (!result.ok) skipped++;
+      else if (result.created) added++;
+      else merged++;
     }
 
     revalidatePath(`${MARKETING_PATH}/subscribers`);

@@ -65,6 +65,13 @@ export interface Subscriber {
   tags: string[];
   status: SubscriberStatus;
   source: SubscriberSource;
+  /**
+   * The intake route this address arrived by — see lib/marketing/sources.ts.
+   * Finer-grained than `source`, which only says "a landing page" where this
+   * says which one. Mirrored as a `route:<id>` tag so segments can filter on it
+   * without a separate index. Absent on records predating the registry.
+   */
+  route?: string;
   consent: SubscriberConsent;
   /** Set when this address belongs to a HybridX athlete, enabling rich segmentation. */
   userId?: string;

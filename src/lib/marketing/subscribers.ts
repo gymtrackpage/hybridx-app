@@ -81,6 +81,8 @@ export interface UpsertInput {
   /** Merged with any tags already on the record — never replaces them. */
   tags?: string[];
   source: SubscriberSource;
+  /** Intake route id — see lib/marketing/sources.ts. Set on create only. */
+  route?: string;
   userId?: string;
   consent?: Partial<SubscriberConsent> & { marketing: boolean };
 }
@@ -90,6 +92,17 @@ export interface UpsertResult {
   created: boolean;
   /** True when the record exists but is unsubscribed/bounced/complained. */
   suppressed: boolean;
+  /**
+   * True when this write moved the record from no marketing consent to having
+   * it — either on create, or later when a confirmation link is clicked.
+   *
+   * Reported because consent, not creation, is the moment someone becomes
+   * mailable, and therefore the moment a nurture sequence should begin. A
+   * confirmed opt-in magnet creates the record on request and grants consent
+   * only on confirmation; a journey keyed on creation would fire for someone
+   * who never confirmed, and one keyed on nothing at all would never fire.
+   */
+  consentGranted: boolean;
 }
 
 /**
@@ -121,6 +134,7 @@ export async function upsertSubscriber(input: UpsertInput): Promise<UpsertResult
         tags: Array.from(new Set(input.tags ?? [])),
         status: 'active',
         source: input.source,
+        ...(input.route ? { route: input.route } : {}),
         consent: {
           marketing: input.consent?.marketing ?? false,
           at: now,
@@ -135,7 +149,12 @@ export async function upsertSubscriber(input: UpsertInput): Promise<UpsertResult
         updatedAt: now,
       };
       tx.set(ref, doc);
-      return { id, created: true, suppressed: false };
+      return {
+        id,
+        created: true,
+        suppressed: false,
+        consentGranted: input.consent?.marketing === true,
+      };
     }
 
     const existing = snap.data() as Subscriber;
@@ -156,7 +175,9 @@ export async function upsertSubscriber(input: UpsertInput): Promise<UpsertResult
 
     // Consent may be granted on a mailable record, and may always be withdrawn.
     // Granting it on a suppressed record would quietly undo an unsubscribe.
-    if (input.consent && (!suppressed || input.consent.marketing === false)) {
+    const mayWriteConsent = !!input.consent && (!suppressed || input.consent.marketing === false);
+
+    if (input.consent && mayWriteConsent) {
       update.consent = {
         marketing: input.consent.marketing,
         at: now,
@@ -165,8 +186,15 @@ export async function upsertSubscriber(input: UpsertInput): Promise<UpsertResult
       };
     }
 
+    // A transition, not a state: re-submitting a form you already consented to
+    // must not re-trigger the sequence you were sent the first time.
+    const consentGranted =
+      mayWriteConsent &&
+      input.consent?.marketing === true &&
+      existing.consent?.marketing !== true;
+
     tx.update(ref, update);
-    return { id, created: false, suppressed };
+    return { id, created: false, suppressed, consentGranted };
   });
 }
 

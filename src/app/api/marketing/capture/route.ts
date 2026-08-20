@@ -59,8 +59,11 @@ export async function POST(request: Request) {
   const result = await captureLead({
     email: body.email,
     name: body.name,
-    source: 'landing',
-    tags: ['source:landing', ...safeTags],
+    route: 'app-homepage',
+    tags: safeTags,
+    // The route is explicit-consent, but this endpoint has already rejected the
+    // request unless consent was ticked, so stating it here keeps the two in
+    // step if the route's posture is ever revised.
     consent: true,
     consentMethod: 'landing-form',
     attribution: body.attribution,

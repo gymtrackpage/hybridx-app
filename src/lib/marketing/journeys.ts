@@ -31,6 +31,7 @@ import type { SegmentDefinition } from './segments';
  */
 export const EVENT_TRIGGERS = [
   'subscriberCreated',
+  'consentGranted',
   'signup',
   'tagAdded',
   'firstWorkoutCompleted',
@@ -74,7 +75,11 @@ export function isDerivedTrigger(t: TriggerType): t is DerivedTriggerType {
 export const TRIGGER_DESCRIPTIONS: Record<TriggerType, string> = {
   manual: 'Sent by hand from the campaigns screen.',
   scheduled: 'Sent once at a chosen date and time.',
-  subscriberCreated: 'Someone joins the mailing list from any source.',
+  subscriberCreated:
+    'Someone joins the mailing list from any source, whether or not they may be mailed yet.',
+  consentGranted:
+    'Someone becomes mailable — they opted in, or clicked a confirmation link. ' +
+    'This is the trigger a welcome or nurture sequence should normally use.',
   signup: 'An athlete creates a HYBRIDX account.',
   tagAdded: 'A specific tag is applied to a subscriber.',
   firstWorkoutCompleted: 'An athlete logs their first workout.',
@@ -102,6 +107,13 @@ const triggerSchema = z.object({
   tag: z.string().optional(),
   milestone: z.number().int().positive().optional(),
   eventName: z.string().optional(),
+  /**
+   * Narrow the trigger to one intake route — see lib/marketing/sources.ts.
+   * Applies to any event trigger, so "welcome the people who took the VO2max
+   * guide" and "welcome everyone" are the same journey with and without this
+   * field, rather than two mechanisms.
+   */
+  route: z.string().optional(),
 });
 
 export type JourneyTrigger = z.infer<typeof triggerSchema>;

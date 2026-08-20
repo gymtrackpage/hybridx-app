@@ -55,7 +55,7 @@ interface SeedJourney {
   id: string;
   name: string;
   goal: string;
-  trigger: { type: string; days?: number };
+  trigger: { type: string; days?: number; route?: string };
   exitOnConversion?: 'workoutLogged' | 'subscriptionActive' | 'programStarted';
   /** Alternating email / wait, mirroring the cadence of the cron it replaces. */
   steps: Array<{ kind: 'email'; email: SeedEmail } | { kind: 'wait'; hours: number }>;
@@ -145,6 +145,145 @@ const JOURNEYS: SeedJourney[] = [
             { type: 'hero', heading: 'Still here when you are' },
             { type: 'paragraph', text: 'Hi [First Name], you have not logged a session yet. That is genuinely fine — but your programme is built and waiting, and the first one is the only difficult one.' },
             cta('Pick up where you left off'),
+          ],
+        },
+      },
+    ],
+  },
+
+  // ── Lead nurture, one journey per intake route ─────────────────────────
+  //
+  // These are what the marketing site's magnets have never had. Each triggers
+  // on `consentGranted` rather than `subscriberCreated`, so it begins at the
+  // moment the person actually became mailable — which for the race card is
+  // the confirmation click, not the original request.
+  //
+  // Each is narrowed to one route, so someone who took the VO2max guide is not
+  // greeted as though they took the race card. Copy is a starting point: read
+  // and edit it in the console before activating, exactly as with the nudges
+  // above.
+  {
+    id: 'seeded-welcome-vo2max',
+    name: 'Welcome — VO2max guide',
+    goal: 'Turn a VO2max guide download into a trial signup.',
+    trigger: { type: 'consentGranted', route: 'magnet-vo2max' },
+    steps: [
+      {
+        kind: 'email',
+        email: {
+          subject: 'Your engine guide — and what to do with it',
+          previewText: 'The three sessions that move VO2max fastest.',
+          blocks: [
+            { type: 'hero', heading: 'You have the guide. Here is where to start.' },
+            { type: 'paragraph', text: 'Hi [First Name], thanks for picking up Build a Bigger Engine. Most people read it once and then wonder which session to do on Monday, so here is the short answer.' },
+            { type: 'bulletList', items: ['One hard interval session a week — that is where VO2max actually moves', 'One long easy run, slower than feels productive', 'Everything else can be compromise work'] },
+            { type: 'paragraph', text: 'The guide explains why. If you would rather not build the schedule yourself, HYBRIDX does it for you.' },
+            cta('See a plan built round your race', '/'),
+          ],
+        },
+      },
+      { kind: 'wait', hours: 72 },
+      {
+        kind: 'email',
+        email: {
+          subject: 'The mistake that stalls most HYROX engines',
+          previewText: 'Running every session at the same middling pace.',
+          blocks: [
+            { type: 'hero', heading: 'Too hard on easy days, too easy on hard days' },
+            { type: 'paragraph', text: '[First Name], this is the single most common pattern we see. Easy runs creep up to moderate, intervals drift down to moderate, and everything becomes the same middling effort that improves nothing much.' },
+            { type: 'paragraph', text: 'Fixing it costs nothing except discipline on the easy days. A structured plan makes it harder to get wrong, because the session tells you the target rather than your legs deciding on the day.' },
+            cta('Try HYBRIDX free', '/'),
+          ],
+        },
+      },
+    ],
+  },
+  {
+    id: 'seeded-welcome-race-card',
+    name: 'Welcome — race day rules card',
+    goal: 'Convert a race-card download into a trial before the athlete’s race.',
+    // Confirmed opt-in: this fires on the confirmation click, not the request.
+    trigger: { type: 'consentGranted', route: 'magnet-race-card' },
+    steps: [
+      {
+        kind: 'email',
+        email: {
+          subject: 'Your race day card is confirmed',
+          previewText: 'Print it, or keep it on your phone for the briefing.',
+          blocks: [
+            { type: 'hero', heading: 'Confirmed — here is your card' },
+            { type: 'paragraph', text: 'Thanks [First Name]. The 2026 rules card is yours. Most athletes keep it on their phone and read it again during the race briefing, when the details actually matter.' },
+            { type: 'paragraph', text: 'The rules that catch people out are rarely the obvious ones. Standards on wall balls and sled depth cost more races than any fitness gap.' },
+            cta('Read the full 2026 rule changes', '/hyrox-rule-changes-2026'),
+          ],
+        },
+      },
+      { kind: 'wait', hours: 96 },
+      {
+        kind: 'email',
+        email: {
+          subject: 'Knowing the rules is the easy half',
+          previewText: 'The other half is arriving able to hold the standard when tired.',
+          blocks: [
+            { type: 'hero', heading: 'No-repping happens when you are tired, not when you are ignorant' },
+            { type: 'paragraph', text: '[First Name], almost nobody fails a wall ball standard fresh. They fail it at station seven, when depth quietly disappears because their legs have gone.' },
+            { type: 'paragraph', text: 'That is a training problem, not a rules problem. A HYROX plan that builds fatigue resistance under the standard is what stops it on race day.' },
+            cta('Build your race plan', '/'),
+          ],
+        },
+      },
+    ],
+  },
+  {
+    id: 'seeded-welcome-free-plan',
+    name: 'Welcome — free HYROX plan',
+    goal: 'Get a free-plan downloader into the app to train the plan properly.',
+    trigger: { type: 'consentGranted', route: 'magnet-free-plan' },
+    steps: [
+      {
+        kind: 'email',
+        email: {
+          subject: 'Your 12-week plan — start here',
+          previewText: 'Week one matters less than you think. Consistency matters more.',
+          blocks: [
+            { type: 'hero', heading: 'The plan is yours. Now the boring part.' },
+            { type: 'paragraph', text: 'Hi [First Name], the download is a PDF, which means it cannot adapt when you miss a session, travel, or pick up a niggle — and you will do all three across twelve weeks.' },
+            { type: 'paragraph', text: 'Train it as written for the first fortnight. If you find yourself rescheduling constantly, that is the point at which a plan that moves with you starts earning its keep.' },
+            cta('Train this plan in the app', '/'),
+          ],
+        },
+      },
+      { kind: 'wait', hours: 168 },
+      {
+        kind: 'email',
+        email: {
+          subject: 'How is week one going?',
+          previewText: 'The athletes who finish are the ones who missed sessions and carried on.',
+          blocks: [
+            { type: 'hero', heading: 'Missed a session already?' },
+            { type: 'paragraph', text: 'Good — so did almost everyone, [First Name]. The twelve-week plans that get finished are not the ones executed perfectly. They are the ones where a missed Tuesday did not turn into a missed fortnight.' },
+            cta('Pick the plan back up', '/'),
+          ],
+        },
+      },
+    ],
+  },
+  {
+    id: 'seeded-welcome-app-homepage',
+    name: 'Welcome — app homepage sign-up',
+    goal: 'Introduce someone who joined the list directly, with no magnet.',
+    trigger: { type: 'consentGranted', route: 'app-homepage' },
+    steps: [
+      {
+        kind: 'email',
+        email: {
+          subject: 'Welcome to HYBRIDX',
+          previewText: 'What we send, and how often.',
+          blocks: [
+            { type: 'hero', heading: 'Glad you are here' },
+            { type: 'paragraph', text: 'Hi [First Name] — you will get HYROX training that is worth reading, and not much else. A few emails a month, never more than a few a week, and an unsubscribe link on every one.' },
+            { type: 'paragraph', text: 'If you want to start training properly in the meantime, the app builds a plan round your race date, your experience and the days you can actually train.' },
+            cta('Start your free trial', '/'),
           ],
         },
       },

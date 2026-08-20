@@ -91,6 +91,12 @@ export function mergeTags(existing: string[], derived: string[]): string[] {
  * what the send path checks. This is the difference between a list you can
  * lawfully mail and one you merely possess.
  *
+ * Deliberately does NOT go through captureLead, and so raises no events. This
+ * is reconciliation, not intake: the athletes it writes have been on the roster
+ * for weeks or months, and emitting `subscriberCreated` for each of them would
+ * enrol the entire back catalogue into whatever welcome journey is live. Real
+ * signups raise their own `signup` event at the moment they happen.
+ *
  * @param batchLimit Cap on athletes processed per invocation, so a cron run
  *                   stays inside its timeout on a large roster.
  */
@@ -142,6 +148,7 @@ export async function syncAthletesToSubscribers(batchLimit = 5000): Promise<Sync
           tags: mergeTags([], derived),
           status: 'active',
           source: 'sync',
+          route: 'account-sync',
           userId: user.id,
           consent: {
             marketing: user.marketingConsent === true,

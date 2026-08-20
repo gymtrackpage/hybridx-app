@@ -122,8 +122,13 @@ export async function processEvents(): Promise<{ processed: number; enrolled: nu
 }
 
 /** Trigger parameters beyond the event type itself — a specific tag, a milestone number. */
-function triggerMatchesEvent(journey: Journey, event: MarketingEvent): boolean {
+export function triggerMatchesEvent(journey: Journey, event: MarketingEvent): boolean {
   const { trigger } = journey;
+
+  // Route narrowing applies to every event trigger, so it is checked before the
+  // type-specific parameters. A journey asking for one route must not enrol
+  // someone who arrived by another, even when the event type matches.
+  if (trigger.route && event.payload?.route !== trigger.route) return false;
 
   if (trigger.type === 'tagAdded' && trigger.tag) {
     return event.payload?.tag === trigger.tag;

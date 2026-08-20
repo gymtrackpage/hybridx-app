@@ -14,19 +14,12 @@
 import { NextResponse } from 'next/server';
 import { guardBridge } from '@/lib/marketing/bridge-auth';
 import { captureLead, type CaptureAttribution } from '@/lib/marketing/capture';
+import { resolveRoute } from '@/lib/marketing/sources';
 import { getSubscriberByEmail } from '@/lib/marketing/subscribers';
 import { UNMAILABLE_STATUSES } from '@/lib/marketing/types';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
-
-/** Magnet names the marketing site uses, mapped to the tag applied here. */
-const KNOWN_SOURCES: Record<string, string> = {
-  free_hyrox_plan: 'magnet:free-plan',
-  sign_up: 'magnet:signup',
-  build_a_bigger_engine: 'magnet:vo2max-guide',
-  hyrox_rules_card: 'magnet:race-card',
-};
 
 interface LeadBody {
   email?: string;
@@ -56,13 +49,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Email is required.' }, { status: 400 });
   }
 
-  const sourceTag = body.source ? KNOWN_SOURCES[body.source] : undefined;
+  // The site sends its own vocabulary (`build_a_bigger_engine`); the registry
+  // maps it to a route, which decides tags and consent posture. An unrecognised
+  // name resolves to the unclassified route rather than being rejected — losing
+  // a real lead because the registry trails a deploy would be the worse failure.
+  const route = resolveRoute(body.source);
 
   // Tags come from another service, so they are constrained rather than
   // trusted — an unbounded tag write would let a compromised marketing site
-  // place people into any segment.
+  // place people into any segment. Route tags are applied by the registry, not
+  // taken from the request, so this cannot be used to forge an origin.
   const safeTags = (body.tags ?? [])
     .filter((t) => typeof t === 'string' && /^[a-z0-9:-]{1,40}$/.test(t))
+    .filter((t) => !t.startsWith('route:'))
     .slice(0, 5);
 
   const attribution: CaptureAttribution | undefined = body.utm
@@ -78,12 +77,12 @@ export async function POST(request: Request) {
   const result = await captureLead({
     email: body.email,
     name: body.name,
-    source: 'landing',
-    tags: ['source:website', ...(sourceTag ? [sourceTag] : []), ...safeTags],
+    route: route.id,
+    tags: safeTags,
     // Requesting a lead magnet is not the same as agreeing to ongoing
-    // marketing. The marketing site says which it was; absent that, the
-    // conservative reading applies and the person is stored but not mailed.
-    consent: body.consent === true,
+    // marketing. The marketing site knows what its own form said, so its answer
+    // wins; absent one, the route's posture applies, which is conservative.
+    consent: typeof body.consent === 'boolean' ? body.consent : undefined,
     consentMethod: body.consentMethod ?? (body.source ? `magnet:${body.source}` : 'website'),
     attribution,
   });
@@ -97,11 +96,17 @@ export async function POST(request: Request) {
   const subscriber = await getSubscriberByEmail(body.email).catch(() => null);
   const suppressed = subscriber ? UNMAILABLE_STATUSES.includes(subscriber.status) : false;
 
-  logger.log(`[marketing/leads] ingested ${body.source ?? 'website'} lead (created=${result.created})`);
+  logger.log(
+    `[marketing/leads] ingested ${body.source ?? 'website'} lead as route ${result.route} ` +
+      `(created=${result.created})`,
+  );
 
   return NextResponse.json({
     success: true,
     created: result.created,
+    // Echoed so the marketing site can log which route its lead landed on, and
+    // notice when a new magnet is still resolving to the unclassified route.
+    route: result.route,
     suppressed,
     status: subscriber?.status ?? 'active',
   });
