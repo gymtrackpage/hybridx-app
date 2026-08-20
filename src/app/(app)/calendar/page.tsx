@@ -39,6 +39,7 @@ import { canFixTreadmill } from '@/lib/treadmill';
 import { useToast } from '@/hooks/use-toast';
 import { useDebouncedCallback } from 'use-debounce';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/logger';
 
 const MonthCalendarWidget = lazy(() => import('@/components/ui/calendar').then(mod => ({ default: mod.Calendar })));
 const LinkStravaActivityDialog = lazy(() => import('@/components/link-strava-activity-dialog').then(mod => ({ default: mod.LinkStravaActivityDialog })));
@@ -177,7 +178,15 @@ function WeeklyScheduleView() {
       const cappedEnd = addDays(today0, MAX_FUTURE_WEEKS * 7 - 1);
       const rangeEnd = candidateEnd < cappedEnd ? candidateEnd : cappedEnd;
 
-      const sessions = await getAllUserSessions(fbUser.uid);
+      // Persisted sessions only override the program's own schedule per day. If the
+      // read fails, still build the calendar from the program itself rather than
+      // leaving the athlete with an empty calendar and no way to tell why.
+      let sessions: WorkoutSession[] = [];
+      try {
+        sessions = await getAllUserSessions(fbUser.uid);
+      } catch (error) {
+        logger.error('Failed to load workout sessions for the calendar:', error);
+      }
       const slots = buildDaySlots(userProgram, startDate, sessions, rangeStart, rangeEnd);
 
       setAllSlots(slots);
@@ -539,7 +548,14 @@ function MonthGridCalendarView() {
       }
       setProgram(userProgram);
 
-      const sessions = await getAllUserSessions(fbUser.uid);
+      // Same reasoning as the schedule view: a sessions failure must not stop the
+      // month grid rendering the assigned program.
+      let sessions: WorkoutSession[] = [];
+      try {
+        sessions = await getAllUserSessions(fbUser.uid);
+      } catch (error) {
+        logger.error('Failed to load workout sessions for the month view:', error);
+      }
       generateWorkoutEvents(userProgram, user?.startDate, sessions);
     } catch (error) {
       console.error('Error fetching calendar data:', error);
