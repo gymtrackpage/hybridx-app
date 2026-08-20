@@ -192,6 +192,17 @@ export async function resolveRouteFor(
 
   const fallback = routes.get(FALLBACK_ROUTE_ID)!;
 
+  // An archived route still exists, so it must not reach autoRegister: create()
+  // would fail with ALREADY_EXISTS and the recovery path would hand back the
+  // archived route as the resolution, making archiving a no-op for intake. Leads
+  // for a retired funnel land as unclassified, which is the honest answer — the
+  // funnel is closed, and its journeys should not enrol anybody new.
+  const archived = routes.get(slug);
+  if (archived?.status === 'archived') {
+    logger.log(`[marketing/routes] "${slug}" is archived; filing lead as ${FALLBACK_ROUTE_ID}`);
+    return fallback;
+  }
+
   if (!slug || options.autoRegister === false) return fallback;
 
   // An unusable slug is not worth a permanent document, but the lead behind it
@@ -265,6 +276,13 @@ async function autoRegister(
   } catch (err) {
     // A create() that lost a race means the route now exists, which is the
     // outcome we wanted — re-read rather than treating it as a failure.
+    //
+    // The cache must be dropped first. The losing instance never invalidated
+    // its own copy (the winner invalidated only its own), so a plain re-read
+    // would return the same stale map that caused the miss, report failure, and
+    // file the lead as unclassified — under the route the admin is about to
+    // attach a welcome journey to.
+    invalidateRouteCache();
     const routes = await getAllRoutes();
     const raced = routes.get(slug);
     if (raced) return raced;

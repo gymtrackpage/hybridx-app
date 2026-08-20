@@ -28,9 +28,26 @@ describe('sharesTransactionalSender — the invisible deliverability failure', (
     expect(sharesTransactionalSender()).toBe(true);
   });
 
-  it('does not claim a conflict when either address is unset', () => {
+  it('flags an unset MARKETING_EMAIL_FROM, because campaigns then fall back to EMAIL_FROM', () => {
+    // The previous version of this check returned false here and the health
+    // panel rendered a green tick reading "apart from transactional mail" —
+    // while getMarketingFrom() resolved campaigns to the verification address.
+    // A green light for the most common form of the misconfiguration is worse
+    // than no check at all.
     delete process.env.MARKETING_EMAIL_FROM;
     process.env.EMAIL_FROM = 'training@hybridx.club';
+    expect(sharesTransactionalSender()).toBe(true);
+  });
+
+  it('sees through the display-name form both variables are set in', () => {
+    process.env.MARKETING_EMAIL_FROM = '"HYBRIDX" <training@hybridx.club>';
+    process.env.EMAIL_FROM = 'training@hybridx.club';
+    expect(sharesTransactionalSender()).toBe(true);
+  });
+
+  it('claims no conflict when nothing at all is configured', () => {
+    delete process.env.MARKETING_EMAIL_FROM;
+    delete process.env.EMAIL_FROM;
     expect(sharesTransactionalSender()).toBe(false);
   });
 });
@@ -38,6 +55,11 @@ describe('sharesTransactionalSender — the invisible deliverability failure', (
 describe('getMarketingSenderDomain', () => {
   it('reads the domain campaigns actually send from', () => {
     process.env.MARKETING_EMAIL_FROM = 'news@mail.hybridx.club';
+    expect(getMarketingSenderDomain()).toBe('mail.hybridx.club');
+  });
+
+  it('strips the display-name wrapper rather than reporting a trailing bracket', () => {
+    process.env.MARKETING_EMAIL_FROM = '"HYBRIDX" <news@mail.hybridx.club>';
     expect(getMarketingSenderDomain()).toBe('mail.hybridx.club');
   });
 

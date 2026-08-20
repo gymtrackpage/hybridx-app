@@ -210,9 +210,15 @@ async function evaluateSegmentEntry(journey: Journey): Promise<number> {
   const audience = await resolveSegment(segment.definition ?? {});
   const matchingNow = new Set(audience.subscribers.map((s) => s.id));
 
+  // Keyed by journey, not by segment. Two live journeys may watch the same
+  // saved segment; with one shared marker the first to run would claim every
+  // entrant and the second would see an empty `entering` set for ever — live,
+  // and enrolling nobody, which is the failure this trigger was fixed to end.
+  const marker = `${journey.id}:${segmentId}`;
+
   const previousSnap = await db
     .collection(SUBSCRIBERS)
-    .where('matchedSegments', 'array-contains', segmentId)
+    .where('matchedSegments', 'array-contains', marker)
     .get();
   const matchedBefore = new Set(previousSnap.docs.map((d) => d.id));
 
@@ -225,20 +231,26 @@ async function evaluateSegmentEntry(journey: Journey): Promise<number> {
   const writer = db.bulkWriter();
   for (const id of entering) {
     writer.update(db.collection(SUBSCRIBERS).doc(id), {
-      matchedSegments: FieldValue.arrayUnion(segmentId),
+      matchedSegments: FieldValue.arrayUnion(marker),
     });
   }
   for (const id of leaving) {
     writer.update(db.collection(SUBSCRIBERS).doc(id), {
-      matchedSegments: FieldValue.arrayRemove(segmentId),
+      matchedSegments: FieldValue.arrayRemove(marker),
     });
   }
   await writer.close();
 
-  const seeded = (segment as { enteredSeeded?: boolean }).enteredSeeded === true;
+  // Per journey too: a second journey attached to an already-seeded segment
+  // must get its own quiet first pass rather than immediately enrolling every
+  // existing member.
+  const seededFor = (segment as { enteredSeededFor?: string[] }).enteredSeededFor ?? [];
+  const seeded = seededFor.includes(journey.id);
 
   if (!seeded) {
-    await segmentSnap.ref.update({ enteredSeeded: true });
+    await segmentSnap.ref.update({
+      enteredSeededFor: FieldValue.arrayUnion(journey.id),
+    });
     logger.log(
       `[marketing/engine] segmentEntered: seeded ${matchingNow.size} existing members of ` +
         `${segmentId} without enrolling`,
@@ -246,9 +258,18 @@ async function evaluateSegmentEntry(journey: Journey): Promise<number> {
     return 0;
   }
 
+  // userId matters: without it `shouldExit` returns null for every athlete
+  // condition and `evaluateBranch` returns false for every branch, so a journey
+  // with exitOnConversion would chase someone who has already converted and
+  // every branch would take its false path. Every other derived trigger passes
+  // it; this one was the exception.
+  const userIdBySubscriber = new Map(
+    audience.subscribers.map((sub) => [sub.id, sub.userId] as const),
+  );
+
   let enrolled = 0;
   for (const subscriberId of entering) {
-    const result = await enrolSubscriber(journey, subscriberId);
+    const result = await enrolSubscriber(journey, subscriberId, userIdBySubscriber.get(subscriberId));
     if (result === 'enrolled') enrolled++;
   }
 

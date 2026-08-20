@@ -35,6 +35,31 @@ export const ACTIVITY_STATE_DOC = 'marketingSettings/activity';
 const SESSIONS = 'workoutSessions';
 
 /**
+ * Marker written on a session once it has been added to its athlete's counter.
+ *
+ * This is what makes counting idempotent, and it is not optional. The counter is
+ * a read-add-write, the cursor only advances at the end of a page, and the cron
+ * fires every five minutes with a five-minute budget — so an interrupted pass or
+ * two overlapping invocations would otherwise count the same sessions twice and
+ * inflate `completedWorkouts` without bound, firing milestone emails for totals
+ * the athlete never reached.
+ */
+const COUNTED_FIELD = 'marketingCounted';
+
+/**
+ * How far back the daily sweep looks for sessions written with a past
+ * `finishedAt`.
+ *
+ * Two completion paths do exactly that: a manual log records the day the athlete
+ * says they trained, and a Strava import records the activity's own start time.
+ * Both can be days old, so once the forward scan is caught up its watermark sits
+ * ahead of them and they are never read. The sweep is daily rather than
+ * continuous because re-reading a month of sessions every five minutes would
+ * cost more than the counters are worth.
+ */
+const BACKDATE_LOOKBACK_DAYS = 45;
+
+/**
  * Counts worth an email. Deliberately sparse — a note on someone's 10th
  * session reads as encouragement, one on every session reads as noise.
  */
@@ -123,8 +148,22 @@ export async function syncWorkoutActivity(pageSize = 500): Promise<ActivitySyncR
     .get();
 
   // Sessions already accounted for on the previous pass, re-read because the
-  // query is inclusive of the watermark.
-  const fresh = snap.docs.filter((d) => !state.lastIds.includes(d.id));
+  // query is inclusive of the watermark — plus anything already counted, and
+  // anything skipped.
+  //
+  // `skipped` matters more than it looks. A skipped workout is written with a
+  // real `finishedAt` *and* `skipped: true` (see the active workout screen), so
+  // counting on `finishedAt` alone treats abandoning a session as completing
+  // one. An athlete who skipped ten would be congratulated on their tenth
+  // workout, tagged `engagement:regular`, and excluded from the re-engagement
+  // journey they should be in. The rest of the codebase defines completion as
+  // `finishedAt && !skipped`; so does this.
+  const fresh = snap.docs.filter(
+    (d) =>
+      !state.lastIds.includes(d.id) &&
+      d.data()?.skipped !== true &&
+      d.data()?.[COUNTED_FIELD] !== true,
+  );
 
   const result: ActivitySyncResult = {
     scanned: fresh.length,
@@ -161,15 +200,15 @@ export async function syncWorkoutActivity(pageSize = 500): Promise<ActivitySyncR
 
   // Group by athlete so each one takes a single transaction regardless of how
   // many sessions they finished in this window.
-  const perUser = new Map<string, number>();
+  const perUser = new Map<string, string[]>();
   for (const doc of fresh) {
     const userId = doc.data().userId as string | undefined;
     if (!userId) continue;
-    perUser.set(userId, (perUser.get(userId) ?? 0) + 1);
+    perUser.set(userId, [...(perUser.get(userId) ?? []), doc.id]);
   }
 
-  for (const [userId, added] of perUser) {
-    const outcome = await applyWorkoutCount(userId, added);
+  for (const [userId, sessionIds] of perUser) {
+    const outcome = await applyWorkoutSessions(userId, sessionIds);
     if (!outcome) continue;
 
     result.athletes++;
@@ -221,42 +260,143 @@ export async function syncWorkoutActivity(pageSize = 500): Promise<ActivitySyncR
 }
 
 /**
- * Add to an athlete's completed-workout counter and report the transition.
+ * Add an athlete's uncounted sessions to their counter and report the transition.
  *
  * Transactional because the before-and-after values are what decide whether an
- * email goes out; a bare increment would give the new total but not the old,
- * and re-reading afterwards could observe another pass's write.
+ * email goes out; a bare increment would give the new total but not the old, and
+ * re-reading afterwards could observe another pass's write.
+ *
+ * The session documents are read *inside* the transaction and marked as counted
+ * in the same commit. That is what makes the whole scan idempotent: a pass that
+ * dies half way, or a second cron invocation overlapping the first, re-reads
+ * sessions that are already marked and adds nothing. Without it the counter
+ * inflates silently and milestone emails fire on totals nobody reached.
  */
-async function applyWorkoutCount(
+async function applyWorkoutSessions(
   userId: string,
-  added: number,
+  sessionIds: string[],
 ): Promise<{ before: number; after: number } | null> {
   const db = getAdminDb();
-  const ref = db.collection('users').doc(userId);
+  const userRef = db.collection('users').doc(userId);
+
+  // A transaction may read a bounded number of documents. An athlete with more
+  // sessions than this in one page keeps the remainder for the next pass, which
+  // the marker makes safe.
+  const ids = sessionIds.slice(0, 200);
+  const sessionRefs = ids.map((id) => db.collection(SESSIONS).doc(id));
 
   try {
     return await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
+      // All reads before any write, as Firestore requires.
+      const userSnap = await tx.get(userRef);
       // A session belonging to a deleted account. Nothing to count.
-      if (!snap.exists) return null;
+      if (!userSnap.exists) return null;
 
-      const before = (snap.data()?.completedWorkouts as number | undefined) ?? 0;
-      const after = before + added;
+      const sessionSnaps = await tx.getAll(...sessionRefs);
 
-      tx.update(ref, {
+      // Re-checked here rather than trusted from the outer query: between that
+      // read and this transaction, another pass may have counted them.
+      const uncounted = sessionSnaps.filter(
+        (snap) => snap.exists && snap.data()?.[COUNTED_FIELD] !== true,
+      );
+      if (!uncounted.length) return null;
+
+      const before = (userSnap.data()?.completedWorkouts as number | undefined) ?? 0;
+      const after = before + uncounted.length;
+
+      tx.update(userRef, {
         completedWorkouts: after,
         lastWorkoutAt: FieldValue.serverTimestamp(),
       });
 
+      for (const snap of uncounted) {
+        tx.update(snap.ref, { [COUNTED_FIELD]: true });
+      }
+
       return { before, after };
     });
   } catch (err) {
-    // One athlete failing must not abandon the rest of the page — the cursor
-    // only advances at the end, so a transient failure is retried next pass.
+    // One athlete failing must not abandon the rest of the page. Their sessions
+    // stay unmarked, so the next pass picks them up — the cursor advancing past
+    // them is no longer a way to lose the work.
     logger.error(
       `[marketing/activity] could not update ${userId}:`,
       err instanceof Error ? err.message : String(err),
     );
     return null;
   }
+}
+
+/**
+ * Catch sessions written with a `finishedAt` in the past.
+ *
+ * A manual log records the day the athlete says they trained; a Strava import
+ * records the activity's own start time. Both can be well below the forward
+ * scan's watermark by the time they are written, so that scan will never see
+ * them — the counter silently stops moving for exactly the athletes who log
+ * their training after the fact.
+ *
+ * Runs on the daily pass. Everything it finds is already protected by the
+ * counted marker, so re-reading a window costs reads and nothing else.
+ */
+export async function sweepBackdatedActivity(pageSize = 500): Promise<ActivitySyncResult> {
+  const db = getAdminDb();
+  const state = await getActivityState();
+
+  const result: ActivitySyncResult = {
+    scanned: 0,
+    athletes: 0,
+    firstWorkouts: 0,
+    milestones: 0,
+    caughtUp: state.caughtUp,
+    backfilling: !state.caughtUp,
+  };
+
+  // Pointless until the forward scan has finished walking history — everything
+  // would be unmarked and the sweep would duplicate its work.
+  if (!state.caughtUp) return result;
+
+  const floor = Timestamp.fromMillis(Date.now() - BACKDATE_LOOKBACK_DAYS * 86_400_000);
+
+  const snap = await db
+    .collection(SESSIONS)
+    .where('finishedAt', '>=', floor)
+    .orderBy('finishedAt', 'asc')
+    .limit(pageSize)
+    .get();
+
+  const missed = snap.docs.filter(
+    (d) => d.data()?.skipped !== true && d.data()?.[COUNTED_FIELD] !== true,
+  );
+  result.scanned = missed.length;
+  if (!missed.length) return result;
+
+  const perUser = new Map<string, string[]>();
+  for (const doc of missed) {
+    const userId = doc.data().userId as string | undefined;
+    if (!userId) continue;
+    perUser.set(userId, [...(perUser.get(userId) ?? []), doc.id]);
+  }
+
+  for (const [userId, sessionIds] of perUser) {
+    const outcome = await applyWorkoutSessions(userId, sessionIds);
+    if (!outcome) continue;
+
+    result.athletes++;
+
+    if (outcome.before === 0 && outcome.after > 0) {
+      await emitMarketingEvent('firstWorkoutCompleted', { userId });
+      result.firstWorkouts++;
+    }
+    for (const milestone of crossedMilestones(outcome.before, outcome.after)) {
+      await emitMarketingEvent('workoutMilestone', { userId, payload: { count: milestone } });
+      result.milestones++;
+    }
+  }
+
+  logger.log(
+    `[marketing/activity] back-dated sweep: ${result.scanned} missed sessions across ` +
+      `${result.athletes} athletes`,
+  );
+  return result;
 }

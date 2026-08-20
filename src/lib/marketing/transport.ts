@@ -93,17 +93,37 @@ export function getMarketingFrom(senderName?: string): string {
  * not be discovered mid-send.
  */
 export function sharesTransactionalSender(): boolean {
-  const marketing = (process.env.MARKETING_EMAIL_FROM || '').trim().toLowerCase();
-  const transactional = (process.env.EMAIL_FROM || '').trim().toLowerCase();
+  // Resolved the same way getMarketingFrom() resolves it, not read raw. An
+  // unset MARKETING_EMAIL_FROM does not mean "no conflict" — it means campaigns
+  // fall back to EMAIL_FROM and really do send from the verification address.
+  // Comparing the raw values would report a green tick for the single most
+  // common form of the misconfiguration this check exists to catch.
+  const marketing = extractAddress(process.env.MARKETING_EMAIL_FROM || process.env.EMAIL_FROM);
+  const transactional = extractAddress(process.env.EMAIL_FROM);
   if (!marketing || !transactional) return false;
   return marketing === transactional;
 }
 
+/**
+ * Pull the bare address out of a From value.
+ *
+ * These variables are set both ways in this codebase — a bare address in the
+ * app, a display-name form like `"HYBRIDX" <news@mail.hybridx.club>` on the
+ * marketing site — and comparing the two forms as strings would miss a genuine
+ * conflict while the trailing `>` corrupted the reported domain.
+ */
+function extractAddress(value: string | undefined): string {
+  const raw = (value || '').trim();
+  if (!raw) return '';
+  const angled = raw.match(/<([^>]+)>/);
+  return (angled ? angled[1] : raw).trim().toLowerCase();
+}
+
 /** The domain campaigns are sent from, for the health panel. */
 export function getMarketingSenderDomain(): string | null {
-  const address = process.env.MARKETING_EMAIL_FROM || process.env.EMAIL_FROM || '';
+  const address = extractAddress(process.env.MARKETING_EMAIL_FROM || process.env.EMAIL_FROM);
   const at = address.lastIndexOf('@');
-  return at >= 0 ? address.slice(at + 1).trim().toLowerCase() : null;
+  return at >= 0 ? address.slice(at + 1) : null;
 }
 
 export interface BulkMessage {

@@ -29,12 +29,7 @@ export const BRIDGE_CONTRACT_VERSION = '1.1.0';
  * place people into any segment. `route:` is reserved — origin is decided by
  * the registry from the authenticated call, never claimed by the payload.
  */
-const tagSchema = z
-  .string()
-  .regex(/^[a-z0-9:-]{1,40}$/, 'Tags must be lowercase [a-z0-9:-], 1–40 characters.')
-  .refine((t) => !t.startsWith('route:'), {
-    message: 'The route: prefix is reserved — origin comes from the authenticated caller.',
-  });
+const TAG_PATTERN = /^[a-z0-9:-]{1,40}$/;
 
 /**
  * UTM parameters, in either spelling.
@@ -42,8 +37,12 @@ const tagSchema = z
  * `utm_source` is what a browser query string carries, and `source` is what a
  * form handler naturally names it after stripping the prefix. Both are real,
  * both are in use, so both are accepted and `normaliseUtm` collapses them.
+ *
+ * Values are `unknown` rather than `string` so a form serialising a null or a
+ * number cannot fail the whole payload. normaliseUtm already coerces safely, so
+ * strictness here would buy nothing and cost leads.
  */
-const utmSchema = z.record(z.string(), z.string()).optional();
+const utmSchema = z.record(z.string(), z.unknown()).optional();
 
 export const leadPayloadSchema = z.object({
   email: z.string().trim().min(3).max(254),
@@ -69,7 +68,25 @@ export const leadPayloadSchema = z.object({
 
   utm: utmSchema,
 
-  tags: z.array(tagSchema).max(5).optional(),
+  /**
+   * Tags are *filtered*, not rejected.
+   *
+   * Validating them strictly would mean a sixth tag, one capital letter, or a
+   * stray punctuation mark failing the whole payload — and since the forward is
+   * fire-and-forget, nobody would see the 400s. A cosmetic mistake in a funnel's
+   * tag list must cost a tag, never the lead.
+   */
+  tags: z
+    .array(z.unknown())
+    .optional()
+    .transform((raw) =>
+      (raw ?? [])
+        .filter((t): t is string => typeof t === 'string' && TAG_PATTERN.test(t))
+        // The route: prefix is reserved — origin is decided by the registry from
+        // the authenticated call, never claimed by the payload.
+        .filter((t) => !t.startsWith('route:'))
+        .slice(0, 5),
+    ),
 });
 
 export type LeadPayload = z.infer<typeof leadPayloadSchema>;
@@ -95,7 +112,9 @@ export interface NormalisedUtm {
  * storing those would make "no attribution" indistinguishable from "attributed
  * to nothing" in every report that follows.
  */
-export function normaliseUtm(utm: Record<string, string> | undefined): NormalisedUtm | undefined {
+export function normaliseUtm(
+  utm: Record<string, unknown> | undefined,
+): NormalisedUtm | undefined {
   if (!utm) return undefined;
 
   const pick = (prefixed: string, bare: string): string | undefined => {
@@ -104,17 +123,26 @@ export function normaliseUtm(utm: Record<string, string> | undefined): Normalise
     return trimmed.length ? trimmed.slice(0, 200) : undefined;
   };
 
-  const normalised: NormalisedUtm = {
-    utmSource: pick('utm_source', 'source'),
-    utmMedium: pick('utm_medium', 'medium'),
-    utmCampaign: pick('utm_campaign', 'campaign'),
-    utmTerm: pick('utm_term', 'term'),
-    utmContent: pick('utm_content', 'content'),
+  // Keys with no value are omitted entirely, not set to undefined. The Admin
+  // SDK is initialised without `ignoreUndefinedProperties`, so a single
+  // undefined value makes the whole document write throw — and this object is
+  // written inside captureLead, whose catch would then report the capture as a
+  // 500 and skip event emission. A lead with one UTM (the common case) would
+  // take down the welcome sequence for that person.
+  const normalised: NormalisedUtm = {};
+  const assign = (key: keyof NormalisedUtm, value: string | undefined) => {
+    if (value !== undefined) normalised[key] = value;
   };
 
+  assign('utmSource', pick('utm_source', 'source'));
+  assign('utmMedium', pick('utm_medium', 'medium'));
+  assign('utmCampaign', pick('utm_campaign', 'campaign'));
+  assign('utmTerm', pick('utm_term', 'term'));
+  assign('utmContent', pick('utm_content', 'content'));
+
   // All five absent means there was no attribution, which should read as
-  // undefined rather than an object full of undefined.
-  return Object.values(normalised).some(Boolean) ? normalised : undefined;
+  // undefined rather than an empty object.
+  return Object.keys(normalised).length ? normalised : undefined;
 }
 
 /**
@@ -153,7 +181,9 @@ export function describeContract() {
       tags: {
         type: 'string[]',
         required: false,
-        note: 'Max 5, lowercase [a-z0-9:-]. The route: prefix is reserved.',
+        note:
+          'Filtered, not rejected: entries that are not lowercase [a-z0-9:-] are ' +
+          'dropped, the first 5 kept. The route: prefix is reserved.',
       },
     },
     responds: {

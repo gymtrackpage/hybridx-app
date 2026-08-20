@@ -152,6 +152,11 @@ export async function captureLead(input: CaptureInput): Promise<CaptureResult> {
     // document so a later re-capture of the same address cannot overwrite the
     // first-touch record — first-touch is only meaningful if it stays first.
     if (input.attribution && result.created) {
+      // Never allowed to fail the capture. Attribution is reporting metadata;
+      // the events below are what start the person's welcome sequence. Letting
+      // a bad attribution write reach the catch would report the whole capture
+      // as a 500 and skip emission entirely — losing the nurture to save
+      // nothing, since the subscriber row is already committed by this point.
       await getAdminDb()
         .collection(SUBSCRIBERS)
         .doc(result.id)
@@ -160,6 +165,12 @@ export async function captureLead(input: CaptureInput): Promise<CaptureResult> {
             attribution: { ...input.attribution, capturedAt: FieldValue.serverTimestamp() },
           },
           { merge: true },
+        )
+        .catch((err) =>
+          logger.error(
+            '[marketing] attribution write failed (capture unaffected):',
+            err instanceof Error ? err.message : String(err),
+          ),
         );
     }
 

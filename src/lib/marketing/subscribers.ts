@@ -233,24 +233,49 @@ export async function suppressSubscriber(
       return false;
     }
 
-    await ref.set({
-      email: '',
-      firstName: '',
-      lastName: '',
-      tags: [],
-      status,
-      source: 'sync',
-      consent: { marketing: false, at: FieldValue.serverTimestamp(), method: 'pre-emptive-optout' },
-      ...(reason ? { statusReason: reason } : {}),
-      totalSent: 0,
-      openCount: 0,
-      clickCount: 0,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    // create(), not set(). The race this tombstone exists for runs both ways:
+    // the forwarded lead can land in the gap between the exists-check above and
+    // this write, and a blind set() would then replace a full subscriber record
+    // — address, name, tags, route, consent evidence — with these blanks. The
+    // address cannot be recovered from a sha256 id, so that loss is permanent.
+    //
+    // If the record now exists, the capture won: fall through to suppressing it
+    // properly, which is the outcome we wanted anyway.
+    try {
+      await ref.create({
+        email: '',
+        firstName: '',
+        lastName: '',
+        tags: [],
+        status,
+        source: 'sync',
+        consent: {
+          marketing: false,
+          at: FieldValue.serverTimestamp(),
+          method: 'pre-emptive-optout',
+        },
+        ...(reason ? { statusReason: reason } : {}),
+        totalSent: 0,
+        openCount: 0,
+        clickCount: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
 
-    logger.log(`[marketing] suppress: wrote tombstone for unknown subscriber ${id}`);
-    return true;
+      logger.log(`[marketing] suppress: wrote tombstone for unknown subscriber ${id}`);
+      return true;
+    } catch {
+      // Lost the race — the real record arrived first. Suppress that instead of
+      // flattening it.
+      await ref.update({
+        status,
+        ...(reason ? { statusReason: reason } : {}),
+        'consent.marketing': false,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      logger.log(`[marketing] suppress: capture won the race for ${id}; suppressed in place`);
+      return true;
+    }
   }
 
   await ref.update({

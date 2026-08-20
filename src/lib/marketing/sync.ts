@@ -58,6 +58,29 @@ export function deriveTags(user: User): string[] {
   return tags;
 }
 
+/**
+ * How recently an athlete must have started their programme for a first-time
+ * sync to treat it as news.
+ *
+ * The sync runs daily, so anything inside this window started since the last
+ * pass. Wider and the first run after deploy would announce programmes people
+ * began months ago; narrower and a signup shortly after a sync would be missed.
+ */
+const RECENT_START_DAYS = 2;
+
+function startedRecently(user: User): boolean {
+  const raw = user.startDate as unknown;
+  const date =
+    raw instanceof Date
+      ? raw
+      : typeof raw === 'object' && raw !== null && 'toDate' in raw
+        ? (raw as { toDate(): Date }).toDate()
+        : null;
+  if (!date) return false;
+  const ageDays = (Date.now() - date.getTime()) / 86_400_000;
+  return ageDays >= 0 && ageDays <= RECENT_START_DAYS;
+}
+
 /** Tag prefixes this sync owns. Anything else on a record is left untouched. */
 const DERIVED_PREFIXES = [
   'experience:',
@@ -171,6 +194,14 @@ export async function syncAthletesToSubscribers(batchLimit = 5000): Promise<Sync
           createdAt: now,
           updatedAt: now,
         });
+        // Seeding the mirror on create otherwise suppresses programStarted for
+        // every athlete who picks a plan during onboarding — which is nearly all
+        // of them, since no subscriber record exists until the first sync after
+        // they sign up. `startDate` is when they began their current programme,
+        // so it distinguishes "started since the last pass" from "has had this
+        // plan for months", which is the whole reason the seeding rule exists.
+        if (user.programId && startedRecently(user)) started.push(user.id);
+
         result.created++;
         return;
       }

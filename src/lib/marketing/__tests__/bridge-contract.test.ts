@@ -56,11 +56,23 @@ describe('normaliseUtm — the drift this contract exists to stop', () => {
   it('keeps a partial attribution rather than discarding the whole thing', () => {
     expect(normaliseUtm({ utm_source: 'newsletter', utm_medium: '' })).toEqual({
       utmSource: 'newsletter',
-      utmMedium: undefined,
-      utmCampaign: undefined,
-      utmTerm: undefined,
-      utmContent: undefined,
     });
+  });
+
+  it('omits absent keys entirely rather than setting them to undefined', () => {
+    // Not cosmetic. The Admin SDK is initialised without
+    // ignoreUndefinedProperties, so one undefined value makes the attribution
+    // write throw — and that write happens inside captureLead, whose catch
+    // would report the whole capture as a 500 and skip event emission. A lead
+    // with a single UTM (the common case) would lose its welcome sequence.
+    const result = normaliseUtm({ utm_source: 'instagram' })!;
+    expect(Object.keys(result)).toEqual(['utmSource']);
+    expect(Object.values(result).every((v) => v !== undefined)).toBe(true);
+  });
+
+  it('survives a non-string value rather than failing the payload', () => {
+    const result = normaliseUtm({ utm_source: 'ig', utm_medium: null as unknown as string });
+    expect(result).toEqual({ utmSource: 'ig' });
   });
 
   it('returns undefined when there was no utm object at all', () => {
@@ -97,20 +109,33 @@ describe('leadPayloadSchema', () => {
     expect(leadPayloadSchema.safeParse({}).success).toBe(false);
   });
 
-  it('refuses a tag claiming an origin — the route comes from the authenticated caller', () => {
-    const result = leadPayloadSchema.safeParse({ ...valid, tags: ['route:magnet-vo2max'] });
-    expect(result.success).toBe(false);
+  it('drops a tag claiming an origin — the route comes from the authenticated caller', () => {
+    const result = leadPayloadSchema.safeParse({ ...valid, tags: ['route:magnet-vo2max', 'ok'] });
+    expect(result.success && result.data.tags).toEqual(['ok']);
   });
 
-  it('refuses malformed tags rather than writing them to a segment vocabulary', () => {
-    for (const tag of ['Uppercase', 'has space', 'has/slash', 'x'.repeat(41)]) {
-      expect(leadPayloadSchema.safeParse({ ...valid, tags: [tag] }).success, tag).toBe(false);
-    }
+  it('drops malformed tags but keeps the lead', () => {
+    // Filtering, not rejecting. A sixth tag or one stray capital used to fail
+    // the whole payload — and since the forward is fire-and-forget, nobody
+    // would have seen the 400s. A cosmetic mistake must cost a tag, not a lead.
+    const result = leadPayloadSchema.safeParse({
+      ...valid,
+      tags: ['Uppercase', 'has space', 'has/slash', 'x'.repeat(41), 'good:tag'],
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.tags).toEqual(['good:tag']);
   });
 
-  it('caps the number of tags one call may apply', () => {
-    const six = ['a', 'b', 'c', 'd', 'e', 'f'];
-    expect(leadPayloadSchema.safeParse({ ...valid, tags: six }).success).toBe(false);
+  it('caps the number of tags one call may apply, without failing', () => {
+    const seven = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+    const result = leadPayloadSchema.safeParse({ ...valid, tags: seven });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.tags).toHaveLength(5);
+  });
+
+  it('does not fail a payload whose utm carries a non-string value', () => {
+    const result = leadPayloadSchema.safeParse({ ...valid, utm: { utm_source: 'ig', n: 4 } });
+    expect(result.success).toBe(true);
   });
 
   it('leaves consent undefined when unstated, so the route decides', () => {
