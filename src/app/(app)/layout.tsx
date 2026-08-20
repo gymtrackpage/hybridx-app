@@ -37,6 +37,7 @@ import { NotificationPermissionPrompt } from '@/components/notification-permissi
 import { OfflineIndicator } from '@/components/offline-indicator';
 import { VerifyEmailBanner } from '@/components/verify-email-banner';
 import { getUserClient } from '@/services/user-service-client';
+import { cn } from '@/lib/utils';
 import { isTrialExpired } from '@/lib/trial';
 import { MobileNavBar, primaryNavItems, secondaryNavItems, adminNavItems } from '@/components/mobile-nav-bar';
 import { UserProvider, useUserProfile } from '@/contexts/user-context';
@@ -291,8 +292,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </SidebarFooter>
             </Sidebar>
             <SidebarInset>
-            {/* Added mt-4 for 10px+ margin on Android, removed pt-8 since no overlay */}
-            <header className={`flex h-14 items-center justify-between gap-4 border-b bg-card px-4 pt-safe lg:h-[60px] lg:px-6 ${isAndroid ? 'mt-4' : ''}`}>
+            {/*
+              The header height must grow with any top padding, otherwise the
+              safe-area inset squeezes the logo/trigger row out of the fixed
+              box and the bottom border is drawn straight through them.
+              On Android the status bar is configured as non-overlay (see
+              StatusBar.setOverlaysWebView above), so the webview already
+              starts below it and the safe-area inset must not be added again.
+            */}
+            <header
+                className={cn(
+                    'flex min-h-14 items-center justify-between gap-4 border-b bg-card px-4 lg:min-h-[60px] lg:px-6',
+                    isAndroid ? 'mt-4' : 'pt-safe'
+                )}
+            >
                 <div className="flex items-center gap-2">
                     <SidebarTrigger className="md:hidden" />
                     <Link href="/dashboard" className="flex items-center gap-2 md:hidden">
