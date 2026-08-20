@@ -37,14 +37,67 @@ everything production relies on.
 
 ### 2. Add the `FIREBASE_SERVICE_ACCOUNT` secret
 
-Create (or reuse) a service account in the `hyroxedgeai` project with:
+Needs the `gcloud` and `gh` CLIs, both authenticated against an account that can
+administer the project. Run from anywhere:
 
-- **Firebase Rules Admin** (`roles/firebaserules.admin`)
-- **Cloud Datastore Index Admin** (`roles/datastore.indexAdmin`)
+```bash
+PROJECT_ID=hyroxedgeai
+REPO=gymtrackpage/hybridx-app
+SA_NAME=github-firestore-deploy
+SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
-Download a JSON key and add it under
-**GitHub → Settings → Secrets and variables → Actions** as
-`FIREBASE_SERVICE_ACCOUNT`, pasting the whole JSON document.
+# 1. Create the service account.
+gcloud iam service-accounts create "$SA_NAME" \
+  --project="$PROJECT_ID" \
+  --display-name="GitHub Actions Firestore config deploy"
+
+# 2. Grant only what deploying rules and indexes needs.
+for ROLE in roles/firebaserules.admin roles/datastore.indexAdmin roles/firebase.viewer; do
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${SA_EMAIL}" \
+    --role="$ROLE" \
+    --condition=None
+done
+
+# 3. Mint a key.
+gcloud iam service-accounts keys create ./firebase-sa.json \
+  --iam-account="$SA_EMAIL" \
+  --project="$PROJECT_ID"
+
+# 4. Prove the roles are sufficient BEFORE trusting CI with them.
+#    Run this only after step 1 above (the index export), or it may propose
+#    deleting indexes that production relies on.
+GOOGLE_APPLICATION_CREDENTIALS=./firebase-sa.json \
+  npx --yes firebase-tools@14 deploy \
+    --only firestore:rules,firestore:indexes \
+    --project "$PROJECT_ID" --non-interactive
+
+# 5. Store it as the repository secret the workflow reads.
+gh secret set FIREBASE_SERVICE_ACCOUNT --repo "$REPO" < ./firebase-sa.json
+
+# 6. Delete the local copy — it is a long-lived credential.
+rm -f ./firebase-sa.json
+```
+
+Then trigger the workflow once by hand to confirm it works end to end:
+
+```bash
+gh workflow run firestore-config.yml --repo "$REPO"
+gh run watch --repo "$REPO"
+```
+
+Notes:
+
+- If step 3 fails with a policy error, the org enforces
+  `constraints/iam.disableServiceAccountKeyCreation`. Use
+  [Workload Identity Federation](https://github.com/google-github-actions/auth#workload-identity-federation)
+  instead of a key — it is the better option regardless, since it issues
+  short-lived credentials and leaves nothing to leak or rotate.
+- If step 4 fails on a permission the roles above do not cover, add
+  `roles/firebase.developAdmin` rather than reaching for `roles/editor`.
+- Without `gh`, paste the contents of `firebase-sa.json` into
+  **GitHub → Settings → Secrets and variables → Actions** as
+  `FIREBASE_SERVICE_ACCOUNT`.
 
 ## Deploying by hand
 
