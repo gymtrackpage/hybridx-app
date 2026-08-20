@@ -92,7 +92,18 @@ export interface User {
   trialStartDate?: Date;
   cancel_at_period_end?: boolean;
   cancellation_effective_date?: Date;
+  /**
+   * Finished workouts, maintained server-side by the marketing activity
+   * reconciler (lib/marketing/activity.ts) from the workoutSessions stream.
+   *
+   * Read by segments, engagement tags and the `noWorkoutAfterNDays` /
+   * `churnRisk` triggers. It was previously computed only inside getAllUsers()
+   * for the admin table and never persisted, so every athlete document read
+   * back `undefined` and all four of those consumers were silently wrong.
+   */
   completedWorkouts?: number;
+  /** When the most recent finished workout was counted. Server-maintained. */
+  lastWorkoutAt?: Date;
   notificationTime?: { hour: number; minute: number };
   // Analytics fields
   lastSeenAt?: Date;

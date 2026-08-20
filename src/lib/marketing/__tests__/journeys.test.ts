@@ -1,5 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
+  ALL_TRIGGERS,
+  TRIGGER_DESCRIPTIONS,
   computeNextRunAt,
   isDerivedTrigger,
   isEventTrigger,
@@ -323,5 +325,61 @@ describe('triggerMatchesEvent — narrowing a trigger to one intake route', () =
     expect(triggerMatchesEvent(j, { ...event({ route: 'app-homepage', tag: 'other' }), type: 'tagAdded' })).toBe(false);
     // Right tag, wrong route.
     expect(triggerMatchesEvent(j, { ...event({ route: 'beta-android', tag: 'vip' }), type: 'tagAdded' })).toBe(false);
+  });
+});
+
+describe('validateJourney — segmentEntered needs something to watch', () => {
+  const emailStep: JourneyStep = { id: 's1', type: 'sendEmail', campaignId: 'c1' };
+
+  it('rejects a segmentEntered trigger with no segment', () => {
+    // This is the case that used to pass validation and then silently enrol
+    // nobody: the days check exempts segmentEntered, and the engine had no
+    // case for it, so the journey looked live and did nothing for ever.
+    const problems = validateJourney({
+      name: 'Churn risk',
+      trigger: { type: 'segmentEntered' },
+      steps: [emailStep],
+    });
+    expect(problems.some((p) => p.includes('saved segment'))).toBe(true);
+  });
+
+  it('accepts one that names a segment', () => {
+    expect(
+      validateJourney({
+        name: 'Churn risk',
+        trigger: { type: 'segmentEntered', segmentId: 'seg-1' },
+        steps: [emailStep],
+      }),
+    ).toEqual([]);
+  });
+
+  it('still does not demand a day count from it', () => {
+    const problems = validateJourney({
+      name: 'Churn risk',
+      trigger: { type: 'segmentEntered', segmentId: 'seg-1' },
+      steps: [emailStep],
+    });
+    expect(problems.some((p) => p.includes('number of days'))).toBe(false);
+  });
+});
+
+describe('the trigger vocabulary only offers triggers something can raise', () => {
+  it('no longer offers streakMilestone or programCompleted', () => {
+    // Streaks are computed in the browser and never stored; a cleared
+    // programId cannot be told apart from switching plans or giving up. Both
+    // were removed rather than left as options that fail quietly.
+    expect(ALL_TRIGGERS).not.toContain('streakMilestone');
+    expect(ALL_TRIGGERS).not.toContain('programCompleted');
+  });
+
+  it('describes every trigger it offers', () => {
+    for (const trigger of ALL_TRIGGERS) {
+      expect(TRIGGER_DESCRIPTIONS[trigger], trigger).toBeTruthy();
+    }
+  });
+
+  it('offers the intake triggers the capture path raises', () => {
+    expect(ALL_TRIGGERS).toContain('subscriberCreated');
+    expect(ALL_TRIGGERS).toContain('consentGranted');
   });
 });

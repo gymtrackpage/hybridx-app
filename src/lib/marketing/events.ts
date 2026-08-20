@@ -17,6 +17,30 @@ import { SUBSCRIBERS, subscriberId as hashEmail } from './subscribers';
 
 export const EVENTS = 'marketingEvents';
 
+/**
+ * Custom event names the lead bridge may raise, as `apiEvent` payloads.
+ *
+ * An allow-list rather than a free namespace. The marketing site is a separate
+ * deployment holding a shared secret; letting it invent event names would mean
+ * a journey could be triggered by a string nobody in this codebase has ever
+ * seen, and a compromised or simply buggy site could enrol people into
+ * automations at will. Adding a name here is the deliberate act that makes a
+ * new cross-property trigger possible.
+ */
+export const BRIDGE_EVENT_NAMES = [
+  'calculatorUsed',
+  'pricingViewed',
+  'raceCardConfirmed',
+  'programPageViewed',
+  'storeVisited',
+] as const;
+
+export type BridgeEventName = (typeof BRIDGE_EVENT_NAMES)[number];
+
+export function isBridgeEventName(name: string): name is BridgeEventName {
+  return (BRIDGE_EVENT_NAMES as readonly string[]).includes(name);
+}
+
 export interface MarketingEvent {
   id: string;
   type: EventTriggerType;

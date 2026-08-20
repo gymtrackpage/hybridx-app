@@ -36,6 +36,7 @@ What connects them:
 src/lib/marketing/
   types.ts          data model
   sources.ts        the intake registry — every route in, declared once
+  activity.ts       athlete counters + behavioural events, from the session stream
   subscribers.ts    the only write path for the subscriber list
   capture.ts        one entry point for every lead form
   sync.ts           users -> marketingSubscribers, nightly
@@ -79,6 +80,7 @@ the Admin SDK.
 | `marketingSegments` | Saved, named audiences reusable across campaigns and journeys |
 | `marketingBriefs` | Weekly snapshots; each run diffs against the previous |
 | `marketingSettings/config` | Sender, batch size, frequency cap, sending switch |
+| `marketingSettings/activity` | Cursor for the workout-session scan; `caughtUp` gates event emission |
 
 ## Environment
 
@@ -92,7 +94,7 @@ the Admin SDK.
 | `MARKETING_BRIEF_RECIPIENT` | Where the weekly brief is emailed. Falls back to `EMAIL_FROM`. |
 | `CRON_SECRET` | Shared bearer secret for the cron endpoints. |
 | `BREVO_WEBHOOK_SECRET` | Shared secret for Brevo's delivery webhook. The endpoint rejects everything without it, so bounces and complaints would go unrecorded. |
-| `LEAD_BRIDGE_SECRET` | Server-to-server credential for the marketing-site bridge. Must be the SAME value in `hyroxedgeai` and `hybridx-hub`. Minimum 32 characters; unset fails closed. |
+| `LEAD_BRIDGE_SECRET` | Server-to-server credential for the marketing-site bridge — lead intake, suppression lookups and custom events. Must be the SAME value in `hyroxedgeai` and `hybridx-hub`. Minimum 32 characters; unset fails closed. |
 | `HXMAILER_SERVICE_ACCOUNT_KEY` | Migration only. Remove after cutover. |
 
 ## Scheduled jobs
@@ -102,7 +104,7 @@ All require `Authorization: Bearer $CRON_SECRET`.
 | Endpoint | Frequency | Does |
 |---|---|---|
 | `/api/cron/marketing-send` | every minute | Drains the send queue; enqueues scheduled campaigns that are due |
-| `/api/cron/marketing-journeys` | every 5 minutes | Enrols from events, advances runs whose next step is due |
+| `/api/cron/marketing-journeys` | every 5 minutes | Advances the activity scan, enrols from events, advances runs whose next step is due |
 | `/api/cron/marketing-journeys?derived=1` | daily | Also evaluates derived triggers and prunes processed events |
 | `/api/cron/marketing-sync` | daily | Reconciles the athlete roster into the subscriber list |
 | `/api/cron/marketing-brief` | weekly | Compiles the week, drafts proposals, emails the brief |
@@ -273,6 +275,7 @@ Two endpoints connect that to this system:
 |---|---|
 | `POST /api/marketing/leads` | Takes a lead at write time, so someone is mailable seconds after submitting rather than after a manual export. Magnet names become tags, UTMs become first-touch attribution. |
 | `GET /api/marketing/suppression?email=` | One suppression list across both properties. Reports `suppressed` and, separately, `complained`. |
+| `POST /api/marketing/events` | Behavioural signals from the site, raised as `apiEvent`. Names come from a server-side allow-list. |
 
 Both authenticate with `LEAD_BRIDGE_SECRET`, compared in constant time and
 failing closed when unset. Deliberately **not** `CRON_SECRET`: the marketing
@@ -427,6 +430,9 @@ does not require both projects to deploy in lockstep — the lead lands, tagged
 | `subscriberCreated` | `captureLead()` — any route, the first time an address is seen |
 | `consentGranted` | `captureLead()` — when someone becomes mailable, including a confirmation click |
 | `signup` | `src/services/user-service.ts`, where the user document is created |
+| `firstWorkoutCompleted`, `workoutMilestone` | `lib/marketing/activity.ts`, from the session stream |
+| `programStarted` | `lib/marketing/sync.ts`, by diffing the mirrored `programId` |
+| `apiEvent` | `POST /api/marketing/events`, from the marketing site |
 | `subscriptionCanceled`, `paymentFailed` | `src/app/api/stripe/webhook/route.ts` |
 | `stravaConnected` | `src/app/api/strava/exchange/route.ts` |
 | `garminConnected` | `src/app/api/garmin/exchange/route.ts` |
@@ -453,6 +459,87 @@ journey to a route is the clearer design.
 The nightly athlete sync deliberately raises **no** events. It is
 reconciliation, not intake: emitting `subscriberCreated` for the existing roster
 would enrol the entire back catalogue into whatever welcome journey is live.
+
+### Athlete activity, and the counter that was never written
+
+`lib/marketing/activity.ts` walks the `workoutSessions` stream from a stored
+cursor, maintains `users/{uid}.completedWorkouts` and `lastWorkoutAt`, and
+raises `firstWorkoutCompleted` and `workoutMilestone`.
+
+It reads the session stream rather than hooking a completion handler because
+there isn't one: workouts are finished by the **client** Firestore SDK through
+at least four paths (active workout, manual log, Strava-linked activity,
+import). Reading the stream catches every path by construction.
+
+It also repairs a field that was never persisted. `completedWorkouts` was on the
+`User` type and read by segments, engagement tags and two derived triggers — but
+the only code that set it was `getAllUsers()`, which computes it in memory for
+the admin table. Every athlete document therefore read back `undefined`:
+
+- `churnRisk` requires `completedWorkouts >= 3`, so it could never fire.
+- `noWorkoutAfterNDays` requires it to be `0`, so it matched **every** athlete
+  in the window, including people training four times a week. The seeded
+  re-engagement journey uses that trigger.
+- Every athlete was tagged `engagement:none`, making that dimension meaningless.
+
+**Backfill and steady state are the same loop.** While the scan is still walking
+history, `caughtUp` is false and it corrects counters silently — emitting
+milestones for workouts finished months ago would mail the back catalogue a
+congratulations note. Once it reaches the end of the stream it flips to
+emitting. There is no separate backfill script to forget to run.
+
+`completedWorkouts` and `lastWorkoutAt` are in the protected-fields list in
+`firestore.rules`: a client that could set them could place itself into any
+engagement segment.
+
+### Triggers that were removed rather than left unwired
+
+`streakMilestone` and `programCompleted` are no longer in the vocabulary.
+Nothing could raise either, but both were offered in the studio and to the AI
+composer — so a journey could be built on one, activated, and silently enrol
+nobody for ever. A trigger that cannot fire is worse than a missing feature,
+because it fails quietly.
+
+| Trigger | What it would need |
+|---|---|
+| `streakMilestone` | Streaks are computed in the browser (`utils/streak-calculator.ts`) and never stored. Persist a streak alongside `completedWorkouts` in `activity.ts`, then emit on crossings. |
+| `programCompleted` | A cleared `programId` cannot be told apart from switching plans or giving up, and congratulating someone who quit is worse than staying quiet. Needs a real completion signal — programme length against `startDate`, or an explicit "finished" action. |
+
+`programStarted` **is** wired, by mirroring `programId` onto the subscriber in
+the nightly sync and emitting on a change. Programmes are assigned by the client
+writing straight to the user document, so a diff is the only reliable signal. An
+absent mirror means "never seen", which is what stops the first sync after
+deploy treating the whole roster as having just started one.
+
+### `segmentEntered`
+
+Now implemented. The sweep resolves the watched segment, diffs it against the
+`matchedSegments` mirror on each subscriber, and enrols only those who have
+*started* matching — otherwise someone who matches "churn risk" would be
+re-enrolled every night for as long as they kept matching. Leaving the segment
+clears the mirror, which is what lets a genuine re-entry fire later.
+
+The first evaluation of a segment seeds membership without enrolling anyone.
+Everyone matching when a journey goes live was already there rather than newly
+arrived, and treating them as new would mail the whole segment at once.
+
+`validateJourney` now requires a `segmentId`. Previously the trigger was exempt
+from the day-count check and the engine had no case for it, so a journey could
+pass validation, go live, and do nothing — the failure mode that looks like
+success at every step.
+
+### Custom events from the marketing site
+
+`POST /api/marketing/events` (behind `LEAD_BRIDGE_SECRET`) raises an `apiEvent`.
+Before it existed the bridge could carry one thing — "this address exists" —
+so nothing the marketing site knew about behaviour could reach an automation.
+
+Event names come from an allow-list in `events.ts`, not the request: the site is
+a separate deployment holding a shared secret, and letting it invent names would
+mean a journey triggered by a string nobody in this codebase has seen. Payloads
+are reduced to at most ten scalar values. Either `email` or `userId` is
+required — the engine discards events it cannot attribute, so accepting one
+without an identity would be a silent no-op.
 
 Derived triggers (`trialEndingSoon`, `onboardingStalled`, `noWorkoutAfterNDays`,
 `churnRisk`, `raceDateApproaching`) are not events — nothing "happens" when a

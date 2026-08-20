@@ -26,7 +26,8 @@ import {
   type JourneyStep,
 } from './journeys';
 import { CAMPAIGNS, getSettings, sendDocId } from './queue';
-import { matchesAthlete } from './segments';
+import { SEGMENTS, type SavedSegment } from './segment-store';
+import { matchesAthlete, resolveSegment } from './segments';
 import { SUBSCRIBERS } from './subscribers';
 import type { Send, Subscriber } from './types';
 
@@ -151,10 +152,17 @@ export async function evaluateDerivedTriggers(): Promise<{ enrolled: number }> {
   const journeys = (await getLiveJourneys()).filter((j) => isDerivedTrigger(j.trigger.type));
   if (!journeys.length) return { enrolled: 0 };
 
-  const db = getAdminDb();
   let enrolled = 0;
 
   for (const journey of journeys) {
+    // Segment membership is a different question from the time-based states
+    // below: it is answered by diffing who matches now against who matched
+    // before, not by asking whether one athlete's record satisfies a condition.
+    if (journey.trigger.type === 'segmentEntered') {
+      enrolled += await evaluateSegmentEntry(journey);
+      continue;
+    }
+
     const days = journey.trigger.days ?? 3;
     const candidates = await findDerivedCandidates(journey, days);
 
@@ -166,9 +174,89 @@ export async function evaluateDerivedTriggers(): Promise<{ enrolled: number }> {
     logger.log(`[marketing/engine] ${journey.trigger.type}: ${candidates.length} candidates`);
   }
 
-  // Reference kept so the unused-import linting stays honest about db usage.
-  void db;
   return { enrolled };
+}
+
+/**
+ * Enrol subscribers who have *started* matching a saved segment.
+ *
+ * Membership is mirrored onto each subscriber as `matchedSegments`, so entry is
+ * a diff rather than a state: someone who has matched "churn risk" for three
+ * weeks should not be re-enrolled every night. Leaving the segment clears the
+ * mirror, which is what lets a genuine re-entry fire again later.
+ *
+ * The first evaluation of a segment seeds membership without enrolling anyone.
+ * Everyone matching at the moment a journey goes live has not just entered —
+ * they were already there — and treating them as new arrivals would mail the
+ * entire segment at once, which is precisely what nobody intends when they
+ * activate an automation.
+ */
+async function evaluateSegmentEntry(journey: Journey): Promise<number> {
+  const segmentId = journey.trigger.segmentId;
+  if (!segmentId) {
+    logger.error(`[marketing/engine] journey ${journey.id} watches no segment; skipping`);
+    return 0;
+  }
+
+  const db = getAdminDb();
+
+  const segmentSnap = await db.collection(SEGMENTS).doc(segmentId).get();
+  if (!segmentSnap.exists) {
+    logger.error(`[marketing/engine] segment ${segmentId} no longer exists`);
+    return 0;
+  }
+
+  const segment = segmentSnap.data() as SavedSegment;
+  const audience = await resolveSegment(segment.definition ?? {});
+  const matchingNow = new Set(audience.subscribers.map((s) => s.id));
+
+  const previousSnap = await db
+    .collection(SUBSCRIBERS)
+    .where('matchedSegments', 'array-contains', segmentId)
+    .get();
+  const matchedBefore = new Set(previousSnap.docs.map((d) => d.id));
+
+  const entering = [...matchingNow].filter((id) => !matchedBefore.has(id));
+  const leaving = [...matchedBefore].filter((id) => !matchingNow.has(id));
+
+  // Mirror first. If enrolment then fails part-way, the next pass sees those
+  // people as already-members and does not re-enrol them — under-sending on a
+  // transient failure, rather than mailing someone twice.
+  const writer = db.bulkWriter();
+  for (const id of entering) {
+    writer.update(db.collection(SUBSCRIBERS).doc(id), {
+      matchedSegments: FieldValue.arrayUnion(segmentId),
+    });
+  }
+  for (const id of leaving) {
+    writer.update(db.collection(SUBSCRIBERS).doc(id), {
+      matchedSegments: FieldValue.arrayRemove(segmentId),
+    });
+  }
+  await writer.close();
+
+  const seeded = (segment as { enteredSeeded?: boolean }).enteredSeeded === true;
+
+  if (!seeded) {
+    await segmentSnap.ref.update({ enteredSeeded: true });
+    logger.log(
+      `[marketing/engine] segmentEntered: seeded ${matchingNow.size} existing members of ` +
+        `${segmentId} without enrolling`,
+    );
+    return 0;
+  }
+
+  let enrolled = 0;
+  for (const subscriberId of entering) {
+    const result = await enrolSubscriber(journey, subscriberId);
+    if (result === 'enrolled') enrolled++;
+  }
+
+  logger.log(
+    `[marketing/engine] segmentEntered ${segmentId}: ${entering.length} entered, ` +
+      `${leaving.length} left, ${enrolled} enrolled`,
+  );
+  return enrolled;
 }
 
 async function findDerivedCandidates(

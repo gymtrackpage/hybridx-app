@@ -9,6 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { syncWorkoutActivity } from '@/lib/marketing/activity';
 import { advanceRuns, evaluateDerivedTriggers, processEvents } from '@/lib/marketing/engine';
 import { pruneProcessedEvents } from '@/lib/marketing/events';
 
@@ -30,6 +31,12 @@ export async function GET(request: Request) {
   const runDerived = url.searchParams.get('derived') === '1';
 
   try {
+    // Before processing events, advance the activity scan so anything finished
+    // since the last pass has raised its events and updated the counters the
+    // derived triggers read. Ordering matters: run it after processEvents and a
+    // first workout would wait a full cycle to enrol.
+    const activity = await syncWorkoutActivity();
+
     const events = await processEvents();
     const derived = runDerived ? await evaluateDerivedTriggers() : { enrolled: 0 };
     const advanced = await advanceRuns();
@@ -39,6 +46,7 @@ export async function GET(request: Request) {
     const pruned = runDerived ? await pruneProcessedEvents() : 0;
 
     return NextResponse.json({
+      activity,
       events: events.processed,
       enrolledFromEvents: events.enrolled,
       enrolledFromDerived: derived.enrolled,
