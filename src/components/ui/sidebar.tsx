@@ -194,12 +194,16 @@ const Sidebar = React.forwardRef<
     }
 
     if (isMobile) {
+      // The drawer is fixed to inset-y-0, so on Android (edge-to-edge is
+      // enforced from Android 15) and on notched iOS devices it runs underneath
+      // the status bar and the home indicator. Inset it by the safe area so the
+      // header logo and the account row stay clear of both.
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            className="w-[--sidebar-width] bg-sidebar p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-sidebar-foreground [&>button]:hidden"
             style={
               {
                 "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
