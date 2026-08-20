@@ -85,7 +85,11 @@ export default function DashboardPage() {
   const { isGranted } = useNotificationPermission();
   
   // New User Detection
-  const isNewUser = !loading && allSessions.length === 0;
+  // "New" has to mean genuinely at the start, not merely "no sessions came back".
+  // Keying this off allSessions alone put an athlete 82 days into a program behind
+  // the week-1 welcome takeover whenever the sessions query returned empty or
+  // failed, hiding the real dashboard (and their actual program) entirely.
+  const isNewUser = !loading && allSessions.length === 0 && (todaysWorkout?.day ?? 0) <= 7;
 
   // Calculate progress data when sessions or Strava activities change
   useEffect(() => {
