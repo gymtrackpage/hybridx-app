@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "db:seed": "tsx scripts/upload-programs.ts",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes --project hyroxedgeai"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",

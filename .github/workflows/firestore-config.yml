@@ -1,0 +1,70 @@
+# Deploys Firestore rules and indexes.
+#
+# Firebase App Hosting builds and deploys the Next.js app ONLY — it never reads
+# firestore.rules or firestore.indexes.json. Until this workflow existed, those
+# two files were applied by hand (or not at all), so the repo and the live
+# project drifted apart: the app shipped queries whose composite indexes were
+# never created, and they failed at runtime in the browser with
+# FAILED_PRECONDITION rather than at build or deploy time.
+#
+# This job closes that gap by applying both files whenever they change on main.
+#
+# IMPORTANT — one-time setup before enabling, see docs/firestore-deploys.md:
+#   1. Export the indexes that already exist in the live project into
+#      firestore.indexes.json, so the file is a superset of production.
+#   2. Add a FIREBASE_SERVICE_ACCOUNT repository secret.
+# Deploying an index file that is MISSING indexes production relies on is the
+# one way this job can cause harm, which is why step 1 comes first. The deploy
+# deliberately does not pass --force, so the CLI will stop and ask rather than
+# silently dropping an index that is not in the file.
+name: Deploy Firestore config
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'firestore.indexes.json'
+      - '.github/workflows/firestore-config.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: firestore-config
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check credentials are configured
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT secret is not set. See docs/firestore-deploys.md."
+            exit 1
+          fi
+
+      - name: Authenticate
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+
+      - name: Deploy rules and indexes
+        run: |
+          npx --yes firebase-tools@14 deploy \
+            --only firestore:rules,firestore:indexes \
+            --project hyroxedgeai \
+            --non-interactive
+
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-sa.json"
