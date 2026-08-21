@@ -515,6 +515,37 @@ discarded for months. Nothing failed, because two independently-declared shapes
 had each been checked only against themselves. `bridge-contract.ts` is now the
 single declaration, and `bridge-contract.test.ts` pins both spellings.
 
+### Durability
+
+Forwarding is fire-and-forget on the request path, because a marketing
+integration being slow must never cost a visitor their submission. That posture
+is only safe because something retries behind it.
+
+Each lead on the marketing site carries its own outbox entry — the exact payload
+to send, whether it has been sent, and when to try again — written in the same
+operation as the lead itself. The inline attempt still cannot fail the
+submission; the entry simply survives it failing. `/api/cron/marketing-maintenance`
+there drains what is left, hourly, backing off and giving up after about a day
+of outage. Giving up parks the entry rather than discarding it, so it stays
+visible in the admin view and in the bridge diagnostic's backlog count.
+
+The payload is stored rather than reconstructed on replay. Consent and its
+method differ between a single opt-in magnet, a pending confirmed opt-in and the
+confirmation itself, and re-deriving that from context is the one thing worth
+never guessing about.
+
+**`GET /api/marketing/complaints`** serves the complainant list as sha256
+hashes, so the site can mirror it and answer the check locally. That check must
+happen — mailing someone who reported us as spam endangers delivery for everyone
+on a shared domain — but asking it across a project boundary put a round trip on
+the awaited path of every form submission. The live lookup stays as a backstop
+for a stale, absent or truncated mirror, and is never removed: a mirror that
+quietly stopped refreshing would answer "not a complainant" for everybody.
+
+Only complaints are mirrored. Not unsubscribes, not bounces — everything the
+site sends was requested seconds earlier, and withholding a guide because
+someone once opted out of a campaign fails the person while solving nothing.
+
 ### Verifying the link
 
 `GET /api/admin/bridge-check` on the marketing site (admin session required)
