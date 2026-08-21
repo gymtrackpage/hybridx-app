@@ -18,7 +18,11 @@
 // Seeded journeys are created PAUSED. Activating them is a decision, made once
 // the old crons are gone, so the two systems never run simultaneously.
 //
-// Usage:
+// Usage, from Cloud Shell or anywhere with gcloud signed in:
+//   gcloud auth application-default login
+//   npx tsx scripts/seed-journeys.ts --dry-run
+//
+// Or with an explicit service-account key, for CI:
 //   FIREBASE_SERVICE_ACCOUNT_KEY='<json>' npx tsx scripts/seed-journeys.ts [--dry-run]
 
 import * as admin from 'firebase-admin';
@@ -29,18 +33,34 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.hybridx.club';
 
-function db(): admin.firestore.Firestore {
+const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'hyroxedgeai';
+
+/**
+ * Credentials, preferring application default.
+ *
+ * An explicit service-account key still works and is what CI uses, but it
+ * should not be the only way in. Running this from Cloud Shell otherwise means
+ * creating a key, downloading it, and pasting a private key into a shell — a
+ * long-lived credential minted and handled by hand for a one-off script. Any
+ * environment with `gcloud auth application-default login` already has short-
+ * lived credentials for the operator, which is both easier and safer.
+ */
+function credential(): admin.credential.Credential {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY is not set.');
+  if (!raw) return admin.credential.applicationDefault();
 
   const serviceAccount = JSON.parse(raw);
   if (serviceAccount.private_key) {
     serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
   }
+  return admin.credential.cert(serviceAccount);
+}
 
+function db(): admin.firestore.Firestore {
   const existing = admin.apps.find((a) => a?.name === 'seed');
   const app =
-    existing ?? admin.initializeApp({ credential: admin.credential.cert(serviceAccount) }, 'seed');
+    existing ??
+    admin.initializeApp({ credential: credential(), projectId: PROJECT_ID }, 'seed');
   return app.firestore();
 }
 
