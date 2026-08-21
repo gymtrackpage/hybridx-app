@@ -543,6 +543,11 @@ export async function importSubscribers(
         route: 'admin-import',
         consent: options.consent,
         consentMethod: 'csv-import',
+        // A server action's request can be torn down the moment it responds, so
+        // the trigger-bus writes are awaited here rather than left in flight.
+        // Otherwise a large import returns a summary describing events that were
+        // still being written when the process stopped caring about them.
+        awaitEvents: true,
       });
 
       // Invalid addresses are reported in the summary rather than aborting the

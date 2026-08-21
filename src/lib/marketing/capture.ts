@@ -21,7 +21,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { emitMarketingEventAsync } from './events';
+import { emitMarketingEvent } from './events';
 import { resolveRouteFor, type ResolveOptions } from './route-store';
 import { grantsConsentOnCapture, tagsForRoute } from './sources';
 import {
@@ -79,6 +79,20 @@ export interface CaptureInput {
   attribution?: CaptureAttribution;
   /** Truncated IP, for consent evidence. */
   ip?: string;
+  /**
+   * Wait for the trigger-bus writes before returning.
+   *
+   * Off by default, and should stay off for anything on a request path: a
+   * marketing automation must never be able to fail a form submission, which is
+   * why emission is fire-and-forget everywhere else.
+   *
+   * A bulk import is the exception. Five thousand rows would otherwise leave up
+   * to ten thousand unawaited writes in flight, and any that had not landed when
+   * the server action returned would be cancelled with the request — producing a
+   * partly-populated event log, no error anywhere, and a summary count that does
+   * not describe what happened.
+   */
+  awaitEvents?: boolean;
 }
 
 export type CaptureResult =
@@ -174,7 +188,8 @@ export async function captureLead(input: CaptureInput): Promise<CaptureResult> {
         );
     }
 
-    emitCaptureEvents(result, email, route.id, input.userId);
+    const emitted = emitCaptureEvents(result, email, route.id, input.userId);
+    if (input.awaitEvents) await emitted;
 
     logger.log(
       `[marketing] captured ${email} via ${route.id} ` +
@@ -220,15 +235,22 @@ function emitCaptureEvents(
   email: string,
   routeId: string,
   userId?: string,
-): void {
+): Promise<void> {
   const payload = { route: routeId };
+  const pending: Promise<void>[] = [];
 
   if (result.created) {
-    emitMarketingEventAsync('subscriberCreated', { email, userId, payload });
+    pending.push(emitMarketingEvent('subscriberCreated', { email, userId, payload }));
   }
   if (result.consentGranted) {
-    emitMarketingEventAsync('consentGranted', { email, userId, payload });
+    pending.push(emitMarketingEvent('consentGranted', { email, userId, payload }));
   }
+
+  // Returned rather than awaited. Callers on a request path ignore it, which is
+  // the fire-and-forget behaviour every emit site relies on; a batch caller
+  // awaits it so the work is actually finished when the batch says it is.
+  // emitMarketingEvent never throws, so an ignored rejection is not possible.
+  return Promise.all(pending).then(() => undefined);
 }
 
 /**
