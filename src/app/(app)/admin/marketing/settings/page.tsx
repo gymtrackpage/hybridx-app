@@ -1,5 +1,9 @@
 import { getSettings } from '@/lib/marketing/queue';
-import { isBulkTransportConfigured } from '@/lib/marketing/transport';
+import {
+  getMarketingSenderDomain,
+  isBulkTransportConfigured,
+  sharesTransactionalSender,
+} from '@/lib/marketing/transport';
 import { isTokenSecretConfigured } from '@/lib/marketing/tokens';
 import { isBridgeConfigured } from '@/lib/marketing/bridge-auth';
 import { MarketingSettingsForm } from '@/components/marketing/settings-form';
@@ -18,6 +22,8 @@ export default async function MarketingSettingsPage() {
     appUrl: process.env.NEXT_PUBLIC_APP_URL ?? null,
     fromAddress:
       process.env.MARKETING_EMAIL_FROM ?? process.env.EMAIL_FROM ?? null,
+    sharesTransactionalSender: sharesTransactionalSender(),
+    senderDomain: getMarketingSenderDomain(),
   };
 
   return (

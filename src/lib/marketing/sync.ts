@@ -15,6 +15,7 @@ import { FieldValue, type UpdateData } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { logger } from '@/lib/logger';
 import type { User } from '@/models/types';
+import { emitMarketingEvent } from './events';
 import { SUBSCRIBERS, isPlausibleEmail, normaliseEmail, subscriberId } from './subscribers';
 import { UNMAILABLE_STATUSES, type Subscriber } from './types';
 
@@ -24,6 +25,8 @@ export interface SyncResult {
   updated: number;
   skippedSuppressed: number;
   skippedInvalid: number;
+  /** Athletes seen to have picked up a programme since the last run. */
+  programStarts: number;
 }
 
 /**
@@ -53,6 +56,29 @@ export function deriveTags(user: User): string[] {
   if (user.garmin) tags.push('integration:garmin');
 
   return tags;
+}
+
+/**
+ * How recently an athlete must have started their programme for a first-time
+ * sync to treat it as news.
+ *
+ * The sync runs daily, so anything inside this window started since the last
+ * pass. Wider and the first run after deploy would announce programmes people
+ * began months ago; narrower and a signup shortly after a sync would be missed.
+ */
+const RECENT_START_DAYS = 2;
+
+function startedRecently(user: User): boolean {
+  const raw = user.startDate as unknown;
+  const date =
+    raw instanceof Date
+      ? raw
+      : typeof raw === 'object' && raw !== null && 'toDate' in raw
+        ? (raw as { toDate(): Date }).toDate()
+        : null;
+  if (!date) return false;
+  const ageDays = (Date.now() - date.getTime()) / 86_400_000;
+  return ageDays >= 0 && ageDays <= RECENT_START_DAYS;
 }
 
 /** Tag prefixes this sync owns. Anything else on a record is left untouched. */
@@ -91,6 +117,12 @@ export function mergeTags(existing: string[], derived: string[]): string[] {
  * what the send path checks. This is the difference between a list you can
  * lawfully mail and one you merely possess.
  *
+ * Deliberately does NOT go through captureLead, and so raises no events. This
+ * is reconciliation, not intake: the athletes it writes have been on the roster
+ * for weeks or months, and emitting `subscriberCreated` for each of them would
+ * enrol the entire back catalogue into whatever welcome journey is live. Real
+ * signups raise their own `signup` event at the moment they happen.
+ *
  * @param batchLimit Cap on athletes processed per invocation, so a cron run
  *                   stays inside its timeout on a large roster.
  */
@@ -102,6 +134,7 @@ export async function syncAthletesToSubscribers(batchLimit = 5000): Promise<Sync
     updated: 0,
     skippedSuppressed: 0,
     skippedInvalid: 0,
+    programStarts: 0,
   };
 
   const usersSnap = await db.collection('users').limit(batchLimit).get();
@@ -119,6 +152,9 @@ export async function syncAthletesToSubscribers(batchLimit = 5000): Promise<Sync
       }
       return true;
     });
+
+  /** Athletes seen to have picked up a programme since the last run. */
+  const started: string[] = [];
 
   const writer = db.bulkWriter();
   const BATCH = 300;
@@ -142,7 +178,11 @@ export async function syncAthletesToSubscribers(batchLimit = 5000): Promise<Sync
           tags: mergeTags([], derived),
           status: 'active',
           source: 'sync',
+          route: 'account-sync',
           userId: user.id,
+          // Seeded, not left absent: an absent mirror means "never seen",
+          // which is what suppresses the first-run emit.
+          lastKnownProgramId: user.programId ?? null,
           consent: {
             marketing: user.marketingConsent === true,
             at: now,
@@ -154,6 +194,14 @@ export async function syncAthletesToSubscribers(batchLimit = 5000): Promise<Sync
           createdAt: now,
           updatedAt: now,
         });
+        // Seeding the mirror on create otherwise suppresses programStarted for
+        // every athlete who picks a plan during onboarding — which is nearly all
+        // of them, since no subscriber record exists until the first sync after
+        // they sign up. `startDate` is when they began their current programme,
+        // so it distinguishes "started since the last pass" from "has had this
+        // plan for months", which is the whole reason the seeding rule exists.
+        if (user.programId && startedRecently(user)) started.push(user.id);
+
         result.created++;
         return;
       }
@@ -180,6 +228,30 @@ export async function syncAthletesToSubscribers(batchLimit = 5000): Promise<Sync
       if (user.firstName && !existing.firstName) update.firstName = user.firstName;
       if (user.lastName && !existing.lastName) update.lastName = user.lastName;
 
+      // Programmes are assigned by the client SDK writing straight to the user
+      // document, so there is no server handler to raise an event from. Mirror
+      // the value here and emit on a change instead.
+      const previous = existing.lastKnownProgramId;
+      const current = user.programId ?? null;
+
+      if (previous !== current) {
+        update.lastKnownProgramId = current;
+
+        // `undefined` means this athlete has never been mirrored — every
+        // existing athlete on the first run after deploy. Seeding the mirror
+        // without emitting is what stops the whole roster being treated as
+        // having just started a programme.
+        //
+        // Only a *start* is emitted. A programme going to null is
+        // indistinguishable here from finishing it, switching away, or giving
+        // up, and congratulating someone who abandoned a plan is worse than
+        // staying quiet. See docs/MARKETING.md on why `programCompleted` is not
+        // in the trigger vocabulary.
+        if (previous !== undefined && current) {
+          started.push(user.id);
+        }
+      }
+
       // The athlete's own preference is authoritative for their record — this
       // is how a profile-page toggle reaches the subscriber list even if the
       // preferences route failed to write both halves at the time.
@@ -198,9 +270,18 @@ export async function syncAthletesToSubscribers(batchLimit = 5000): Promise<Sync
   }
 
   await writer.close();
+
+  // After the writes land, so a programme start cannot be announced by an event
+  // whose mirror update then failed.
+  for (const userId of started) {
+    await emitMarketingEvent('programStarted', { userId });
+  }
+  result.programStarts = started.length;
+
   logger.log(
     `[marketing] sync: ${result.created} created, ${result.updated} updated, ` +
-      `${result.skippedSuppressed} suppressed, ${result.skippedInvalid} invalid`,
+      `${result.skippedSuppressed} suppressed, ${result.skippedInvalid} invalid, ` +
+      `${started.length} programme starts`,
   );
   return result;
 }

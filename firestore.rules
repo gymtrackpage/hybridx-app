@@ -20,11 +20,17 @@ service cloud.firestore {
     // is updated in the same operation. A direct client write would leave the
     // two collections disagreeing about who may be emailed — and the subscriber
     // record is the one the send path actually reads.
+    // NOTE: completedWorkouts and lastWorkoutAt are included. They are derived
+    // counters maintained server-side by the marketing activity reconciler,
+    // which reads the workoutSessions stream. Segments, engagement tags and two
+    // derived triggers read completedWorkouts to decide who gets emailed, so a
+    // client that could set it could place itself into any engagement segment.
     function isWritingProtectedUserField() {
       let protected = ['isAdmin', 'subscriptionStatus', 'subscriptionTier',
                        'stripeCustomerId', 'stripeSubscriptionId', 'subscriptionId',
                        'trialEndsAt', 'trialEndDate', 'trialStartDate',
-                       'marketingConsent', 'marketingConsentAt', 'marketingUnsubscribedAt'];
+                       'marketingConsent', 'marketingConsentAt', 'marketingUnsubscribedAt',
+                       'completedWorkouts', 'lastWorkoutAt'];
       return request.resource.data.diff(resource.data).affectedKeys().hasAny(protected);
     }
 
@@ -175,6 +181,16 @@ service cloud.firestore {
     }
 
     match /marketingSegments/{segmentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Intake routes. Written by the Admin SDK only — including the
+    // auto-registration that happens when a new funnel sends its first lead,
+    // which arrives over the server-to-server lead bridge and never from a
+    // browser. A client that could write here could invent an origin for
+    // itself and land in whatever segment it liked.
+    match /marketingRoutes/{routeId} {
       allow read: if isAdmin();
       allow write: if false;
     }

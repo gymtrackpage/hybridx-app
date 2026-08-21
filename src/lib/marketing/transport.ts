@@ -80,6 +80,52 @@ export function getMarketingFrom(senderName?: string): string {
   return `"${name}" <${address}>`;
 }
 
+/**
+ * Whether campaigns are sent from the same address as verification email.
+ *
+ * Reputation is scored per sending domain, and increasingly per address. When
+ * bulk and transactional share one, a campaign that draws complaints degrades
+ * delivery of the mail people are *waiting* for — password resets, email
+ * verification — and the failure is invisible until someone cannot sign in.
+ *
+ * Exported and surfaced in the settings health panel rather than enforced. The
+ * fix is DNS and a warmed subdomain, which cannot be done from code and should
+ * not be discovered mid-send.
+ */
+export function sharesTransactionalSender(): boolean {
+  // Resolved the same way getMarketingFrom() resolves it, not read raw. An
+  // unset MARKETING_EMAIL_FROM does not mean "no conflict" — it means campaigns
+  // fall back to EMAIL_FROM and really do send from the verification address.
+  // Comparing the raw values would report a green tick for the single most
+  // common form of the misconfiguration this check exists to catch.
+  const marketing = extractAddress(process.env.MARKETING_EMAIL_FROM || process.env.EMAIL_FROM);
+  const transactional = extractAddress(process.env.EMAIL_FROM);
+  if (!marketing || !transactional) return false;
+  return marketing === transactional;
+}
+
+/**
+ * Pull the bare address out of a From value.
+ *
+ * These variables are set both ways in this codebase — a bare address in the
+ * app, a display-name form like `"HYBRIDX" <news@mail.hybridx.club>` on the
+ * marketing site — and comparing the two forms as strings would miss a genuine
+ * conflict while the trailing `>` corrupted the reported domain.
+ */
+function extractAddress(value: string | undefined): string {
+  const raw = (value || '').trim();
+  if (!raw) return '';
+  const angled = raw.match(/<([^>]+)>/);
+  return (angled ? angled[1] : raw).trim().toLowerCase();
+}
+
+/** The domain campaigns are sent from, for the health panel. */
+export function getMarketingSenderDomain(): string | null {
+  const address = extractAddress(process.env.MARKETING_EMAIL_FROM || process.env.EMAIL_FROM);
+  const at = address.lastIndexOf('@');
+  return at >= 0 ? address.slice(at + 1) : null;
+}
+
 export interface BulkMessage {
   to: string;
   subject: string;

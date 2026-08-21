@@ -8,7 +8,9 @@ import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -27,12 +29,30 @@ import {
   unsubscribeSubscriber,
 } from '@/lib/marketing/actions';
 import type { SerialisableSubscriber } from '@/lib/marketing/queries';
+import type { IntakeProperty } from '@/lib/marketing/sources';
 import type { SubscriberStatus } from '@/lib/marketing/types';
+
+/** Trimmed route record, passed from the server so runtime routes are included. */
+interface RouteOption {
+  id: string;
+  label: string;
+  property: IntakeProperty;
+}
 
 interface Props {
   subscribers: SerialisableSubscriber[];
   tags: Array<{ tag: string; count: number }>;
+  routes: RouteOption[];
 }
+
+/** Marks records written before the intake registry existed. */
+const NO_ROUTE = '__none__';
+
+const PROPERTY_LABELS = {
+  website: 'hybridx.club',
+  app: 'app.hybridx.club',
+  admin: 'Administrative',
+} as const;
 
 const STATUS_STYLES: Record<SubscriberStatus, string> = {
   active: 'bg-green-500/15 text-green-600 dark:text-green-400',
@@ -41,26 +61,46 @@ const STATUS_STYLES: Record<SubscriberStatus, string> = {
   complained: 'bg-destructive/15 text-destructive',
 };
 
-export function SubscribersTable({ subscribers, tags }: Props) {
+export function SubscribersTable({ subscribers, tags, routes }: Props) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'all' | SubscriberStatus>('all');
   const [tag, setTag] = useState('all');
+  const [route, setRoute] = useState('all');
   const [syncing, setSyncing] = useState(false);
+
+  const grouped = useMemo(() => {
+    const byProperty: Record<IntakeProperty, RouteOption[]> = { website: [], app: [], admin: [] };
+    for (const r of routes) byProperty[r.property]?.push(r);
+    return byProperty;
+  }, [routes]);
+
+  const routeById = useMemo(() => new Map(routes.map((r) => [r.id, r])), [routes]);
+
+  /** How many subscribers arrived by each route, so the filter shows its own weight. */
+  const routeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of subscribers) {
+      const key = s.route ?? NO_ROUTE;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [subscribers]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return subscribers.filter((s) => {
       if (status !== 'all' && s.status !== status) return false;
       if (tag !== 'all' && !(s.tags ?? []).includes(tag)) return false;
+      if (route !== 'all' && (s.route ?? NO_ROUTE) !== route) return false;
       if (!q) return true;
       return (
         s.email.toLowerCase().includes(q) ||
         `${s.firstName} ${s.lastName}`.toLowerCase().includes(q)
       );
     });
-  }, [subscribers, search, status, tag]);
+  }, [subscribers, search, status, tag, route]);
 
   const handleStatusChange = (sub: SerialisableSubscriber, next: 'unsubscribe' | 'resubscribe') => {
     startTransition(async () => {
@@ -121,6 +161,33 @@ export function SubscribersTable({ subscribers, tags }: Props) {
           </SelectContent>
         </Select>
 
+        <Select value={route} onValueChange={setRoute}>
+          <SelectTrigger className="w-[230px]">
+            <SelectValue placeholder="How they joined" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Every route</SelectItem>
+            {(['website', 'app', 'admin'] as const).map((property) => (
+              <SelectGroup key={property}>
+                <SelectLabel>{PROPERTY_LABELS[property]}</SelectLabel>
+                {grouped[property].map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.label} ({(routeCounts.get(r.id) ?? 0).toLocaleString()})
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+            {routeCounts.has(NO_ROUTE) && (
+              <SelectGroup>
+                <SelectLabel>Before routes were recorded</SelectLabel>
+                <SelectItem value={NO_ROUTE}>
+                  Unrecorded ({(routeCounts.get(NO_ROUTE) ?? 0).toLocaleString()})
+                </SelectItem>
+              </SelectGroup>
+            )}
+          </SelectContent>
+        </Select>
+
         <Select value={tag} onValueChange={setTag}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Tag" />
@@ -156,6 +223,7 @@ export function SubscribersTable({ subscribers, tags }: Props) {
               <TableHead>Subscriber</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Consent</TableHead>
+              <TableHead>Joined via</TableHead>
               <TableHead>Tags</TableHead>
               <TableHead className="text-right">Sent</TableHead>
               <TableHead className="text-right">Opens</TableHead>
@@ -166,7 +234,7 @@ export function SubscribersTable({ subscribers, tags }: Props) {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                   No subscribers match those filters.
                 </TableCell>
               </TableRow>
@@ -195,6 +263,29 @@ export function SubscribersTable({ subscribers, tags }: Props) {
                     ) : (
                       <span className="text-sm text-muted-foreground">No</span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const r = s.route ? routeById.get(s.route) : undefined;
+                      if (r) {
+                        return (
+                          <span className="text-sm">
+                            {r.label}
+                            <span className="block text-xs text-muted-foreground">
+                              {PROPERTY_LABELS[r.property]}
+                            </span>
+                          </span>
+                        );
+                      }
+                      // Either a record older than the registry, or a route the
+                      // registry has since dropped. Showing the raw id beats
+                      // showing nothing — it says what to go and look up.
+                      return (
+                        <span className="text-sm text-muted-foreground">
+                          {s.route ?? '—'}
+                        </span>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     <div className="flex max-w-[260px] flex-wrap gap-1">

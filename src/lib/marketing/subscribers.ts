@@ -81,6 +81,8 @@ export interface UpsertInput {
   /** Merged with any tags already on the record — never replaces them. */
   tags?: string[];
   source: SubscriberSource;
+  /** Intake route id — see lib/marketing/sources.ts. Set on create only. */
+  route?: string;
   userId?: string;
   consent?: Partial<SubscriberConsent> & { marketing: boolean };
 }
@@ -90,6 +92,17 @@ export interface UpsertResult {
   created: boolean;
   /** True when the record exists but is unsubscribed/bounced/complained. */
   suppressed: boolean;
+  /**
+   * True when this write moved the record from no marketing consent to having
+   * it — either on create, or later when a confirmation link is clicked.
+   *
+   * Reported because consent, not creation, is the moment someone becomes
+   * mailable, and therefore the moment a nurture sequence should begin. A
+   * confirmed opt-in magnet creates the record on request and grants consent
+   * only on confirmation; a journey keyed on creation would fire for someone
+   * who never confirmed, and one keyed on nothing at all would never fire.
+   */
+  consentGranted: boolean;
 }
 
 /**
@@ -121,6 +134,7 @@ export async function upsertSubscriber(input: UpsertInput): Promise<UpsertResult
         tags: Array.from(new Set(input.tags ?? [])),
         status: 'active',
         source: input.source,
+        ...(input.route ? { route: input.route } : {}),
         consent: {
           marketing: input.consent?.marketing ?? false,
           at: now,
@@ -135,7 +149,12 @@ export async function upsertSubscriber(input: UpsertInput): Promise<UpsertResult
         updatedAt: now,
       };
       tx.set(ref, doc);
-      return { id, created: true, suppressed: false };
+      return {
+        id,
+        created: true,
+        suppressed: false,
+        consentGranted: input.consent?.marketing === true,
+      };
     }
 
     const existing = snap.data() as Subscriber;
@@ -154,9 +173,16 @@ export async function upsertSubscriber(input: UpsertInput): Promise<UpsertResult
     if (input.lastName && !existing.lastName) update.lastName = input.lastName;
     if (input.userId && !existing.userId) update.userId = input.userId;
 
+    // Fills in a tombstone written by an unsubscribe that arrived before we
+    // knew the address. The id already proves these are the same person, so
+    // this only makes the record readable — it does not change who it is.
+    if (!existing.email) update.email = email;
+
     // Consent may be granted on a mailable record, and may always be withdrawn.
     // Granting it on a suppressed record would quietly undo an unsubscribe.
-    if (input.consent && (!suppressed || input.consent.marketing === false)) {
+    const mayWriteConsent = !!input.consent && (!suppressed || input.consent.marketing === false);
+
+    if (input.consent && mayWriteConsent) {
       update.consent = {
         marketing: input.consent.marketing,
         at: now,
@@ -165,8 +191,15 @@ export async function upsertSubscriber(input: UpsertInput): Promise<UpsertResult
       };
     }
 
+    // A transition, not a state: re-submitting a form you already consented to
+    // must not re-trigger the sequence you were sent the first time.
+    const consentGranted =
+      mayWriteConsent &&
+      input.consent?.marketing === true &&
+      existing.consent?.marketing !== true;
+
     tx.update(ref, update);
-    return { id, created: false, suppressed };
+    return { id, created: false, suppressed, consentGranted };
   });
 }
 
@@ -179,12 +212,70 @@ export async function suppressSubscriber(
   id: string,
   status: Exclude<SubscriberStatus, 'active'>,
   reason?: string,
+  options: { createTombstone?: boolean } = {},
 ): Promise<boolean> {
   const ref = getAdminDb().collection(SUBSCRIBERS).doc(id);
   const snap = await ref.get();
   if (!snap.exists) {
-    logger.log(`[marketing] suppress: no subscriber ${id}`);
-    return false;
+    // An unsubscribe for an address we have no record of is not a no-op. It
+    // happens whenever mail goes out before the subscriber write lands — the
+    // marketing site sends a magnet within seconds of capture, and its forward
+    // to this system is deliberately fire-and-forget. Without a tombstone the
+    // opt-out is simply lost, and the forward that arrives a moment later
+    // creates the person as active: they unsubscribed, and we signed them up.
+    //
+    // The id is sha256(email), so a record written here collides with the
+    // eventual capture by construction, and upsertSubscriber refuses to grant
+    // consent to a suppressed record. The address itself is unknown — a hash
+    // cannot be reversed — which is fine: the id is all the send path needs.
+    if (!options.createTombstone) {
+      logger.log(`[marketing] suppress: no subscriber ${id}`);
+      return false;
+    }
+
+    // create(), not set(). The race this tombstone exists for runs both ways:
+    // the forwarded lead can land in the gap between the exists-check above and
+    // this write, and a blind set() would then replace a full subscriber record
+    // — address, name, tags, route, consent evidence — with these blanks. The
+    // address cannot be recovered from a sha256 id, so that loss is permanent.
+    //
+    // If the record now exists, the capture won: fall through to suppressing it
+    // properly, which is the outcome we wanted anyway.
+    try {
+      await ref.create({
+        email: '',
+        firstName: '',
+        lastName: '',
+        tags: [],
+        status,
+        source: 'sync',
+        consent: {
+          marketing: false,
+          at: FieldValue.serverTimestamp(),
+          method: 'pre-emptive-optout',
+        },
+        ...(reason ? { statusReason: reason } : {}),
+        totalSent: 0,
+        openCount: 0,
+        clickCount: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      logger.log(`[marketing] suppress: wrote tombstone for unknown subscriber ${id}`);
+      return true;
+    } catch {
+      // Lost the race — the real record arrived first. Suppress that instead of
+      // flattening it.
+      await ref.update({
+        status,
+        ...(reason ? { statusReason: reason } : {}),
+        'consent.marketing': false,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      logger.log(`[marketing] suppress: capture won the race for ${id}; suppressed in place`);
+      return true;
+    }
   }
 
   await ref.update({

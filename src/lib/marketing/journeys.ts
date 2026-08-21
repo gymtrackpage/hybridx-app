@@ -31,13 +31,21 @@ import type { SegmentDefinition } from './segments';
  */
 export const EVENT_TRIGGERS = [
   'subscriberCreated',
+  'consentGranted',
   'signup',
   'tagAdded',
   'firstWorkoutCompleted',
   'workoutMilestone',
-  'streakMilestone',
   'programStarted',
-  'programCompleted',
+  // NOTE: `streakMilestone` and `programCompleted` were removed rather than
+  // left unwired. Nothing could raise either — streaks are computed in the
+  // browser and never stored, and a cleared `programId` is indistinguishable
+  // from switching plans or giving up, so emitting "completed" would
+  // congratulate people who quit. Both were offered in the studio and to the
+  // AI composer, so a journey could be built on them, activated, and silently
+  // enrol nobody for ever. A trigger that cannot fire is worse than a missing
+  // one, because it fails quietly. See docs/MARKETING.md for what each would
+  // need before it comes back.
   'subscriptionCanceled',
   'paymentFailed',
   'stravaConnected',
@@ -74,14 +82,16 @@ export function isDerivedTrigger(t: TriggerType): t is DerivedTriggerType {
 export const TRIGGER_DESCRIPTIONS: Record<TriggerType, string> = {
   manual: 'Sent by hand from the campaigns screen.',
   scheduled: 'Sent once at a chosen date and time.',
-  subscriberCreated: 'Someone joins the mailing list from any source.',
+  subscriberCreated:
+    'Someone joins the mailing list from any source, whether or not they may be mailed yet.',
+  consentGranted:
+    'Someone becomes mailable — they opted in, or clicked a confirmation link. ' +
+    'This is the trigger a welcome or nurture sequence should normally use.',
   signup: 'An athlete creates a HYBRIDX account.',
   tagAdded: 'A specific tag is applied to a subscriber.',
   firstWorkoutCompleted: 'An athlete logs their first workout.',
   workoutMilestone: 'An athlete reaches a workout count milestone (10th, 50th, 100th).',
-  streakMilestone: 'An athlete reaches a training-streak milestone.',
   programStarted: 'An athlete starts a training programme.',
-  programCompleted: 'An athlete finishes a training programme.',
   subscriptionCanceled: 'An athlete cancels their subscription.',
   paymentFailed: 'A subscription payment fails.',
   stravaConnected: 'An athlete connects Strava.',
@@ -102,6 +112,15 @@ const triggerSchema = z.object({
   tag: z.string().optional(),
   milestone: z.number().int().positive().optional(),
   eventName: z.string().optional(),
+  /** Saved segment a `segmentEntered` trigger watches. */
+  segmentId: z.string().optional(),
+  /**
+   * Narrow the trigger to one intake route — see lib/marketing/sources.ts.
+   * Applies to any event trigger, so "welcome the people who took the VO2max
+   * guide" and "welcome everyone" are the same journey with and without this
+   * field, rather than two mechanisms.
+   */
+  route: z.string().optional(),
 });
 
 export type JourneyTrigger = z.infer<typeof triggerSchema>;
@@ -325,6 +344,12 @@ export function validateJourney(journey: Pick<Journey, 'steps' | 'trigger' | 'na
   if (isDerivedTrigger(journey.trigger.type) && journey.trigger.type !== 'segmentEntered'
       && !journey.trigger.days) {
     problems.push(`A ${journey.trigger.type} trigger needs a number of days.`);
+  }
+  // segmentEntered is exempt from the days check above, which previously let it
+  // pass validation with nothing to watch — and the engine then had no case for
+  // it, so the journey went live and enrolled nobody, for ever.
+  if (journey.trigger.type === 'segmentEntered' && !journey.trigger.segmentId) {
+    problems.push('A segmentEntered trigger needs a saved segment to watch.');
   }
 
   return problems;

@@ -65,9 +65,34 @@ export interface Subscriber {
   tags: string[];
   status: SubscriberStatus;
   source: SubscriberSource;
+  /**
+   * The intake route this address arrived by — see lib/marketing/sources.ts.
+   * Finer-grained than `source`, which only says "a landing page" where this
+   * says which one. Mirrored as a `route:<id>` tag so segments can filter on it
+   * without a separate index. Absent on records predating the registry.
+   */
+  route?: string;
   consent: SubscriberConsent;
   /** Set when this address belongs to a HybridX athlete, enabling rich segmentation. */
   userId?: string;
+  /**
+   * Mirror of the athlete's `programId` as of the last sync, used to detect a
+   * programme change and raise `programStarted`. Programmes are assigned by the
+   * client writing straight to the user document, so there is no server handler
+   * to emit from and a diff is the only reliable signal.
+   *
+   * `undefined` means never mirrored; `null` means mirrored as having no
+   * programme. The distinction matters — it is what stops the first sync after
+   * deploy treating every athlete as having just started one.
+   */
+  lastKnownProgramId?: string | null;
+  /**
+   * Saved segments this subscriber currently matches, maintained by the
+   * `segmentEntered` sweep. Membership is mirrored so that *entry* can be
+   * detected as a diff — without it, someone who matches "churn risk" would be
+   * re-enrolled every night for as long as they kept matching.
+   */
+  matchedSegments?: string[];
   // Denormalised lifetime engagement counters, incremented by the tracking routes.
   totalSent?: number;
   openCount?: number;

@@ -1,13 +1,17 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
+  ALL_TRIGGERS,
+  TRIGGER_DESCRIPTIONS,
   computeNextRunAt,
   isDerivedTrigger,
   isEventTrigger,
   journeyRunId,
   validateJourney,
+  type Journey,
   type JourneyStep,
 } from '../journeys';
-import { matchesDerivedTrigger } from '../engine';
+import { matchesDerivedTrigger, triggerMatchesEvent } from '../engine';
+import type { MarketingEvent } from '../events';
 import type { User } from '@/models/types';
 
 afterEach(() => vi.useRealTimers());
@@ -280,5 +284,102 @@ describe('matchesDerivedTrigger', () => {
 
   it('returns false for a trigger it does not handle', () => {
     expect(matchesDerivedTrigger(athlete(), 'signup', 3)).toBe(false);
+  });
+});
+
+describe('triggerMatchesEvent — narrowing a trigger to one intake route', () => {
+  const journey = (trigger: Journey['trigger']): Journey =>
+    ({ id: 'j1', trigger, steps: [] }) as unknown as Journey;
+
+  const event = (payload?: Record<string, unknown>): MarketingEvent =>
+    ({ id: 'e1', type: 'consentGranted', processed: false, at: null, payload }) as MarketingEvent;
+
+  it('matches any route when the trigger does not name one', () => {
+    const j = journey({ type: 'consentGranted' });
+    expect(triggerMatchesEvent(j, event({ route: 'magnet-vo2max' }))).toBe(true);
+    expect(triggerMatchesEvent(j, event())).toBe(true);
+  });
+
+  it('matches when the event carries the named route', () => {
+    const j = journey({ type: 'consentGranted', route: 'magnet-vo2max' });
+    expect(triggerMatchesEvent(j, event({ route: 'magnet-vo2max' }))).toBe(true);
+  });
+
+  it('does NOT enrol someone who arrived by a different route', () => {
+    // The whole point of route narrowing: a VO2max welcome sequence must not
+    // greet someone who came in through the race card.
+    const j = journey({ type: 'consentGranted', route: 'magnet-vo2max' });
+    expect(triggerMatchesEvent(j, event({ route: 'magnet-race-card' }))).toBe(false);
+  });
+
+  it('does not match an event with no route at all when one is required', () => {
+    const j = journey({ type: 'consentGranted', route: 'magnet-vo2max' });
+    expect(triggerMatchesEvent(j, event())).toBe(false);
+    expect(triggerMatchesEvent(j, event({}))).toBe(false);
+  });
+
+  it('applies the route filter alongside a tag filter, not instead of it', () => {
+    const j = journey({ type: 'tagAdded', tag: 'vip', route: 'app-homepage' });
+    expect(triggerMatchesEvent(j, { ...event({ route: 'app-homepage', tag: 'vip' }), type: 'tagAdded' })).toBe(true);
+    // Right route, wrong tag.
+    expect(triggerMatchesEvent(j, { ...event({ route: 'app-homepage', tag: 'other' }), type: 'tagAdded' })).toBe(false);
+    // Right tag, wrong route.
+    expect(triggerMatchesEvent(j, { ...event({ route: 'beta-android', tag: 'vip' }), type: 'tagAdded' })).toBe(false);
+  });
+});
+
+describe('validateJourney — segmentEntered needs something to watch', () => {
+  const emailStep: JourneyStep = { id: 's1', type: 'sendEmail', campaignId: 'c1' };
+
+  it('rejects a segmentEntered trigger with no segment', () => {
+    // This is the case that used to pass validation and then silently enrol
+    // nobody: the days check exempts segmentEntered, and the engine had no
+    // case for it, so the journey looked live and did nothing for ever.
+    const problems = validateJourney({
+      name: 'Churn risk',
+      trigger: { type: 'segmentEntered' },
+      steps: [emailStep],
+    });
+    expect(problems.some((p) => p.includes('saved segment'))).toBe(true);
+  });
+
+  it('accepts one that names a segment', () => {
+    expect(
+      validateJourney({
+        name: 'Churn risk',
+        trigger: { type: 'segmentEntered', segmentId: 'seg-1' },
+        steps: [emailStep],
+      }),
+    ).toEqual([]);
+  });
+
+  it('still does not demand a day count from it', () => {
+    const problems = validateJourney({
+      name: 'Churn risk',
+      trigger: { type: 'segmentEntered', segmentId: 'seg-1' },
+      steps: [emailStep],
+    });
+    expect(problems.some((p) => p.includes('number of days'))).toBe(false);
+  });
+});
+
+describe('the trigger vocabulary only offers triggers something can raise', () => {
+  it('no longer offers streakMilestone or programCompleted', () => {
+    // Streaks are computed in the browser and never stored; a cleared
+    // programId cannot be told apart from switching plans or giving up. Both
+    // were removed rather than left as options that fail quietly.
+    expect(ALL_TRIGGERS).not.toContain('streakMilestone');
+    expect(ALL_TRIGGERS).not.toContain('programCompleted');
+  });
+
+  it('describes every trigger it offers', () => {
+    for (const trigger of ALL_TRIGGERS) {
+      expect(TRIGGER_DESCRIPTIONS[trigger], trigger).toBeTruthy();
+    }
+  });
+
+  it('offers the intake triggers the capture path raises', () => {
+    expect(ALL_TRIGGERS).toContain('subscriberCreated');
+    expect(ALL_TRIGGERS).toContain('consentGranted');
   });
 });

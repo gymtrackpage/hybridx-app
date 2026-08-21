@@ -35,6 +35,8 @@ What connects them:
 ```
 src/lib/marketing/
   types.ts          data model
+  sources.ts        the intake registry — every route in, declared once
+  activity.ts       athlete counters + behavioural events, from the session stream
   subscribers.ts    the only write path for the subscriber list
   capture.ts        one entry point for every lead form
   sync.ts           users -> marketingSubscribers, nightly
@@ -78,6 +80,7 @@ the Admin SDK.
 | `marketingSegments` | Saved, named audiences reusable across campaigns and journeys |
 | `marketingBriefs` | Weekly snapshots; each run diffs against the previous |
 | `marketingSettings/config` | Sender, batch size, frequency cap, sending switch |
+| `marketingSettings/activity` | Cursor for the workout-session scan; `caughtUp` gates event emission |
 
 ## Environment
 
@@ -91,7 +94,7 @@ the Admin SDK.
 | `MARKETING_BRIEF_RECIPIENT` | Where the weekly brief is emailed. Falls back to `EMAIL_FROM`. |
 | `CRON_SECRET` | Shared bearer secret for the cron endpoints. |
 | `BREVO_WEBHOOK_SECRET` | Shared secret for Brevo's delivery webhook. The endpoint rejects everything without it, so bounces and complaints would go unrecorded. |
-| `LEAD_BRIDGE_SECRET` | Server-to-server credential for the marketing-site bridge. Must be the SAME value in `hyroxedgeai` and `hybridx-hub`. Minimum 32 characters; unset fails closed. |
+| `LEAD_BRIDGE_SECRET` | Server-to-server credential for the marketing-site bridge — lead intake, suppression lookups and custom events. Must be the SAME value in `hyroxedgeai` and `hybridx-hub`. Minimum 32 characters; unset fails closed. |
 | `HXMAILER_SERVICE_ACCOUNT_KEY` | Migration only. Remove after cutover. |
 
 ## Scheduled jobs
@@ -101,7 +104,7 @@ All require `Authorization: Bearer $CRON_SECRET`.
 | Endpoint | Frequency | Does |
 |---|---|---|
 | `/api/cron/marketing-send` | every minute | Drains the send queue; enqueues scheduled campaigns that are due |
-| `/api/cron/marketing-journeys` | every 5 minutes | Enrols from events, advances runs whose next step is due |
+| `/api/cron/marketing-journeys` | every 5 minutes | Advances the activity scan, enrols from events, advances runs whose next step is due |
 | `/api/cron/marketing-journeys?derived=1` | daily | Also evaluates derived triggers and prunes processed events |
 | `/api/cron/marketing-sync` | daily | Reconciles the athlete roster into the subscriber list |
 | `/api/cron/marketing-brief` | weekly | Compiles the week, drafts proposals, emails the brief |
@@ -272,6 +275,7 @@ Two endpoints connect that to this system:
 |---|---|
 | `POST /api/marketing/leads` | Takes a lead at write time, so someone is mailable seconds after submitting rather than after a manual export. Magnet names become tags, UTMs become first-touch attribution. |
 | `GET /api/marketing/suppression?email=` | One suppression list across both properties. Reports `suppressed` and, separately, `complained`. |
+| `POST /api/marketing/events` | Behavioural signals from the site, raised as `apiEvent`. Names come from a server-side allow-list. |
 
 Both authenticate with `LEAD_BRIDGE_SECRET`, compared in constant time and
 failing closed when unset. Deliberately **not** `CRON_SECRET`: the marketing
@@ -297,6 +301,61 @@ domain as the app, so one sender reputation is built rather than two. Its
 `RESEND_API_KEY` binding is commented out rather than deleted: `getEmailProvider()`
 prefers Resend whenever that key is present, which makes re-adding the secret
 the rollback.
+
+## Sender identity
+
+Three roles, and they must not share an address:
+
+| Role | Variable | Should be |
+|---|---|---|
+| App transactional | `EMAIL_FROM` | `training@hybridx.club` |
+| Campaigns and journeys | `MARKETING_EMAIL_FROM` | a dedicated authenticated subdomain |
+| Marketing site mail | `EMAIL_FROM` (hybridx-hub) | the transactional identity |
+
+Reputation is scored per sending domain and increasingly per address. When bulk
+and transactional share one, a campaign that draws complaints degrades delivery
+of the mail people are *waiting* for — verification, password resets — and the
+failure is invisible until someone cannot sign in.
+
+The settings health panel reports whether they are still shared. It is a warning
+rather than a blocker, because the fix is DNS and a warmed subdomain: see the
+ordered steps in `apphosting.yaml` beside `MARKETING_EMAIL_FROM`. Do not point
+it at an unverified subdomain — every campaign would then fail authentication,
+which is worse than sharing.
+
+Warming matters. A cold subdomain sending thousands on day one is
+indistinguishable from a spammer, because that is what spammers do. Start with a
+few hundred of the most engaged subscribers and grow over a fortnight.
+
+## Unsubscribe across both properties
+
+Campaign mail carries `List-Unsubscribe` and `List-Unsubscribe-Post` from
+`transport.ts`. Marketing-site mail now does too, via
+`POST /api/marketing/unsubscribe-link` — the site asks this app to mint a signed
+one-click URL for an address and attaches it.
+
+The signing key stays here. Handing `MARKETING_TOKEN_SECRET` to the other
+project so it could mint its own would put the key that makes every unsubscribe
+and tracking link unforgeable in two places, to save one HTTP call on a few
+messages a minute.
+
+Before this, site mail offered only `mailto:`. That failed twice: Gmail and
+Yahoo have required a one-click HTTPS endpoint of bulk senders since February
+2024, and an opt-out arriving in a human inbox never reached the suppression
+list — so someone could unsubscribe from a magnet and keep receiving campaigns.
+
+`sendEmail` on the site attaches the headers automatically. Callers no longer
+opt in, because forgetting was how `send-training-plan.ts` came to send no
+unsubscribe header at all. Genuinely transactional messages pass
+`transactional: true`; a lead magnet does **not** qualify simply because it was
+requested seconds earlier — to a mailbox provider it is list mail.
+
+**Tombstones.** An unsubscribe for an address with no subscriber record writes
+one anyway, keyed by the same `sha256(email)`. This is not hypothetical: the
+site sends a magnet within seconds of capture and its forward to this app is
+deliberately fire-and-forget, so mail can precede the record. Without a
+tombstone the opt-out is lost and the forward that lands a moment later creates
+the person as active — they unsubscribed, and we signed them up.
 
 ## Delivery feedback
 
@@ -374,11 +433,141 @@ honoured, the shared frequency cap applies, copy is editable in the console,
 opens and clicks are attributed per campaign, and delivery goes through the
 authenticated hybridx.club domain rather than a Gmail account.
 
+## Intake routes
+
+Every address enters through one **route**, declared once in
+`src/lib/marketing/sources.ts`. A route carries its label, the tags it applies,
+the property it belongs to, and — importantly — its consent posture. Adding an
+intake path is one registry entry rather than a scattering of literals across
+route handlers.
+
+| Route | Property | Consent | Arrives from |
+|---|---|---|---|
+| `magnet-free-plan` | hybridx.club | implied | Free HYROX plan download |
+| `magnet-vo2max` | hybridx.club | implied | Build a Bigger Engine guide |
+| `magnet-race-card` | hybridx.club | **confirmed** | Race day rules card |
+| `website-signup` | hybridx.club | implied | Direct sign-up, no magnet |
+| `website-other` | hybridx.club | none | Fallback for an unrecognised source |
+| `app-homepage` | app.hybridx.club | explicit | Homepage capture form |
+| `app-account` | app.hybridx.club | none | Account creation |
+| `beta-android` | app.hybridx.club | none | Android beta request |
+| `admin-manual` | admin | none | Added by hand in the console |
+| `admin-import` | admin | none | CSV import |
+| `account-sync` | admin | none | Nightly athlete reconciliation |
+| `migration` | admin | none | Carried over from HXMailer |
+
+Consent postures: `implied` (the form says signing up means ongoing email),
+`explicit` (a marketing checkbox was ticked), `confirmed` (nothing until the
+confirmation link is clicked), `none` (the address is known, not mailable).
+
+Every subscriber carries a `route:<id>` tag and a `route` field, so the console
+can filter by origin and any journey can be narrowed to one route. Route tags
+are applied by the registry, never taken from a request — the bridge strips
+`route:` from any tags the marketing site sends, so an origin cannot be forged.
+
+**Bulk intake raises events like any other.** A CSV import of 5,000 rows emits
+5,000 `subscriberCreated` events. That is correct — an imported contact should
+be as reachable by automation as any other — but it means a *route-less* welcome
+journey would enrol the whole file. The seeded welcome journeys are each scoped
+to a route, and none of them to `admin-import`, so an import matches nothing by
+default. Keep it that way, or pause journeys before a large import.
+
+**The marketing site keeps its own vocabulary.** It sends `source` values like
+`build_a_bigger_engine`; `aliases` on the registry map them. An unrecognised
+name resolves to `website-other` rather than being rejected, so a new magnet
+does not require both projects to deploy in lockstep — the lead lands, tagged
+`route:unclassified`, which is the prompt to add a proper entry.
+
+## Building a new funnel
+
+The whole point of the registry is that this needs no deploy of this app.
+
+1. **On the marketing site**, add a page with the generic capture form and a
+   slug of your choosing:
+
+   ```tsx
+   <FunnelSignupForm source="spring-hyrox-challenge" formId="spring" placement="hero" />
+   ```
+
+   Slugs are `[a-z0-9][a-z0-9_-]{1,48}`. Keep one stable once it is live —
+   changing it starts a new route and orphans the journey attached to the old.
+
+2. **On the first lead**, the route registers itself and appears in
+   `/admin/marketing/routes` badged **New**.
+
+3. **Configure it there**: name, tags, consent posture. Then build a journey
+   with `trigger: { type: 'consentGranted', route: '<slug>' }` and activate it.
+
+That is the whole loop. Funnels that also hand over a file the visitor is
+waiting on still need their own server action for that delivery — but the
+capture, routing and nurture are all covered by the above.
+
+### The wire contract
+
+`GET /api/marketing/leads` (same bridge auth as the POST) returns the accepted
+payload, its field names and the response shape. Read it rather than copying an
+existing caller — a caller can be wrong, and one was.
+
+Both UTM spellings are accepted (`utm_source` and `source`) and normalised on
+receipt. This is not politeness: the marketing site sent the bare spelling while
+this app read the prefixed one, and every lead's first-touch attribution was
+discarded for months. Nothing failed, because two independently-declared shapes
+had each been checked only against themselves. `bridge-contract.ts` is now the
+single declaration, and `bridge-contract.test.ts` pins both spellings.
+
+### Durability
+
+Forwarding is fire-and-forget on the request path, because a marketing
+integration being slow must never cost a visitor their submission. That posture
+is only safe because something retries behind it.
+
+Each lead on the marketing site carries its own outbox entry — the exact payload
+to send, whether it has been sent, and when to try again — written in the same
+operation as the lead itself. The inline attempt still cannot fail the
+submission; the entry simply survives it failing. `/api/cron/marketing-maintenance`
+there drains what is left, hourly, backing off and giving up after about a day
+of outage. Giving up parks the entry rather than discarding it, so it stays
+visible in the admin view and in the bridge diagnostic's backlog count.
+
+The payload is stored rather than reconstructed on replay. Consent and its
+method differ between a single opt-in magnet, a pending confirmed opt-in and the
+confirmation itself, and re-deriving that from context is the one thing worth
+never guessing about.
+
+**`GET /api/marketing/complaints`** serves the complainant list as sha256
+hashes, so the site can mirror it and answer the check locally. That check must
+happen — mailing someone who reported us as spam endangers delivery for everyone
+on a shared domain — but asking it across a project boundary put a round trip on
+the awaited path of every form submission. The live lookup stays as a backstop
+for a stale, absent or truncated mirror, and is never removed: a mirror that
+quietly stopped refreshing would answer "not a complainant" for everybody.
+
+Only complaints are mirrored. Not unsubscribes, not bounces — everything the
+site sends was requested seconds earlier, and withholding a guide because
+someone once opted out of a campaign fails the person while solving nothing.
+
+### Verifying the link
+
+`GET /api/admin/bridge-check` on the marketing site (admin session required)
+performs the round trips and reports what happened: whether the bridge is
+configured, whether the shared secret authenticates, whether the suppression
+lookup answers, and whether the fields the site sends are still in the contract.
+It is read-only and writes no lead, so it is safe to run against production.
+
+This matters because the failures are silent by design — lead forwarding is
+fire-and-forget so an outage cannot cost a submission, which also means an
+outage looks exactly like success from the site's side.
+
 ## Triggers wired into the app
 
 | Event | Raised from |
 |---|---|
+| `subscriberCreated` | `captureLead()` — any route, the first time an address is seen |
+| `consentGranted` | `captureLead()` — when someone becomes mailable, including a confirmation click |
 | `signup` | `src/services/user-service.ts`, where the user document is created |
+| `firstWorkoutCompleted`, `workoutMilestone` | `lib/marketing/activity.ts`, from the session stream |
+| `programStarted` | `lib/marketing/sync.ts`, by diffing the mirrored `programId` |
+| `apiEvent` | `POST /api/marketing/events`, from the marketing site |
 | `subscriptionCanceled`, `paymentFailed` | `src/app/api/stripe/webhook/route.ts` |
 | `stravaConnected` | `src/app/api/strava/exchange/route.ts` |
 | `garminConnected` | `src/app/api/garmin/exchange/route.ts` |
@@ -387,6 +576,105 @@ authenticated hybridx.club domain rather than a Gmail account.
 All are emitted fire-and-forget through `emitMarketingEventAsync`, *after* the
 write they describe. A marketing automation must never be able to fail a signup,
 an OAuth callback, or a Stripe webhook that Stripe would then retry.
+
+**Use `consentGranted`, not `subscriberCreated`, for a nurture sequence.**
+Creation says we know someone; consent says we may mail them. On a single
+opt-in route the two fire together, but on the confirmed opt-in race-card route
+creation happens when the card is *requested* and consent only when the link is
+clicked. A welcome journey keyed on creation would enrol people who never
+confirmed, and then never send to them — the engine refuses to mail without
+consent, so the run would sit there looking active and doing nothing.
+
+Any event trigger can be narrowed with `trigger.route`, so "welcome the people
+who took the VO2max guide" and "welcome everyone" are the same journey with and
+without that field. A route-less welcome journey will overlap with every
+route-scoped one; the shared frequency cap prevents a pile-up, but scoping each
+journey to a route is the clearer design.
+
+The nightly athlete sync deliberately raises **no** events. It is
+reconciliation, not intake: emitting `subscriberCreated` for the existing roster
+would enrol the entire back catalogue into whatever welcome journey is live.
+
+### Athlete activity, and the counter that was never written
+
+`lib/marketing/activity.ts` walks the `workoutSessions` stream from a stored
+cursor, maintains `users/{uid}.completedWorkouts` and `lastWorkoutAt`, and
+raises `firstWorkoutCompleted` and `workoutMilestone`.
+
+It reads the session stream rather than hooking a completion handler because
+there isn't one: workouts are finished by the **client** Firestore SDK through
+at least four paths (active workout, manual log, Strava-linked activity,
+import). Reading the stream catches every path by construction.
+
+It also repairs a field that was never persisted. `completedWorkouts` was on the
+`User` type and read by segments, engagement tags and two derived triggers — but
+the only code that set it was `getAllUsers()`, which computes it in memory for
+the admin table. Every athlete document therefore read back `undefined`:
+
+- `churnRisk` requires `completedWorkouts >= 3`, so it could never fire.
+- `noWorkoutAfterNDays` requires it to be `0`, so it matched **every** athlete
+  in the window, including people training four times a week. The seeded
+  re-engagement journey uses that trigger.
+- Every athlete was tagged `engagement:none`, making that dimension meaningless.
+
+**Backfill and steady state are the same loop.** While the scan is still walking
+history, `caughtUp` is false and it corrects counters silently — emitting
+milestones for workouts finished months ago would mail the back catalogue a
+congratulations note. Once it reaches the end of the stream it flips to
+emitting. There is no separate backfill script to forget to run.
+
+`completedWorkouts` and `lastWorkoutAt` are in the protected-fields list in
+`firestore.rules`: a client that could set them could place itself into any
+engagement segment.
+
+### Triggers that were removed rather than left unwired
+
+`streakMilestone` and `programCompleted` are no longer in the vocabulary.
+Nothing could raise either, but both were offered in the studio and to the AI
+composer — so a journey could be built on one, activated, and silently enrol
+nobody for ever. A trigger that cannot fire is worse than a missing feature,
+because it fails quietly.
+
+| Trigger | What it would need |
+|---|---|
+| `streakMilestone` | Streaks are computed in the browser (`utils/streak-calculator.ts`) and never stored. Persist a streak alongside `completedWorkouts` in `activity.ts`, then emit on crossings. |
+| `programCompleted` | A cleared `programId` cannot be told apart from switching plans or giving up, and congratulating someone who quit is worse than staying quiet. Needs a real completion signal — programme length against `startDate`, or an explicit "finished" action. |
+
+`programStarted` **is** wired, by mirroring `programId` onto the subscriber in
+the nightly sync and emitting on a change. Programmes are assigned by the client
+writing straight to the user document, so a diff is the only reliable signal. An
+absent mirror means "never seen", which is what stops the first sync after
+deploy treating the whole roster as having just started one.
+
+### `segmentEntered`
+
+Now implemented. The sweep resolves the watched segment, diffs it against the
+`matchedSegments` mirror on each subscriber, and enrols only those who have
+*started* matching — otherwise someone who matches "churn risk" would be
+re-enrolled every night for as long as they kept matching. Leaving the segment
+clears the mirror, which is what lets a genuine re-entry fire later.
+
+The first evaluation of a segment seeds membership without enrolling anyone.
+Everyone matching when a journey goes live was already there rather than newly
+arrived, and treating them as new would mail the whole segment at once.
+
+`validateJourney` now requires a `segmentId`. Previously the trigger was exempt
+from the day-count check and the engine had no case for it, so a journey could
+pass validation, go live, and do nothing — the failure mode that looks like
+success at every step.
+
+### Custom events from the marketing site
+
+`POST /api/marketing/events` (behind `LEAD_BRIDGE_SECRET`) raises an `apiEvent`.
+Before it existed the bridge could carry one thing — "this address exists" —
+so nothing the marketing site knew about behaviour could reach an automation.
+
+Event names come from an allow-list in `events.ts`, not the request: the site is
+a separate deployment holding a shared secret, and letting it invent names would
+mean a journey triggered by a string nobody in this codebase has seen. Payloads
+are reduced to at most ten scalar values. Either `email` or `userId` is
+required — the engine discards events it cannot attribute, so accepting one
+without an identity would be a silent no-op.
 
 Derived triggers (`trialEndingSoon`, `onboardingStalled`, `noWorkoutAfterNDays`,
 `churnRisk`, `raceDateApproaching`) are not events — nothing "happens" when a

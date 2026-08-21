@@ -101,9 +101,7 @@ export async function POST(request: NextRequest) {
     await captureLead({
       email,
       name,
-      source: 'beta-request',
-      tags: ['source:beta-request', 'interest:android'],
-      consent: false,
+      route: 'beta-android',
       consentMethod: 'beta-request-form',
     });
 

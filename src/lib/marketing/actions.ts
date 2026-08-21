@@ -24,9 +24,15 @@ import {
   resubscribe,
   subscriberId as hashEmail,
   suppressSubscriber,
-  upsertSubscriber,
 } from './subscribers';
+import { captureLead } from './capture';
 import { emitMarketingEventAsync } from './events';
+import {
+  archiveRoute,
+  seedBuiltInRoutes,
+  updateRoute,
+  type RoutePatch,
+} from './route-store';
 import { createSegment, deleteSegment, getSegment, updateSegment } from './segment-store';
 import { syncAthletesToSubscribers } from './sync';
 import { isTokenSecretConfigured } from './tokens';
@@ -430,14 +436,21 @@ export async function addSubscriber(input: {
   try {
     await assertAdmin('marketing:subscriber:add');
 
-    const result = await upsertSubscriber({
+    // Through captureLead rather than straight to the subscriber store, so an
+    // admin-added contact carries a route tag and raises the same events as any
+    // other intake — otherwise a person added by hand is invisible to every
+    // journey, which is exactly the surprise this registry exists to remove.
+    const result = await captureLead({
       email: input.email,
       firstName: input.firstName,
       lastName: input.lastName,
       tags: input.tags,
-      source: 'admin',
-      consent: { marketing: input.consent, method: 'admin-added' },
+      route: 'admin-manual',
+      consent: input.consent,
+      consentMethod: 'admin-added',
     });
+
+    if (!result.ok) return { success: false, error: result.error };
 
     revalidatePath(`${MARKETING_PATH}/subscribers`);
     return { success: true, data: { id: result.id, created: result.created } };
@@ -522,20 +535,26 @@ export async function importSubscribers(
     let skipped = 0;
 
     for (const row of rows) {
-      try {
-        const result = await upsertSubscriber({
-          email: row.email,
-          firstName: row.firstName,
-          lastName: row.lastName,
-          tags: [...(row.tags ?? []), ...(options.extraTag ? [options.extraTag] : [])],
-          source: 'import',
-          consent: { marketing: options.consent, method: 'csv-import' },
-        });
-        if (result.created) added++;
-        else merged++;
-      } catch {
-        skipped++; // Invalid address — reported in the summary rather than aborting the import.
-      }
+      const result = await captureLead({
+        email: row.email,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        tags: [...(row.tags ?? []), ...(options.extraTag ? [options.extraTag] : [])],
+        route: 'admin-import',
+        consent: options.consent,
+        consentMethod: 'csv-import',
+        // A server action's request can be torn down the moment it responds, so
+        // the trigger-bus writes are awaited here rather than left in flight.
+        // Otherwise a large import returns a summary describing events that were
+        // still being written when the process stopped caring about them.
+        awaitEvents: true,
+      });
+
+      // Invalid addresses are reported in the summary rather than aborting the
+      // import — one bad row in a thousand should not cost the other 999.
+      if (!result.ok) skipped++;
+      else if (result.created) added++;
+      else merged++;
     }
 
     revalidatePath(`${MARKETING_PATH}/subscribers`);
@@ -670,5 +689,62 @@ export async function setSendingPaused(paused: boolean): Promise<ActionResult> {
     return { success: true };
   } catch (err) {
     return fail(err, 'Could not change the sending state.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Intake routes
+// ---------------------------------------------------------------------------
+
+/**
+ * Configure a route.
+ *
+ * The main use is turning an auto-registered funnel into a real one: a slug
+ * that appeared on its first lead arrives with a generated label and no tags,
+ * and this is where it gets a name, a segment vocabulary and a consent posture.
+ * Saving anything clears `unconfigured`, so the console's "needs attention"
+ * list empties as they are dealt with.
+ */
+export async function saveRoute(id: string, patch: RoutePatch): Promise<ActionResult> {
+  try {
+    await assertAdmin('marketing:route:save');
+    await updateRoute(id, patch);
+
+    revalidatePath(`${MARKETING_PATH}/routes`);
+    revalidatePath(`${MARKETING_PATH}/subscribers`);
+    return { success: true };
+  } catch (err) {
+    return fail(err, 'Could not save the route.');
+  }
+}
+
+/**
+ * Stop a route matching new leads, keeping the record.
+ *
+ * Never deletes: subscribers captured by this route still carry its id, and a
+ * dangling reference would make their origin unreadable in the console.
+ */
+export async function archiveMarketingRoute(id: string): Promise<ActionResult> {
+  try {
+    await assertAdmin('marketing:route:archive');
+    await archiveRoute(id);
+
+    revalidatePath(`${MARKETING_PATH}/routes`);
+    return { success: true };
+  } catch (err) {
+    return fail(err, 'Could not archive the route.');
+  }
+}
+
+/** Write the built-in routes into Firestore so all routes are editable in one place. */
+export async function seedRoutes(): Promise<ActionResult<{ created: number }>> {
+  try {
+    await assertAdmin('marketing:route:seed');
+    const result = await seedBuiltInRoutes();
+
+    revalidatePath(`${MARKETING_PATH}/routes`);
+    return { success: true, data: result };
+  } catch (err) {
+    return fail(err, 'Could not seed the built-in routes.');
   }
 }
