@@ -21,6 +21,7 @@ import {
   JOURNEYS,
   JOURNEY_RUNS,
   journeyRunId,
+  MAX_RUN_FAILURES,
   type Journey,
   type JourneyRun,
   type JourneyStep,
@@ -403,13 +404,15 @@ export interface AdvanceResult {
   completed: number;
   exited: number;
   held: number;
+  /** Runs that threw this pass and were retried or set aside. */
+  failed: number;
 }
 
 /** Advance every run whose next step is due. */
 export async function advanceRuns(limit = 200): Promise<AdvanceResult> {
   const db = getAdminDb();
   const settings = await getSettings();
-  const result: AdvanceResult = { advanced: 0, completed: 0, exited: 0, held: 0 };
+  const result: AdvanceResult = { advanced: 0, completed: 0, exited: 0, held: 0, failed: 0 };
 
   if (settings.sendingPaused) {
     logger.log('[marketing/engine] sending paused; not advancing runs');
@@ -428,77 +431,130 @@ export async function advanceRuns(limit = 200): Promise<AdvanceResult> {
   const journeyCache = new Map<string, Journey>();
 
   for (const doc of due.docs) {
-    const run = { id: doc.id, ...doc.data() } as JourneyRun;
+    // One run failing must not abandon the rest of the page.
+    //
+    // Every branch below can throw — an addTag against a subscriber who has
+    // since been deleted raises NOT_FOUND, a contended transaction can abort,
+    // a malformed step can trip an assertion. Without this catch a single such
+    // run propagates out of the loop, out of advanceRuns, and up to the cron
+    // handler, which abandons every remaining due run. Because the query
+    // re-selects the same run next pass, the failure repeats forever: one bad
+    // record silently stops the whole automation engine.
+    //
+    // The same reasoning already applies per athlete in marketing/activity.ts.
+    try {
+      const run = { id: doc.id, ...doc.data() } as JourneyRun;
 
-    let journey = journeyCache.get(run.journeyId);
-    if (!journey) {
-      const jSnap = await db.collection(JOURNEYS).doc(run.journeyId).get();
-      if (!jSnap.exists) {
-        await doc.ref.update({ status: 'failed', exitReason: 'Journey no longer exists' });
+      let journey = journeyCache.get(run.journeyId);
+      if (!journey) {
+        const jSnap = await db.collection(JOURNEYS).doc(run.journeyId).get();
+        if (!jSnap.exists) {
+          await doc.ref.update({ status: 'failed', exitReason: 'Journey no longer exists' });
+          continue;
+        }
+        journey = { id: jSnap.id, ...jSnap.data() } as Journey;
+        journeyCache.set(run.journeyId, journey);
+      }
+
+      // A paused journey stops advancing without losing where each run had got to.
+      if (journey.status !== 'live') {
+        result.held++;
         continue;
       }
-      journey = { id: jSnap.id, ...jSnap.data() } as Journey;
-      journeyCache.set(run.journeyId, journey);
-    }
 
-    // A paused journey stops advancing without losing where each run had got to.
-    if (journey.status !== 'live') {
-      result.held++;
-      continue;
-    }
+      const exit = await shouldExit(journey, run);
+      if (exit) {
+        await doc.ref.update({
+          status: 'exited',
+          exitReason: exit,
+          completedAt: FieldValue.serverTimestamp(),
+        });
+        await db.collection(JOURNEYS).doc(journey.id).update({
+          'stats.exitedEarly': FieldValue.increment(1),
+        }).catch(() => undefined);
+        result.exited++;
+        continue;
+      }
 
-    const exit = await shouldExit(journey, run);
-    if (exit) {
+      const step = journey.steps[run.currentStep];
+      if (!step) {
+        await doc.ref.update({ status: 'completed', completedAt: FieldValue.serverTimestamp() });
+        await db.collection(JOURNEYS).doc(journey.id).update({
+          'stats.completed': FieldValue.increment(1),
+        }).catch(() => undefined);
+        result.completed++;
+        continue;
+      }
+
+      const outcome = await executeStep(journey, run, step, settings.frequencyCapPerWeek);
+
+      if (outcome.kind === 'hold') {
+        // Try again on the next pass rather than skipping the step.
+        await doc.ref.update({ nextRunAt: new Date(Date.now() + outcome.retryInMs) });
+        result.held++;
+        continue;
+      }
+
+      if (outcome.kind === 'exit') {
+        await doc.ref.update({
+          status: 'exited',
+          exitReason: outcome.reason,
+          completedAt: FieldValue.serverTimestamp(),
+        });
+        await db.collection(JOURNEYS).doc(journey.id).update({
+          'stats.exitedEarly': FieldValue.increment(1),
+        }).catch(() => undefined);
+        result.exited++;
+        continue;
+      }
+
       await doc.ref.update({
-        status: 'exited',
-        exitReason: exit,
-        completedAt: FieldValue.serverTimestamp(),
+        currentStep: outcome.toStep ?? run.currentStep + 1,
+        nextRunAt: outcome.nextRunAt,
+        history: FieldValue.arrayUnion(step.id),
+        // Cleared on success, so the counter measures a step that is stuck now
+        // rather than every failure this run has ever had. Without this a run
+        // that failed four times months ago would be set aside by its next
+        // single transient error.
+        failureCount: 0,
       });
-      await db.collection(JOURNEYS).doc(journey.id).update({
-        'stats.exitedEarly': FieldValue.increment(1),
-      }).catch(() => undefined);
-      result.exited++;
-      continue;
+      result.advanced++;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const run = { id: doc.id, ...doc.data() } as JourneyRun;
+      const failures = (run.failureCount ?? 0) + 1;
+      result.failed++;
+
+      if (failures >= MAX_RUN_FAILURES) {
+        // Set aside rather than retried forever. The run stops occupying a slot
+        // in every pass, and `failed` is surfaced in the console so this is a
+        // thing someone can see rather than a sequence that quietly stopped.
+        await doc.ref
+          .update({
+            status: 'failed',
+            failureCount: failures,
+            lastError: message,
+            completedAt: FieldValue.serverTimestamp(),
+          })
+          .catch(() => undefined);
+        logger.error(
+          `[marketing/engine] run ${doc.id} failed ${failures}x, setting aside: ${message}`,
+        );
+        continue;
+      }
+
+      // Back off and try again. Linear rather than exponential: the ceiling is
+      // MAX_RUN_FAILURES passes, so this is bounded already, and a journey step
+      // delayed by hours is worse than one retried promptly.
+      await doc.ref
+        .update({
+          failureCount: failures,
+          lastError: message,
+          nextRunAt: new Date(Date.now() + failures * 5 * 60_000),
+        })
+        .catch(() => undefined);
+      logger.error(`[marketing/engine] run ${doc.id} threw (${failures}x): ${message}`);
     }
-
-    const step = journey.steps[run.currentStep];
-    if (!step) {
-      await doc.ref.update({ status: 'completed', completedAt: FieldValue.serverTimestamp() });
-      await db.collection(JOURNEYS).doc(journey.id).update({
-        'stats.completed': FieldValue.increment(1),
-      }).catch(() => undefined);
-      result.completed++;
-      continue;
-    }
-
-    const outcome = await executeStep(journey, run, step, settings.frequencyCapPerWeek);
-
-    if (outcome.kind === 'hold') {
-      // Try again on the next pass rather than skipping the step.
-      await doc.ref.update({ nextRunAt: new Date(Date.now() + outcome.retryInMs) });
-      result.held++;
-      continue;
-    }
-
-    if (outcome.kind === 'exit') {
-      await doc.ref.update({
-        status: 'exited',
-        exitReason: outcome.reason,
-        completedAt: FieldValue.serverTimestamp(),
-      });
-      await db.collection(JOURNEYS).doc(journey.id).update({
-        'stats.exitedEarly': FieldValue.increment(1),
-      }).catch(() => undefined);
-      result.exited++;
-      continue;
-    }
-
-    await doc.ref.update({
-      currentStep: outcome.toStep ?? run.currentStep + 1,
-      nextRunAt: outcome.nextRunAt,
-      history: FieldValue.arrayUnion(step.id),
-    });
-    result.advanced++;
   }
 
   return result;

@@ -249,7 +249,26 @@ export interface JourneyRun {
   exitReason?: string;
   /** Step ids already executed, so a replay cannot repeat a send. */
   history: string[];
+  /**
+   * Consecutive times executing the current step has thrown.
+   *
+   * Reset on any successful advance, so this counts a step that is genuinely
+   * stuck rather than a run that has had a bad day at some point in its life.
+   */
+  failureCount?: number;
+  /** What went wrong the last time this run threw. Shown in the console. */
+  lastError?: string;
 }
+
+/**
+ * How many consecutive throws before a run is set aside as failed.
+ *
+ * Not one: a Firestore blip or a contended transaction should cost a retry,
+ * not a subscriber's whole sequence. Not unbounded either — a run that can
+ * never succeed must stop being retried, or it occupies a slot in every pass
+ * forever and the log fills with the same error.
+ */
+export const MAX_RUN_FAILURES = 5;
 
 /** Deterministic run id — this is what makes `onceOnly` structural. */
 export function journeyRunId(journeyId: string, subscriberId: string): string {
