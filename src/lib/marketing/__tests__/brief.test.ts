@@ -21,7 +21,7 @@ function brief(over: Partial<WeeklyBrief> = {}): WeeklyBrief {
       averageClickRate: 0.06,
       openRateChange: 0.01,
     },
-    journeys: { live: 3, activeRuns: 120, completedThisWeek: 45 },
+    journeys: { live: 3, activeRuns: 120, completedThisWeek: 45, stuckThisWeek: 0 },
     campaigns: [],
     observations: [],
     ...over,
@@ -110,10 +110,31 @@ describe('deriveObservations', () => {
     });
   });
 
+  it('reports journey runs that stopped with an error', () => {
+    const b = brief({ journeys: { ...brief().journeys, stuckThisWeek: 4 } });
+    expect(findsNote(b, 'stopped with an error')).toBe(true);
+  });
+
+  it('says nothing about stuck runs when none failed', () => {
+    // The default fixture is a healthy week. A health signal that fires on a
+    // clean week is one people learn to skim past.
+    expect(findsNote(brief(), 'stopped with an error')).toBe(false);
+  });
+
+  it('leads with a stuck automation rather than a soft metric', () => {
+    // A broken machine outranks an open rate that drifted; the ordering is the
+    // whole point of putting this check first.
+    const b = brief({
+      journeys: { ...brief().journeys, stuckThisWeek: 2 },
+      sending: { ...brief().sending, averageOpenRate: 0.05 },
+    });
+    expect(deriveObservations(b)[0]).toContain('stopped with an error');
+  });
+
   it('notices the list going cold', () => {
     const b = brief({
       sending: { ...brief().sending, campaignsSent: 0, emailsDelivered: 0, averageOpenRate: null },
-      journeys: { live: 0, activeRuns: 0, completedThisWeek: 0 },
+      journeys: { live: 0, activeRuns: 0, completedThisWeek: 0, stuckThisWeek: 0 },
     });
     expect(findsNote(b, 'going cold')).toBe(true);
   });

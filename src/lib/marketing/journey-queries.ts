@@ -34,6 +34,12 @@ export interface SerialisableJourney {
   activatedAt: string | null;
   /** Live run counts, which are the numbers that tell you whether it is working. */
   activeRuns?: number;
+  /**
+   * Runs set aside after repeatedly throwing on the same step. Surfaced in the
+   * list rather than only on the detail page: a stuck automation is not
+   * something anyone will find by clicking into each journey in turn.
+   */
+  failedRuns?: number;
 }
 
 function serialise(id: string, data: FirebaseFirestore.DocumentData): SerialisableJourney {
@@ -65,13 +71,22 @@ export async function listJourneys(): Promise<SerialisableJourney[]> {
   // which on a busy journey would be thousands of documents to render one number.
   await Promise.all(
     journeys.map(async (j) => {
-      const count = await db
-        .collection(JOURNEY_RUNS)
-        .where('journeyId', '==', j.id)
-        .where('status', '==', 'active')
-        .count()
-        .get();
-      j.activeRuns = count.data().count;
+      const [active, failed] = await Promise.all([
+        db
+          .collection(JOURNEY_RUNS)
+          .where('journeyId', '==', j.id)
+          .where('status', '==', 'active')
+          .count()
+          .get(),
+        db
+          .collection(JOURNEY_RUNS)
+          .where('journeyId', '==', j.id)
+          .where('status', '==', 'failed')
+          .count()
+          .get(),
+      ]);
+      j.activeRuns = active.data().count;
+      j.failedRuns = failed.data().count;
     }),
   );
 
@@ -89,7 +104,12 @@ export interface JourneyDetail extends SerialisableJourney {
     opened: number;
     clicked: number;
   }>;
-  runCounts: { active: number; completed: number; exited: number };
+  /**
+   * `failed` is the one worth reading. A run is set aside as failed only after
+   * repeated throws on the same step, so a non-zero count means an automation
+   * is stuck for real people rather than merely idle.
+   */
+  runCounts: { active: number; completed: number; exited: number; failed: number };
 }
 
 export async function getJourney(id: string): Promise<JourneyDetail | null> {
@@ -122,8 +142,8 @@ export async function getJourney(id: string): Promise<JourneyDetail | null> {
     };
   });
 
-  const [active, completed, exited] = await Promise.all(
-    (['active', 'completed', 'exited'] as const).map((status) =>
+  const [active, completed, exited, failed] = await Promise.all(
+    (['active', 'completed', 'exited', 'failed'] as const).map((status) =>
       db
         .collection(JOURNEY_RUNS)
         .where('journeyId', '==', id)
@@ -140,6 +160,7 @@ export async function getJourney(id: string): Promise<JourneyDetail | null> {
       active: active.data().count,
       completed: completed.data().count,
       exited: exited.data().count,
+      failed: failed.data().count,
     },
   };
 }

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
-import { Loader2, Mail, Pause, Play, PowerOff, Users } from 'lucide-react';
+import { AlertTriangle, Loader2, Mail, Pause, Play, PowerOff, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -146,6 +146,12 @@ export function JourneysList({ journeys }: { journeys: SerialisableJourney[] }) 
                       {journey.activeRuns ?? 0} in progress
                     </span>
                     <span>{journey.stats.completed} completed</span>
+                    {!!journey.failedRuns && (
+                      <span className="flex items-center gap-1.5 font-medium text-destructive">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        {journey.failedRuns} stuck
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex gap-2">

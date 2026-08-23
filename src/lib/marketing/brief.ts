@@ -53,6 +53,17 @@ export interface WeeklyBrief {
     live: number;
     activeRuns: number;
     completedThisWeek: number;
+    /**
+     * Runs set aside as failed this week.
+     *
+     * Counted over the week rather than in total so this reports new breakage
+     * and clears itself once fixed — the standing figure lives in the console,
+     * where it persists until someone deals with it. Reported here because
+     * every other health signal in this system has to be gone and looked at,
+     * and an automation that has stopped sending is exactly the thing nobody
+     * thinks to check.
+     */
+    stuckThisWeek: number;
   };
 
   campaigns: BriefCampaign[];
@@ -85,13 +96,21 @@ export async function compileWeeklyBrief(): Promise<WeeklyBrief> {
 
   // Status changes have no timestamp of their own beyond updatedAt, so these
   // are "changed to this status in the last week" rather than exact counts.
-  const [unsubbed, bounced, complained, completedRuns] = await Promise.all([
+  const [unsubbed, bounced, complained, completedRuns, stuckRuns] = await Promise.all([
     subs.where('status', '==', 'unsubscribed').where('updatedAt', '>=', weekAgo).count().get(),
     subs.where('status', '==', 'bounced').where('updatedAt', '>=', weekAgo).count().get(),
     subs.where('status', '==', 'complained').where('updatedAt', '>=', weekAgo).count().get(),
     db
       .collection(JOURNEY_RUNS)
       .where('status', '==', 'completed')
+      .where('completedAt', '>=', weekAgo)
+      .count()
+      .get(),
+    // `completedAt` is stamped when a run is set aside, so this is "gave up on
+    // it this week" rather than every failure ever recorded.
+    db
+      .collection(JOURNEY_RUNS)
+      .where('status', '==', 'failed')
       .where('completedAt', '>=', weekAgo)
       .count()
       .get(),
@@ -152,6 +171,7 @@ export async function compileWeeklyBrief(): Promise<WeeklyBrief> {
       live: liveJourneys.data().count,
       activeRuns: activeRuns.data().count,
       completedThisWeek: completedRuns.data().count,
+      stuckThisWeek: stuckRuns.data().count,
     },
     campaigns: briefCampaigns,
     observations: [],
@@ -171,6 +191,17 @@ export async function compileWeeklyBrief(): Promise<WeeklyBrief> {
 export function deriveObservations(brief: WeeklyBrief): string[] {
   const notes: string[] = [];
   const { list, sending, journeys } = brief;
+
+  // Ahead of the engagement notes deliberately. A journey that has stopped
+  // sending is a broken machine, not a metric that drifted.
+  if (journeys.stuckThisWeek > 0) {
+    const n = journeys.stuckThisWeek;
+    notes.push(
+      `${n} journey run${n === 1 ? '' : 's'} stopped with an error this week and ${n === 1 ? 'was' : 'were'} set aside. ` +
+        'Those people are part-way through a sequence that will not finish on its own — ' +
+        'the journeys page shows which automation is affected.',
+    );
+  }
 
   if (list.complainedThisWeek > 0) {
     notes.push(
