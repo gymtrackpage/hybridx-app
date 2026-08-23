@@ -23,21 +23,25 @@ env:
   # and coaching email — the failure mode there is invisible until somebody
   # cannot sign in.
   #
-  # BEFORE CHANGING THIS VALUE, in Brevo:
-  #   1. Add mail.hybridx.club as a sending domain.
-  #   2. Publish the SPF, DKIM and Return-Path records it gives you.
-  #   3. Add a DMARC record on the subdomain, starting permissive:
-  #        _dmarc.mail.hybridx.club  TXT  "v=DMARC1; p=none; rua=mailto:training@hybridx.club"
-  #   4. Wait for Brevo to report the domain verified.
-  #   5. Warm it: a few hundred of your most engaged subscribers first, growing
-  #      over a fortnight. A cold subdomain sending thousands on day one is
-  #      indistinguishable from a spammer, because that is what spammers do.
+  # mail.hybridx.club was authenticated in Brevo on 2026-08-23. Verified live
+  # against the authoritative nameservers rather than taken on trust:
   #
-  # Until step 4 is done this must stay on the verified address, or every
-  # campaign fails authentication. The settings health panel reports whether
-  # bulk and transactional are still sharing one address.
+  #   brevo-code TXT                on mail.hybridx.club           present
+  #   brevo1._domainkey  CNAME  ->  b1.mail-hybridx-club.dkim.brevo.com
+  #   brevo2._domainkey  CNAME  ->  b2.mail-hybridx-club.dkim.brevo.com
+  #   _dmarc                        inherited from hybridx.club, p=none
+  #
+  # Both DKIM CNAMEs chase through to real RSA public keys, which is what makes
+  # DMARC align on the From domain. There is deliberately no SPF record on the
+  # subdomain: Brevo bounces via its own Return-Path, so SPF authenticates
+  # against Brevo's domain and DKIM is what carries alignment here. Adding one
+  # would not help and, if wrong, would hurt.
+  #
+  # Still to do — warm it. A cold subdomain sending thousands on day one is
+  # indistinguishable from a spammer, because that is what spammers do. Start
+  # with a few hundred of the most engaged and grow over a fortnight.
   - variable: MARKETING_EMAIL_FROM
-    value: "training@hybridx.club"
+    value: "news@mail.hybridx.club"
   - variable: MARKETING_EMAIL_FROM_NAME
     value: "HYBRIDX"
   # Where the weekly marketing brief is sent. Falls back to EMAIL_FROM.
