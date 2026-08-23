@@ -212,8 +212,12 @@ async function writeSubscribers(
     // Never downgrade a record this system already knows about. A re-run must
     // not undo an unsubscribe that happened after the first migration.
     if (existing.exists && UNMAILABLE.includes(existing.data()?.status)) {
+      const tags = Array.from(sub.tags);
       writer.update(ref, {
-        tags: admin.firestore.FieldValue.arrayUnion(...Array.from(sub.tags)),
+        // arrayUnion() rejects an empty argument list, and it throws where the
+        // call is made rather than on the write — so an untagged subscriber
+        // would abort the whole migration rather than fail one record.
+        ...(tags.length ? { tags: admin.firestore.FieldValue.arrayUnion(...tags) } : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       stats.subscribersWritten++;
