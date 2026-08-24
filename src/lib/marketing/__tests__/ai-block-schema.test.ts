@@ -70,6 +70,38 @@ describe('AI-facing block schemas stay within Gemini responseSchema', () => {
   });
 });
 
+// The keyword set of compose-journey's output schema, which Gemini accepts in
+// production. Two rounds of this bug were spent guessing which keyword the 400
+// was about; the durable rule is that a schema we send may only use keywords a
+// schema we know works already uses.
+const PROVEN_KEYWORDS = new Set([
+  '$schema', 'additionalProperties', 'description', 'enum', 'items',
+  'maxItems', 'minItems', 'properties', 'required', 'type',
+]);
+
+function keywordsUsed(schema: unknown): Set<string> {
+  const seen = new Set<string>();
+  const walk = (n: any, path: string) => {
+    if (!n || typeof n !== 'object' || Array.isArray(n)) return;
+    for (const [k, v] of Object.entries<any>(n)) {
+      seen.add(k);
+      if (k === 'properties') for (const sub of Object.values(v)) walk(sub, path);
+      else if (k === 'items' || k === '$defs') walk(v, path);
+      else if (k === 'anyOf' || k === 'oneOf') (v as any[]).forEach((s2) => walk(s2, path));
+    }
+  };
+  // Raw, uncleaned: genkit assigns this straight to responseJsonSchema.
+  walk(toJsonSchema({ schema: schema as any }), '');
+  return seen;
+}
+
+describe('AI-facing schemas stay within keywords Gemini demonstrably accepts', () => {
+  it('aiEmailContentSchema uses no keyword beyond the proven set', () => {
+    const extra = [...keywordsUsed(aiEmailContentSchema)].filter((k) => !PROVEN_KEYWORDS.has(k));
+    expect(extra).toEqual([]);
+  });
+});
+
 describe('toEmailBlocks', () => {
   it('narrows well-formed flat blocks into the strict union', () => {
     const { blocks, rejected } = toEmailBlocks([
@@ -109,6 +141,17 @@ describe('toEmailBlocks', () => {
     ] as any);
 
     expect(blocks[0]).toEqual({ type: 'paragraph', text: 'Clean me' });
+  });
+
+  it('clamps an out-of-range heading level instead of dropping the block', () => {
+    const { blocks, rejected } = toEmailBlocks([
+      { type: 'heading', text: 'Too deep', level: 5 },
+      { type: 'heading', text: 'Too shallow', level: 1 },
+      { type: 'heading', text: 'Fractional', level: 2.6 },
+    ] as any);
+
+    expect(rejected).toEqual([]);
+    expect(blocks.map((b) => (b as { level: number }).level)).toEqual([3, 2, 3]);
   });
 
   it('ignores explicit nulls the model sends for unused fields', () => {
