@@ -8,6 +8,7 @@
 //   Schedule: 0 3 */10 * *  (03:00 UTC every 10 days — safety net only)
 //   Immediate re-sync is triggered automatically when a user changes program.
 import { NextResponse } from 'next/server';
+import { requireCronAuth } from '@/lib/cron-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { getValidGarminToken } from '@/lib/garmin/token';
 import { workoutToDays } from '@/lib/garmin/program-adapter';
@@ -33,10 +34,8 @@ function isoDate(d: Date): string {
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+  const denied = requireCronAuth(request, 'garmin-sync');
+  if (denied) return denied;
 
   const db = getAdminDb();
   const results = { processed: 0, synced: 0, skipped: 0, errors: 0 };

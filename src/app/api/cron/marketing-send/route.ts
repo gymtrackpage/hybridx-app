@@ -9,6 +9,7 @@
 // campaign in front of a recipient.
 
 import { NextResponse } from 'next/server';
+import { requireCronAuth } from '@/lib/cron-auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { logger } from '@/lib/logger';
@@ -34,10 +35,8 @@ export const dynamic = 'force-dynamic';
 const TIME_BUDGET_MS = 240_000;
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+  const denied = requireCronAuth(request, 'marketing-send');
+  if (denied) return denied;
 
   const startedAt = Date.now();
 

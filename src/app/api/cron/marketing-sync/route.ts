@@ -5,6 +5,7 @@
 // bearer auth, force-dynamic, and an explicit maxDuration.
 
 import { NextResponse } from 'next/server';
+import { requireCronAuth } from '@/lib/cron-auth';
 import { syncAthletesToSubscribers } from '@/lib/marketing/sync';
 import { logger } from '@/lib/logger';
 
@@ -12,10 +13,8 @@ export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+  const denied = requireCronAuth(request, 'marketing-sync');
+  if (denied) return denied;
 
   try {
     const result = await syncAthletesToSubscribers();

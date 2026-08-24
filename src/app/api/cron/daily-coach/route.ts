@@ -1,5 +1,6 @@
 
 import { NextResponse } from 'next/server';
+import { requireCronAuth } from '@/lib/cron-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { analyzeAndAdjust } from '@/ai/flows/analyze-and-adjust';
 
@@ -11,10 +12,8 @@ export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+  const denied = requireCronAuth(request, 'daily-coach');
+  if (denied) return denied;
 
   const db = getAdminDb();
   const today = new Date();
