@@ -11,7 +11,12 @@
 import { z } from 'genkit';
 import { ai } from '@/ai/genkit';
 import { HYBRIDX_BRAND_CONTEXT } from '@/ai/brand-context';
-import { generatableBlockSchema, MERGE_TOKEN_HINT } from '@/lib/marketing/blocks';
+import {
+  aiBlockSchema,
+  toEmailBlocks,
+  MERGE_TOKEN_HINT,
+  type GeneratableBlock,
+} from '@/lib/marketing/blocks';
 import { getPromptKnowledge } from '@/lib/marketing/knowledge';
 
 const reviseBlockInputSchema = z.object({
@@ -26,7 +31,7 @@ const reviseBlockFlow = ai.defineFlow(
   {
     name: 'reviseBlockFlow',
     inputSchema: reviseBlockInputSchema,
-    outputSchema: generatableBlockSchema,
+    outputSchema: aiBlockSchema,
   },
   async ({ block, instruction, emailContext }) => {
     const { block: facts } = await getPromptKnowledge();
@@ -34,7 +39,7 @@ const reviseBlockFlow = ai.defineFlow(
     const { output } = await ai.generate({
       // A single-block rewrite is a small, well-constrained edit, so the faster
       // default model is the right trade here.
-      output: { schema: generatableBlockSchema },
+      output: { schema: aiBlockSchema },
       prompt: `You are editing one block of a HYBRIDX marketing email.
 
 ${HYBRIDX_BRAND_CONTEXT}
@@ -62,6 +67,17 @@ ${instruction}`,
   },
 );
 
-export async function reviseBlock(input: ReviseBlockInput) {
-  return reviseBlockFlow(input);
+export async function reviseBlock(input: ReviseBlockInput): Promise<GeneratableBlock> {
+  const raw = await reviseBlockFlow(input);
+
+  // The flow asks Gemini for the flat block shape (see blocks.ts); narrow it
+  // back to a real block before it reaches the editor. There is only one block
+  // here, so a rejection is a failure rather than something to drop silently.
+  const { blocks, rejected } = toEmailBlocks([raw]);
+  if (!blocks.length) {
+    throw new Error(
+      `The revision was not a valid ${raw.type} block: ${rejected[0]?.reason ?? 'unknown reason'}`,
+    );
+  }
+  return blocks[0];
 }

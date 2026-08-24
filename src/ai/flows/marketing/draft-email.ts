@@ -15,7 +15,13 @@
 import { z } from 'genkit';
 import { ai, MODELS } from '@/ai/genkit';
 import { HYBRIDX_BRAND_CONTEXT } from '@/ai/brand-context';
-import { emailContentSchema, blocksToText, MERGE_TOKEN_HINT } from '@/lib/marketing/blocks';
+import {
+  aiEmailContentSchema,
+  toEmailBlocks,
+  emailContentSchema,
+  blocksToText,
+  MERGE_TOKEN_HINT,
+} from '@/lib/marketing/blocks';
 import { getPromptKnowledge } from '@/lib/marketing/knowledge';
 import { validateDraft, type ValidationIssue } from '@/lib/marketing/validate';
 import { renderBlocks, renderBlocksAsText } from '@/lib/marketing/render';
@@ -46,7 +52,7 @@ const draftEmailFlow = ai.defineFlow(
   {
     name: 'draftEmailFlow',
     inputSchema: draftEmailInputSchema,
-    outputSchema: emailContentSchema,
+    outputSchema: aiEmailContentSchema,
   },
   async (input) => {
     const { block } = await getPromptKnowledge();
@@ -57,7 +63,7 @@ const draftEmailFlow = ai.defineFlow(
 
     const { output } = await ai.generate({
       model: MODELS.reasoning,
-      output: { schema: emailContentSchema },
+      output: { schema: aiEmailContentSchema },
       prompt: `You are a direct-response copywriter for HYBRIDX.
 
 ${HYBRIDX_BRAND_CONTEXT}
@@ -76,6 +82,21 @@ You produce structured blocks, not HTML. Available block types:
 - programCard: highlights one training programme by exact name
 - statRow: two or three figures with labels
 - quote: a testimonial
+
+## Required fields per block type
+Every field is optional in the schema because one shape covers all block types,
+so it is on you to send the right ones. Set "type", then only that type's fields:
+- hero: heading (+ optional subheading, imageUrl)
+- heading: text (+ optional level, 2 or 3)
+- paragraph: text
+- bulletList: items
+- cta: label AND url — a cta without a url is discarded
+- image: url AND alt — alt is not optional in practice
+- divider: nothing else
+- programCard: programName AND description
+- statRow: stats, each with value and label
+- quote: text (+ optional attribution)
+Leave every other field out rather than sending it empty.
 
 ${MERGE_TOKEN_HINT}
 
@@ -112,18 +133,30 @@ export async function draftEmail(input: DraftEmailInput): Promise<DraftEmailResu
   const content = await draftEmailFlow(input);
   const { snapshot } = await getPromptKnowledge();
 
+  // Gemini is asked for the flat block shape (see blocks.ts); narrow it back to
+  // the strict union before anything renders or validates.
+  const { blocks, rejected } = toEmailBlocks(content.blocks);
+
   const { ok, issues } = validateDraft(
-    { subject: content.subject, body: blocksToText(content.blocks) },
+    { subject: content.subject, body: blocksToText(blocks) },
     snapshot,
   );
+
+  // A dropped block makes the email shorter than the model intended, which is
+  // not something the reviewer should have to notice for themselves.
+  const blockIssues: ValidationIssue[] = rejected.map((r) => ({
+    severity: 'error',
+    found: r.type,
+    message: `The model returned a ${r.type} block that was not usable and has been dropped (${r.reason}). Redraft, or add the block by hand.`,
+  }));
 
   return {
     subject: content.subject,
     previewText: content.previewText,
-    blocks: content.blocks,
-    html: renderBlocks(content.blocks, { previewText: content.previewText }),
-    text: renderBlocksAsText(content.blocks),
-    issues,
-    valid: ok,
+    blocks,
+    html: renderBlocks(blocks, { previewText: content.previewText }),
+    text: renderBlocksAsText(blocks),
+    issues: [...issues, ...blockIssues],
+    valid: ok && rejected.length === 0,
   };
 }
