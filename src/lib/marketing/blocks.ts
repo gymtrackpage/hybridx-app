@@ -201,7 +201,15 @@ export const aiBlockSchema = z.object({
   imageUrl: z.string().optional().describe('hero: absolute https URL of a hero image.'),
   // heading, paragraph, quote
   text: z.string().optional().describe('heading/paragraph/quote: the text itself. Plain text; no HTML.'),
-  level: z.number().int().min(2).max(3).optional().describe('heading: 2 for a section, 3 for a sub-section.'),
+  // Deliberately an unconstrained number, not .int().min(2).max(3).
+  //
+  // `minimum`/`maximum` were the only JSON Schema keywords this schema used
+  // that compose-journey's — which Gemini accepts in this same deployment —
+  // does not. Rather than keep guessing which keyword the 400 is about, this
+  // schema now uses a strict subset of the keyword set that is provably
+  // working. toEmailBlocks clamps the value instead, so a stray 5 costs a
+  // heading level rather than the whole block.
+  level: z.number().optional().describe('heading: 2 for a section, 3 for a sub-section. Use 2 or 3 only.'),
   // bulletList
   items: z.array(z.string()).optional().describe('bulletList: two to eight short points.'),
   // cta
@@ -261,9 +269,15 @@ export function toEmailBlocks(raw: z.infer<typeof aiBlockSchema>[]): NarrowedBlo
   for (const candidate of raw) {
     // Drop keys the model left explicitly null/undefined so they cannot look
     // like a present-but-invalid value to the variant schema.
-    const cleaned = Object.fromEntries(
+    const cleaned: Record<string, unknown> = Object.fromEntries(
       Object.entries(candidate).filter(([, v]) => v !== undefined && v !== null),
     );
+
+    // The AI schema cannot constrain this (see `level` above), so clamp rather
+    // than reject: a heading with a silly level is still a usable heading.
+    if (cleaned.type === 'heading' && typeof cleaned.level === 'number') {
+      cleaned.level = Math.min(3, Math.max(2, Math.round(cleaned.level)));
+    }
 
     const parsed = generatableBlockSchema.safeParse(cleaned);
     if (parsed.success) {
