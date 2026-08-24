@@ -8,11 +8,27 @@ if (!process.env.GEMINI_API_KEY) {
   console.error('Get your API key from: https://aistudio.google.com/app/apikey');
 }
 
+/**
+ * Model IDs live here, not at the call sites.
+ *
+ * Preview models get retired without notice — `gemini-3-pro-preview` vanishing
+ * is what took the campaign studio down — so every flow that needs something
+ * other than the default names it through one of these constants and a future
+ * retirement is a one-line change. Prefer generally-available IDs over
+ * `-preview` ones for anything on a user-facing path.
+ */
+export const MODELS = {
+  /** Cheap and quick: short summaries, one-line copy, classification. */
+  fast: 'googleai/gemini-3.5-flash-lite',
+  /** Long-form reasoning and structured output — campaign planning, drafting. */
+  reasoning: 'googleai/gemini-3.7-flash',
+} as const;
+
 // Use GEMINI_API_KEY from environment
 // Note: @genkit-ai/googleai is deprecated in favor of @genkit-ai/google-genai
 // (same googleAI() export/API, just an actively maintained package — the old
 // one hasn't shipped since Jan 2026 and doesn't know about Gemini 3.x models).
 export const ai = genkit({
   plugins: [googleAI({ apiKey: process.env.GEMINI_API_KEY })],
-  model: 'googleai/gemini-3.5-flash-lite',
+  model: MODELS.fast,
 });
