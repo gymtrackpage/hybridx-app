@@ -11,7 +11,7 @@
 // certainly not sends.
 
 import { z } from 'genkit';
-import { ai } from '@/ai/genkit';
+import { ai, MODELS } from '@/ai/genkit';
 import { HYBRIDX_BRAND_CONTEXT } from '@/ai/brand-context';
 import { getPromptKnowledge } from '@/lib/marketing/knowledge';
 import type { WeeklyBrief } from '@/lib/marketing/brief';
@@ -44,7 +44,7 @@ const proposeCampaignsFlow = ai.defineFlow(
     const { block } = await getPromptKnowledge();
 
     const { output } = await ai.generate({
-      model: 'googleai/gemini-3-pro-preview',
+      model: MODELS.reasoning,
       output: { schema: proposeCampaignsOutputSchema },
       prompt: `You are the marketing strategist for HYBRIDX, reviewing the week.
 

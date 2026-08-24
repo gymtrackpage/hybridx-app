@@ -13,7 +13,7 @@
 // review screen looking finished.
 
 import { z } from 'genkit';
-import { ai } from '@/ai/genkit';
+import { ai, MODELS } from '@/ai/genkit';
 import { HYBRIDX_BRAND_CONTEXT } from '@/ai/brand-context';
 import { emailContentSchema, blocksToText, MERGE_TOKEN_HINT } from '@/lib/marketing/blocks';
 import { getPromptKnowledge } from '@/lib/marketing/knowledge';
@@ -56,7 +56,7 @@ const draftEmailFlow = ai.defineFlow(
       : '';
 
     const { output } = await ai.generate({
-      model: 'googleai/gemini-3-pro-preview',
+      model: MODELS.reasoning,
       output: { schema: emailContentSchema },
       prompt: `You are a direct-response copywriter for HYBRIDX.
 

@@ -13,7 +13,7 @@
 // email can be redrafted later without disturbing the sequence around it.
 
 import { z } from 'genkit';
-import { ai } from '@/ai/genkit';
+import { ai, MODELS } from '@/ai/genkit';
 import { HYBRIDX_BRAND_CONTEXT } from '@/ai/brand-context';
 import { getPromptKnowledge } from '@/lib/marketing/knowledge';
 import { ALL_TRIGGERS, TRIGGER_DESCRIPTIONS } from '@/lib/marketing/journeys';
@@ -76,7 +76,7 @@ const composeJourneyFlow = ai.defineFlow(
     const { output } = await ai.generate({
       // Planning quality matters more here than latency — this runs once per
       // journey, and everything downstream inherits its structure.
-      model: 'googleai/gemini-3-pro-preview',
+      model: MODELS.reasoning,
       output: { schema: composeJourneyOutputSchema },
       prompt: `You are a lifecycle marketing strategist for HYBRIDX.
 
