@@ -13,7 +13,9 @@ const StarterWorkoutSchema = z.object({
   day: z.number().describe('Day number within the plan: 1, 2, or 3.'),
   title: z.string().describe('A punchy, motivating title for the session (e.g. "Foundation Builder", "Engine Room", "Full Circuit").'),
   exercises: z.array(ExerciseSchema).describe('Exercises for this session — clear sets/reps/durations.'),
-  programType: z.literal('hyrox'),
+  // z.enum, not z.literal: literals compile to `const`, which Gemini's
+  // responseSchema rejects with a 400. See src/lib/marketing/blocks.ts.
+  programType: z.enum(['hyrox']),
 });
 
 const GenerateHyroxStarterOutputSchema = z.object({
