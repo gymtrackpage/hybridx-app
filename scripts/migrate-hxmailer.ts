@@ -30,6 +30,23 @@
 import * as admin from 'firebase-admin';
 import { createHash } from 'crypto';
 
+const KNOWN_FLAGS = ['--dry-run'];
+
+/**
+ * Reject anything unrecognised rather than ignoring it.
+ *
+ * The mode is decided by the *absence* of --dry-run, so a mistyped flag —
+ * `--dry-run~`, `--dryrun`, a stray quote — silently selects a live migration
+ * against production. Failing on an unknown argument is what keeps a typo from
+ * being the difference between a rehearsal and the real thing.
+ */
+const unknownArgs = process.argv.slice(2).filter((arg) => !KNOWN_FLAGS.includes(arg));
+if (unknownArgs.length) {
+  console.error(`Unrecognised argument(s): ${unknownArgs.join(' ')}`);
+  console.error(`Usage: npx tsx scripts/migrate-hxmailer.ts [--dry-run]`);
+  process.exit(1);
+}
+
 const DRY_RUN = process.argv.includes('--dry-run');
 
 // ---------------------------------------------------------------------------
@@ -487,10 +504,27 @@ async function main() {
   const source = initApp('hxmailer-source', 'HXMAILER_SERVICE_ACCOUNT_KEY');
   const target = initApp('hybridx-target', 'FIREBASE_SERVICE_ACCOUNT_KEY');
 
-  const hxUsers = await source.collection('users').get();
-  const hxUserIds = hxUsers.docs.map((d) => d.id);
+  // listDocuments(), not get(). HXMailer only ever wrote to the subcollections
+  // under users/{uid} — subscribers, campaigns, plans, appSettings — and never
+  // to the parent document itself. Firestore treats such a path as a phantom
+  // document: it holds subcollections but does not exist, so a collection query
+  // omits it entirely and get() returns nothing at all. listDocuments() is the
+  // one call that returns references to phantom parents.
+  const hxUserRefs = await source.collection('users').listDocuments();
+  const hxUserIds = hxUserRefs.map((ref) => ref.id);
   stats.hxUsers = hxUserIds.length;
   console.log(`Found ${hxUserIds.length} HXMailer accounts to merge.\n`);
+
+  // A run that finds nothing is a misconfiguration, not an empty source: the
+  // whole point of pointing at HXMailer is that it holds a list. Reporting
+  // "migration complete" over zero accounts reads as success and hides a
+  // swapped key or a wrong project until someone notices the list never arrived.
+  if (!hxUserIds.length) {
+    console.error('No HXMailer accounts found under users/.');
+    console.error('Check that HXMAILER_SERVICE_ACCOUNT_KEY belongs to the source');
+    console.error('project (studio-2581739992-b1f46) and not to the target.');
+    process.exit(1);
+  }
 
   console.log('Reading subscribers…');
   const { merged, legacyToNew } = await collectSubscribers(source, hxUserIds);
