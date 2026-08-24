@@ -21,57 +21,72 @@
 
 import { z } from 'zod';
 
+// A note on `z.enum(['hero'])` where `z.literal('hero')` would read better.
+//
+// These schemas are sent to Gemini as `generationConfig.responseSchema`, which
+// is a restricted OpenAPI subset, not full JSON Schema. `z.literal()` compiles
+// to `{"const": "hero"}`, and `const` is not a field on Gemini's Schema type —
+// the request is rejected with a 400 INVALID_ARGUMENT before the model runs.
+// `z.enum(['hero'])` compiles to `{"type":"string","enum":["hero"]}`, which is
+// supported and infers the same `'hero'` TypeScript type.
+//
+// Same reason `level` is a bounded integer rather than `z.union([z.literal(2),
+// z.literal(3)])`: that compiles to `{"enum":[2,3]}`, and Gemini's `enum` is a
+// list of *strings*, so numeric members are rejected too.
+//
+// See also src/ai/flows/analyze-and-adjust.ts, which hit this same limit.
+
 /** Merge tokens usable inside any text field. Resolved per recipient at send time. */
 export const MERGE_TOKEN_HINT =
   'You may use [First Name], [Last Name], [Full Name] and [Email] as merge tokens in any text.';
 
 const hero = z.object({
-  type: z.literal('hero'),
+  type: z.enum(['hero']),
   heading: z.string().describe('Short, punchy headline. Under 60 characters.'),
   subheading: z.string().optional().describe('One supporting sentence.'),
   imageUrl: z.string().optional().describe('Absolute https URL of a hero image.'),
 });
 
 const heading = z.object({
-  type: z.literal('heading'),
+  type: z.enum(['heading']),
   text: z.string(),
-  level: z.union([z.literal(2), z.literal(3)]).default(2),
+  level: z.number().int().min(2).max(3).default(2),
 });
 
 const paragraph = z.object({
-  type: z.literal('paragraph'),
+  type: z.enum(['paragraph']),
   text: z.string().describe('One paragraph of body copy. Plain text; no HTML.'),
 });
 
 const bulletList = z.object({
-  type: z.literal('bulletList'),
+  type: z.enum(['bulletList']),
   items: z.array(z.string()).min(1).max(8),
 });
 
 const cta = z.object({
-  type: z.literal('cta'),
+  type: z.enum(['cta']),
   label: z.string().describe('Button text. Two to four words, action-led.'),
   url: z.string().describe('Absolute https URL.'),
 });
 
 const image = z.object({
-  type: z.literal('image'),
+  type: z.enum(['image']),
   url: z.string(),
   alt: z.string().describe('Alt text. Required — many clients block images by default.'),
   linkUrl: z.string().optional(),
 });
 
-const divider = z.object({ type: z.literal('divider') });
+const divider = z.object({ type: z.enum(['divider']) });
 
 const programCard = z.object({
-  type: z.literal('programCard'),
+  type: z.enum(['programCard']),
   programName: z.string().describe('Must exactly match a programme from the supplied facts.'),
   description: z.string(),
   url: z.string().optional(),
 });
 
 const statRow = z.object({
-  type: z.literal('statRow'),
+  type: z.enum(['statRow']),
   stats: z
     .array(z.object({ value: z.string(), label: z.string() }))
     .min(2)
@@ -80,7 +95,7 @@ const statRow = z.object({
 });
 
 const quote = z.object({
-  type: z.literal('quote'),
+  type: z.enum(['quote']),
   text: z.string(),
   attribution: z.string().optional(),
 });
@@ -91,7 +106,7 @@ const quote = z.object({
  * block model is that generated content cannot emit arbitrary markup.
  */
 const rawHtml = z.object({
-  type: z.literal('rawHtml'),
+  type: z.enum(['rawHtml']),
   html: z.string(),
 });
 
