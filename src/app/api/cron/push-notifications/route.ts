@@ -7,6 +7,7 @@
  */
 
 import { NextResponse } from 'next/server';
+import { requireCronAuth } from '@/lib/cron-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { sendPushToUser } from '@/lib/web-push';
 import { notificationMessage } from '@/ai/flows/notification-message';
@@ -52,10 +53,8 @@ const RE_ENGAGEMENT_MESSAGES = [
 ];
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+  const denied = requireCronAuth(request, 'push-notifications');
+  if (denied) return denied;
 
   const db = getAdminDb();
 

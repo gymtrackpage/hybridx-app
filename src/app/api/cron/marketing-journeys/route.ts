@@ -8,6 +8,7 @@
 // still does the actual sending.
 
 import { NextResponse } from 'next/server';
+import { requireCronAuth } from '@/lib/cron-auth';
 import { logger } from '@/lib/logger';
 import { sweepBackdatedActivity, syncWorkoutActivity } from '@/lib/marketing/activity';
 import { advanceRuns, evaluateDerivedTriggers, processEvents } from '@/lib/marketing/engine';
@@ -17,10 +18,8 @@ export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+  const denied = requireCronAuth(request, 'marketing-journeys');
+  if (denied) return denied;
 
   const url = new URL(request.url);
 

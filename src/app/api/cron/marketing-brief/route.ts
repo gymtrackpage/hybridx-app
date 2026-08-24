@@ -8,6 +8,7 @@
 // route to a send.
 
 import { NextResponse } from 'next/server';
+import { requireCronAuth } from '@/lib/cron-auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { logger } from '@/lib/logger';
@@ -124,10 +125,8 @@ async function draftProposal(proposal: CampaignProposal): Promise<ProposalResult
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+  const denied = requireCronAuth(request, 'marketing-brief');
+  if (denied) return denied;
 
   const startedAt = Date.now();
 
