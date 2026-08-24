@@ -48,23 +48,19 @@ export interface DraftEmailResult {
   valid: boolean;
 }
 
-const draftEmailFlow = ai.defineFlow(
-  {
-    name: 'draftEmailFlow',
-    inputSchema: draftEmailInputSchema,
-    outputSchema: aiEmailContentSchema,
-  },
-  async (input) => {
-    const { block } = await getPromptKnowledge();
+/**
+ * Build the drafting prompt.
+ *
+ * Exported so the diagnostic probe can send the byte-identical prompt: a probe
+ * that reconstructs an approximation of it can only prove things about the
+ * approximation.
+ */
+export function buildDraftPrompt(input: DraftEmailInput, block: string): string {
+  const siblings = input.siblingSubjects?.length
+    ? `\n## Other emails in this sequence\nDo not repeat these angles or subject lines:\n${input.siblingSubjects.map((s) => `- ${s}`).join('\n')}`
+    : '';
 
-    const siblings = input.siblingSubjects?.length
-      ? `\n## Other emails in this sequence\nDo not repeat these angles or subject lines:\n${input.siblingSubjects.map((s) => `- ${s}`).join('\n')}`
-      : '';
-
-    const { output } = await ai.generate({
-      model: MODELS.reasoning,
-      output: { schema: aiEmailContentSchema },
-      prompt: `You are a direct-response copywriter for HYBRIDX.
+  return `You are a direct-response copywriter for HYBRIDX.
 
 ${HYBRIDX_BRAND_CONTEXT}
 
@@ -114,7 +110,22 @@ ${MERGE_TOKEN_HINT}
 ${input.journeyGoal ? `## Sequence goal\n${input.journeyGoal}\n` : ''}${input.audienceDescription ? `## Audience\n${input.audienceDescription}\n` : ''}${input.position ? `## Position\n${input.position}\n` : ''}${siblings}
 
 ## This email's brief
-${input.brief}`,
+${input.brief}`;
+}
+
+const draftEmailFlow = ai.defineFlow(
+  {
+    name: 'draftEmailFlow',
+    inputSchema: draftEmailInputSchema,
+    outputSchema: aiEmailContentSchema,
+  },
+  async (input) => {
+    const { block } = await getPromptKnowledge();
+
+    const { output } = await ai.generate({
+      model: MODELS.reasoning,
+      output: { schema: aiEmailContentSchema },
+      prompt: buildDraftPrompt(input, block),
     });
 
     if (!output) throw new Error('The drafting flow returned no output.');
