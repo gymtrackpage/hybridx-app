@@ -22,7 +22,7 @@ import { z } from 'genkit';
 import { requireCronAuth } from '@/lib/cron-auth';
 import { ai, MODELS } from '@/ai/genkit';
 import { aiEmailContentSchema, aiBlockSchema } from '@/lib/marketing/blocks';
-import { buildDraftPrompt } from '@/ai/flows/marketing/draft-email';
+import { buildDraftPrompt } from '@/lib/marketing/draft-prompt';
 import { getPromptKnowledge } from '@/lib/marketing/knowledge';
 
 export const maxDuration = 300;
