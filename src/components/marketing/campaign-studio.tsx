@@ -193,6 +193,10 @@ export function CampaignStudio({
   };
 
   const blockingIssues = drafts.flatMap((d) => d.issues.filter((i) => i.severity === 'error'));
+  // A dropped block and an unverifiable price are both blocking, but they ask
+  // the reader to do different things, so they are counted and worded apart.
+  const factIssues = blockingIssues.filter((i) => i.kind !== 'structure');
+  const structureIssues = blockingIssues.filter((i) => i.kind === 'structure');
 
   return (
     <div className="space-y-6">
@@ -341,11 +345,25 @@ export function CampaignStudio({
           {blockingIssues.length > 0 ? (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Fact check failed</AlertTitle>
+              <AlertTitle>
+                {factIssues.length > 0 ? 'Fact check failed' : 'Draft incomplete'}
+              </AlertTitle>
               <AlertDescription>
-                {blockingIssues.length} claim{blockingIssues.length === 1 ? '' : 's'} could not be
-                verified against live HYBRIDX data. Fix these before sending — they would go out
-                under your brand.
+                {factIssues.length > 0 && (
+                  <>
+                    {factIssues.length} claim{factIssues.length === 1 ? '' : 's'} could not be
+                    verified against live HYBRIDX data. Fix these before sending — they would go
+                    out under your brand.
+                  </>
+                )}
+                {factIssues.length > 0 && structureIssues.length > 0 && ' '}
+                {structureIssues.length > 0 && (
+                  <>
+                    {structureIssues.length} block
+                    {structureIssues.length === 1 ? ' was' : 's were'} dropped as unusable, so the
+                    email is shorter than intended. Redraft, or add the missing content by hand.
+                  </>
+                )}
               </AlertDescription>
             </Alert>
           ) : (

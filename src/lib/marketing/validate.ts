@@ -18,6 +18,19 @@ export type IssueSeverity = 'error' | 'warning';
 
 export interface ValidationIssue {
   severity: IssueSeverity;
+  /**
+   * What kind of problem this is.
+   *
+   * 'fact' means a claim in the copy could not be matched against live data —
+   * a price, a trial length, a programme name. 'structure' means the model's
+   * output was not usable as a block and something was dropped. They surface
+   * together but are not the same thing, and calling a dropped heading "a
+   * claim that could not be verified against live HYBRIDX data" sends the
+   * reader looking for a pricing error that does not exist.
+   *
+   * Optional so existing producers default to 'fact', which is what they are.
+   */
+  kind?: 'fact' | 'structure';
   /** What was found, quoted from the draft. */
   found: string;
   message: string;

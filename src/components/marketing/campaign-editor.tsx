@@ -177,7 +177,9 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
       {errors.length > 0 && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Fact check failed</AlertTitle>
+          <AlertTitle>
+            {errors.some((i) => i.kind !== 'structure') ? 'Fact check failed' : 'Draft incomplete'}
+          </AlertTitle>
           <AlertDescription>
             <ul className="mt-1 list-inside list-disc space-y-1">
               {errors.map((issue, i) => (

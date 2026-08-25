@@ -295,6 +295,37 @@ export function toEmailBlocks(raw: z.infer<typeof aiBlockSchema>[]): NarrowedBlo
       cleaned.level = Math.min(3, Math.max(2, Math.round(cleaned.level)));
     }
 
+    // Recover text the model put in an adjacent field.
+    //
+    // The flat shape has a trap of its own making: a block whose *type* is
+    // `heading` keeps its words in `text`, while the field literally named
+    // `heading` belongs to `hero`. Models put the words in `heading`, which is
+    // the reading the field name invites, and the block was then dropped for a
+    // missing `text` it had actually written.
+    //
+    // Moving a value the model did supply is not the same as inventing one.
+    // This is why a `cta` with no `url` is still dropped: there is nothing to
+    // move, and guessing a link puts a broken one in front of a subscriber.
+    const alias = (target: string, sources: string[]) => {
+      if (typeof cleaned[target] === 'string' && cleaned[target]) return;
+      for (const source of sources) {
+        if (typeof cleaned[source] === 'string' && cleaned[source]) {
+          cleaned[target] = cleaned[source];
+          return;
+        }
+      }
+    };
+
+    if (cleaned.type === 'heading' || cleaned.type === 'paragraph' || cleaned.type === 'quote') {
+      alias('text', ['heading', 'description', 'label']);
+    } else if (cleaned.type === 'hero') {
+      alias('heading', ['text']);
+    } else if (cleaned.type === 'cta') {
+      alias('label', ['text']);
+    } else if (cleaned.type === 'programCard') {
+      alias('description', ['text']);
+    }
+
     const parsed = generatableBlockSchema.safeParse(cleaned);
     if (parsed.success) {
       blocks.push(parsed.data);
