@@ -28,6 +28,17 @@ export const dynamic = 'force-dynamic';
 
 const HORIZON_DAYS = 14;
 
+/**
+ * Stop starting new athletes past this point.
+ *
+ * Every athlete here means a series of calls to Garmin's API, so a large roster
+ * can outlive the container. Without a budget the run is killed mid-athlete and
+ * reports nothing at all; with one it returns a truthful partial result and the
+ * rest are picked up next run. Must stay under maxDuration and under the Cloud
+ * Scheduler attemptDeadline.
+ */
+const TIME_BUDGET_MS = 150_000;
+
 // Helper to convert date to ISO
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -38,7 +49,8 @@ export async function GET(request: Request) {
   if (denied) return denied;
 
   const db = getAdminDb();
-  const results = { processed: 0, synced: 0, skipped: 0, errors: 0 };
+  const startedAt = Date.now();
+  const results = { processed: 0, synced: 0, skipped: 0, errors: 0, deferred: 0 };
 
   // Query users who have connected Garmin (garminConnectedAt is set).
   const usersSnap = await db
@@ -50,6 +62,15 @@ export async function GET(request: Request) {
 
   for (const userDoc of usersSnap.docs) {
     const userId = userDoc.id;
+
+    if (Date.now() - startedAt > TIME_BUDGET_MS) {
+      results.deferred = usersSnap.docs.length - results.processed;
+      logger.error(
+        `[cron/garmin-sync] time budget reached; ${results.deferred} athletes deferred to the next run`,
+      );
+      break;
+    }
+
     results.processed++;
 
     try {
@@ -81,7 +102,10 @@ export async function GET(request: Request) {
         accessToken = await getValidGarminToken(userId);
       } catch (e) {
         const error = e as any;
-        logger.warn(`Garmin cron: token refresh failed for ${userId}:`, (error as any).code);
+        // logger.error, not warn: warn is compiled out in production, and a
+        // token that will not refresh is the single most likely reason an
+        // athlete silently stops receiving workouts.
+        logger.error(`[cron/garmin-sync] token refresh failed for ${userId}:`, (error as any).code);
         results.skipped++;
         continue;
       }
@@ -140,18 +164,18 @@ export async function GET(request: Request) {
             userPushed++;
           } catch (e) {
             const error = e as any;
-            logger.error(`Garmin cron: push failed day ${w.day} session ${sessionIdx} user ${userId}:`, error instanceof Error ? error.message : String(error));
+            logger.error(`[cron/garmin-sync] push failed day ${w.day} session ${sessionIdx} user ${userId}:`, error instanceof Error ? error.message : String(error));
           }
         }
       }
 
       await db.collection('users').doc(userId).update({ garminPlanSync: newSync });
       results.synced++;
-      logger.log(`Garmin cron: synced ${userPushed} workouts for user ${userId}`);
+      logger.log(`[cron/garmin-sync] synced ${userPushed} workouts for user ${userId}`);
 
     } catch (err) {
       const error = err as any;
-      logger.error(`Garmin cron: error for user ${userId}:`, error instanceof Error ? error.message : String(error));
+      logger.error(`[cron/garmin-sync] error for user ${userId}:`, error instanceof Error ? error.message : String(error));
       results.errors++;
     }
   }

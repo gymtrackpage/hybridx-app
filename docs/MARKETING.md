@@ -114,6 +114,16 @@ Outside marketing, the same `CRON_SECRET` guards `/api/cron/daily-coach`,
 covers those too — `daily-coach` and `garmin-sync` had no Scheduler job at all
 until it was written, so those endpoints had never once run.
 
+Before relying on `daily-coach`, check the model call it makes actually works:
+
+```bash
+GEMINI_API_KEY=... npx tsx scripts/check-ai-flows.ts
+```
+
+Its flow had never executed against the live API. A structured-output schema
+that Gemini rejects fails with a bare 400 naming no field, which is very hard to
+diagnose from a nightly job's logs and trivial to see from a terminal.
+
 ### Creating or repairing the jobs
 
 ```bash

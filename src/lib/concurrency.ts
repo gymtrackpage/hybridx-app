@@ -1,0 +1,43 @@
+// src/lib/concurrency.ts
+//
+// Bounded parallelism for cron jobs that fan out per user.
+//
+// `Promise.all(users.map(...))` is the obvious shape and the wrong one once the
+// work inside makes a network call. It starts every request at once, so a job
+// that behaves fine with twenty users floods a provider at two thousand and
+// comes back rate-limited — and the failure arrives all at once, at 3am, on the
+// run nobody is watching.
+
+/**
+ * Map over items with at most `limit` operations in flight.
+ *
+ * Results keep the input order regardless of completion order. A rejection
+ * propagates, as with Promise.all — callers that want partial success should
+ * catch inside `fn`, which is what the cron routes do so one bad user cannot
+ * abandon the rest of the run.
+ */
+export async function mapWithLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return [];
+
+  // A non-positive limit would spawn no workers and hang forever. Treat it as
+  // sequential, which is the safest reading of "no more than zero at a time".
+  const workers = Math.max(1, Math.min(Math.floor(limit) || 1, items.length));
+
+  const results = new Array<R>(items.length);
+  let next = 0;
+
+  async function work(): Promise<void> {
+    for (;;) {
+      const index = next++;
+      if (index >= items.length) return;
+      results[index] = await fn(items[index], index);
+    }
+  }
+
+  await Promise.all(Array.from({ length: workers }, work));
+  return results;
+}
