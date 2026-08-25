@@ -124,7 +124,9 @@ export function JourneyActivation({
         {firstCampaignId && (
           <div className="space-y-2">
             <Label htmlFor="test-email">Send a test</Label>
-            <div className="flex gap-2">
+            {/* Stacked on a phone: an email field squeezed next to a labelled
+                button leaves too little room to read what you typed. */}
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="test-email"
                 type="email"
@@ -132,7 +134,12 @@ export function JourneyActivation({
                 onChange={(e) => setTestEmail(e.target.value)}
                 placeholder="you@hybridx.club"
               />
-              <Button variant="outline" onClick={handleTest} disabled={sendingTest || !testEmail}>
+              <Button
+                variant="outline"
+                className="sm:shrink-0"
+                onClick={handleTest}
+                disabled={sendingTest || !testEmail}
+              >
                 {sendingTest ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
@@ -163,7 +170,7 @@ export function JourneyActivation({
           </div>
         )}
 
-        <Button onClick={handleActivate} disabled={blocked || activating}>
+        <Button className="w-full sm:w-auto" onClick={handleActivate} disabled={blocked || activating}>
           {activating ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
@@ -220,7 +227,7 @@ function ManualRunCard({ journeyId }: { journeyId: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Button onClick={handleRun} disabled={running}>
+        <Button className="w-full sm:w-auto" onClick={handleRun} disabled={running}>
           {running ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (

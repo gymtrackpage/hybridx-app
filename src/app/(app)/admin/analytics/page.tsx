@@ -103,15 +103,18 @@ export default function AdminAnalyticsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Analytics</h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground sm:text-base">
             User behaviour, retention, and engagement insights.
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
+        {/* The window picker and refresh sit on one row on a phone, with the
+            admin toggle beneath, rather than three controls fighting for the
+            same line. */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex min-h-10 items-center gap-2">
             <Switch
               id="exclude-admins"
               checked={excludeAdmins}
@@ -121,19 +124,21 @@ export default function AdminAnalyticsPage() {
               Exclude Admins
             </Label>
           </div>
-          <Select value={days} onValueChange={setDays}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
+          <div className="flex flex-1 items-center gap-2 lg:flex-none">
+            <Select value={days} onValueChange={setDays}>
+              <SelectTrigger className="w-full lg:w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">Last 7 days</SelectItem>
+                <SelectItem value="30">Last 30 days</SelectItem>
+                <SelectItem value="90">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="icon" className="shrink-0" onClick={fetchData} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -150,34 +155,34 @@ export default function AdminAnalyticsPage() {
       {data && (
         <>
           {/* Retention KPIs */}
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Daily Active Users</CardTitle>
-                <Activity className="h-4 w-4 text-muted-foreground" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2 sm:p-6 sm:pb-2">
+                <CardTitle className="text-xs font-medium sm:text-sm">Daily Active Users</CardTitle>
+                <Activity className="h-4 w-4 shrink-0 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{data.retention.dau}</div>
+              <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+                <div className="text-2xl font-bold sm:text-3xl">{data.retention.dau}</div>
                 <p className="text-xs text-muted-foreground mt-1">Last 24 hours</p>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Weekly Active Users</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2 sm:p-6 sm:pb-2">
+                <CardTitle className="text-xs font-medium sm:text-sm">Weekly Active Users</CardTitle>
+                <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{data.retention.wau}</div>
+              <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+                <div className="text-2xl font-bold sm:text-3xl">{data.retention.wau}</div>
                 <p className="text-xs text-muted-foreground mt-1">Last 7 days</p>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Monthly Active Users</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2 sm:p-6 sm:pb-2">
+                <CardTitle className="text-xs font-medium sm:text-sm">Monthly Active Users</CardTitle>
+                <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{data.retention.mau}</div>
+              <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+                <div className="text-2xl font-bold sm:text-3xl">{data.retention.mau}</div>
                 <p className="text-xs text-muted-foreground mt-1">Last 30 days</p>
               </CardContent>
             </Card>
@@ -187,8 +192,8 @@ export default function AdminAnalyticsPage() {
           {data.dauChart.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart2 className="h-4 w-4" />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <BarChart2 className="h-4 w-4 shrink-0" />
                   Daily Active Users — Last {days} Days
                 </CardTitle>
               </CardHeader>
@@ -253,7 +258,7 @@ export default function AdminAnalyticsPage() {
           </Card>
 
           {/* Session Duration + PWA side by side */}
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
             {/* Session Duration */}
             <Card>
               <CardHeader>
@@ -320,7 +325,7 @@ export default function AdminAnalyticsPage() {
           </div>
 
           {/* Platform breakdown + Top Pages side by side */}
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
             {/* Platform */}
             <Card>
               <CardHeader>
@@ -383,9 +388,9 @@ export default function AdminAnalyticsPage() {
                   const pct = Math.round((count / maxCount) * 100);
                   return (
                     <div key={path} className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-mono text-xs truncate max-w-[160px]">{path}</span>
-                        <span className="text-muted-foreground ml-2 shrink-0">{count}</span>
+                      <div className="flex justify-between gap-2 text-sm">
+                        <span className="min-w-0 flex-1 truncate font-mono text-xs">{path}</span>
+                        <span className="shrink-0 text-muted-foreground">{count}</span>
                       </div>
                       <Progress value={pct} className="h-1.5" />
                     </div>

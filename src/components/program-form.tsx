@@ -215,7 +215,7 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-h-[90dvh] w-[calc(100%-1.5rem)] max-w-4xl overflow-y-auto p-4 sm:w-full sm:p-6">
         <DialogHeader>
           <DialogTitle>{program ? 'Edit Program' : 'Add New Program'}</DialogTitle>
           <DialogDescription>
@@ -226,7 +226,7 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
           <form autoComplete="off" onSubmit={form.handleSubmit(onSubmit, () => {
               toast({ title: 'Validation error', description: 'Please check the highlighted fields and try again.', variant: 'destructive' });
             })} className="space-y-6">
-            <ScrollArea className="h-[60vh] pr-6">
+            <ScrollArea className="h-[55vh] pr-3 sm:h-[60vh] sm:pr-6">
               <div className="space-y-4">
 
                 {/* Program name */}
@@ -355,7 +355,7 @@ export function ProgramForm({ isOpen, setIsOpen, program, onSuccess }: ProgramFo
               </div>
             </ScrollArea>
 
-            <DialogFooter>
+            <DialogFooter className="gap-2 sm:gap-0">
               <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>
                 Cancel
               </Button>

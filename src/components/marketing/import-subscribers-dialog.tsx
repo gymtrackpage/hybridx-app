@@ -112,13 +112,13 @@ export function ImportSubscribersDialog() {
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
       <DialogTrigger asChild>
-        <Button variant="outline">
+        <Button variant="outline" className="w-full sm:w-auto">
           <Upload className="mr-2 h-4 w-4" />
           Import CSV
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto sm:w-full">
         <DialogHeader>
           <DialogTitle>Import subscribers</DialogTitle>
           <DialogDescription>
@@ -154,7 +154,7 @@ export function ImportSubscribersDialog() {
                     ['lastName', 'Last name'],
                   ] as const
                 ).map(([field, label]) => (
-                  <div key={field} className="grid grid-cols-2 items-center gap-3">
+                  <div key={field} className="grid gap-1.5 sm:grid-cols-2 sm:items-center sm:gap-3">
                     <Label className="text-sm">{label}</Label>
                     <Select
                       value={mapping[field]}
@@ -218,7 +218,7 @@ export function ImportSubscribersDialog() {
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>

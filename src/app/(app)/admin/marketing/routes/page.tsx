@@ -54,7 +54,7 @@ export default async function RoutesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-headline text-3xl font-bold">Intake routes</h1>
+        <h1 className="font-headline text-2xl font-bold sm:text-3xl">Intake routes</h1>
         <p className="mt-1 max-w-2xl text-muted-foreground">
           Every way an address enters the list. A new funnel on the marketing site registers
           itself here the first time it sends a lead — give it a name, tags and a welcome

@@ -112,7 +112,7 @@ export function JourneysList({ journeys }: { journeys: SerialisableJourney[] }) 
             const emailCount = journey.steps.filter((s) => s.type === 'sendEmail').length;
             return (
               <Card key={journey.id}>
-                <CardHeader className="pb-3">
+                <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <CardTitle className="text-base">
@@ -130,7 +130,7 @@ export function JourneysList({ journeys }: { journeys: SerialisableJourney[] }) 
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
                   <p className="text-xs text-muted-foreground">
                     {TRIGGER_DESCRIPTIONS[journey.trigger.type as TriggerType] ??
                       journey.trigger.type}
@@ -154,7 +154,7 @@ export function JourneysList({ journeys }: { journeys: SerialisableJourney[] }) 
                     )}
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {journey.status === 'live' ? (
                       <Button
                         size="sm"

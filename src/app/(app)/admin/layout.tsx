@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronLeft, Settings, Users, BookOpen, BarChart2, Mail, Send, Contact, Sparkles, Workflow, Filter, DoorOpen } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/icons";
 import { getAdminUser } from "@/lib/admin-auth";
-import { cn } from "@/lib/utils";
+import { AdminMobileNav, AdminSidebar } from "@/components/admin/admin-nav";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -21,92 +21,43 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-sm md:px-6">
-        <Link href="/dashboard" className="flex items-center gap-2">
+    // The app shell already pads its <main>; the negative margins let the admin
+    // header and sidebar run edge to edge inside it, and the inner <main> puts
+    // the padding back around the page content only.
+    <div className="-mx-4 -mt-4 flex min-h-full flex-col lg:-mx-6 lg:-mt-6">
+      <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-3 backdrop-blur-sm md:h-16 md:px-6">
+        {/* Phones get the section name and a drawer trigger; the wordmark is
+            already in the app header directly above, so repeating it there
+            only ate the width the title needs. */}
+        <AdminMobileNav />
+
+        <Link href="/dashboard" className="hidden items-center gap-2 md:flex">
           <Logo className="h-6 w-6 text-primary" />
           <span className="font-semibold">HYBRIDX.CLUB</span>
           <span className="text-sm text-muted-foreground">• Admin</span>
         </Link>
-        <Button asChild variant="outline">
-          <Link href="/dashboard">
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Back to Dashboard
+
+        <Button
+          asChild
+          variant="outline"
+          className="h-9 w-9 shrink-0 p-0 md:h-10 md:w-auto md:px-4"
+        >
+          <Link href="/dashboard" aria-label="Back to Dashboard">
+            <ChevronLeft className="h-4 w-4" />
+            <span className="hidden md:inline">Back to Dashboard</span>
           </Link>
         </Button>
       </header>
 
       <div className="flex flex-1">
-        {/* Sidebar Navigation */}
-        <nav className="w-64 border-r bg-muted/10 p-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 px-2 py-1 text-sm font-medium text-muted-foreground">
-              <Settings className="h-4 w-4" />
-              Admin Panel
-            </div>
-            <AdminNavLink href="/admin/programs" icon={BookOpen}>
-              Programs
-            </AdminNavLink>
-            <AdminNavLink href="/admin/users" icon={Users}>
-              Users
-            </AdminNavLink>
-            <AdminNavLink href="/admin/analytics" icon={BarChart2}>
-              Analytics
-            </AdminNavLink>
+        <AdminSidebar />
 
-            <div className="flex items-center gap-2 px-2 pb-1 pt-4 text-sm font-medium text-muted-foreground">
-              <Mail className="h-4 w-4" />
-              Marketing
-            </div>
-            <AdminNavLink href="/admin/marketing" icon={BarChart2}>
-              Overview
-            </AdminNavLink>
-            <AdminNavLink href="/admin/marketing/studio" icon={Sparkles}>
-              Studio
-            </AdminNavLink>
-            <AdminNavLink href="/admin/marketing/journeys" icon={Workflow}>
-              Journeys
-            </AdminNavLink>
-            <AdminNavLink href="/admin/marketing/campaigns" icon={Send}>
-              Campaigns
-            </AdminNavLink>
-            <AdminNavLink href="/admin/marketing/subscribers" icon={Contact}>
-              Subscribers
-            </AdminNavLink>
-            <AdminNavLink href="/admin/marketing/segments" icon={Filter}>
-              Segments
-            </AdminNavLink>
-            <AdminNavLink href="/admin/marketing/routes" icon={DoorOpen}>
-              Routes
-            </AdminNavLink>
-            <AdminNavLink href="/admin/marketing/settings" icon={Settings}>
-              Settings
-            </AdminNavLink>
-          </div>
-        </nav>
-
-        {/* Main Content */}
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
+        {/* min-w-0 stops wide children (tables, previews) from forcing the
+            whole page to scroll sideways on a phone. */}
+        <main className="min-w-0 flex-1 px-4 py-5 lg:px-6 lg:py-8">
           {children}
         </main>
       </div>
     </div>
-  );
-}
-
-interface AdminNavLinkProps {
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  children: React.ReactNode;
-}
-
-function AdminNavLink({ href, icon: Icon, children }: AdminNavLinkProps) {
-  return (
-    <Button asChild variant="ghost" className="w-full justify-start">
-      <Link href={href}>
-        <Icon className="mr-2 h-4 w-4" />
-        {children}
-      </Link>
-    </Button>
   );
 }

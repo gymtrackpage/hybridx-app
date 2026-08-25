@@ -79,7 +79,7 @@ export function ProgramAccessDialog({ program, isOpen, setIsOpen, onSuccess }: P
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !saving && setIsOpen(open)}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[85dvh] w-[calc(100%-1.5rem)] max-w-lg overflow-y-auto sm:w-full">
         <DialogHeader>
           <DialogTitle>Manage access</DialogTitle>
           <DialogDescription>
@@ -96,7 +96,7 @@ export function ProgramAccessDialog({ program, isOpen, setIsOpen, onSuccess }: P
           disabled={saving}
         />
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="ghost" onClick={() => setIsOpen(false)} disabled={saving}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving || nothingSelected}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
