@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { HYBRIDX_BRAND_CONTEXT } from '@/ai/brand-context';
 import { MERGE_TOKEN_HINT } from '@/lib/marketing/blocks';
+import { APP_MARKETING_PATHS } from '@/lib/marketing/app-routes';
 
 export const draftEmailInputSchema = z.object({
   brief: z.string().describe('What this email must achieve.'),
@@ -75,7 +76,11 @@ ${MERGE_TOKEN_HINT}
 - Six to ten blocks. Athletes do not read long email.
 - Subject under 60 characters so inboxes do not truncate it.
 - Preview text complements the subject; it must not repeat it.
-- Link to https://app.hybridx.club/... for anything in the app.
+- Link into the app using ONLY these exact paths — anything else 404s for the
+  reader. Never invent a path, and never add a query string or fragment:
+${APP_MARKETING_PATHS.map((path) => `  https://app.hybridx.club${path}`).join('\n')}
+  When in doubt, or for anything a specific programme, article or entry does
+  not have its own page for, link to /dashboard rather than guessing.
 - Only name a programme that appears verbatim in the facts above.
 - Never state a price, trial length or statistic that is not in the facts.
 - Write HYROX in capitals and the brand as HYBRIDX.

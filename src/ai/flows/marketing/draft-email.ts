@@ -26,7 +26,7 @@ import {
   type DraftEmailInput,
 } from '@/lib/marketing/draft-prompt';
 import { getPromptKnowledge } from '@/lib/marketing/knowledge';
-import { validateDraft, type ValidationIssue } from '@/lib/marketing/validate';
+import { validateDraft, validateLinks, type ValidationIssue } from '@/lib/marketing/validate';
 import { renderBlocks, renderBlocksAsText } from '@/lib/marketing/render';
 
 export type { DraftEmailInput };
@@ -91,13 +91,20 @@ export async function draftEmail(input: DraftEmailInput): Promise<DraftEmailResu
     message: `The model returned a ${r.type} block that was not usable and has been dropped (${r.reason}). Redraft, or add the block by hand.`,
   }));
 
+  // Checked against the blocks, not the flattened text validateDraft uses —
+  // a URL is not something blocksToText surfaces at all.
+  const linkIssues = validateLinks(
+    blocks,
+    process.env.NEXT_PUBLIC_APP_URL || 'https://app.hybridx.club',
+  );
+
   return {
     subject: content.subject,
     previewText: content.previewText,
     blocks,
     html: renderBlocks(blocks, { previewText: content.previewText }),
     text: renderBlocksAsText(blocks),
-    issues: [...issues, ...blockIssues],
-    valid: ok && rejected.length === 0,
+    issues: [...issues, ...blockIssues, ...linkIssues],
+    valid: ok && rejected.length === 0 && linkIssues.length === 0,
   };
 }

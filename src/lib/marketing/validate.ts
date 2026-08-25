@@ -13,6 +13,8 @@
 // mechanically, and (c) cause real damage when wrong.
 
 import type { KnowledgeSnapshot } from './knowledge';
+import type { EmailBlock } from './blocks';
+import { isKnownAppPath } from './app-routes';
 
 export type IssueSeverity = 'error' | 'warning';
 
@@ -69,6 +71,61 @@ function toText(input: string): string {
 /** Normalise a programme name for comparison: lowercase, punctuation-insensitive. */
 function normaliseName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Check every link in the blocks against the app's real routes.
+ *
+ * Separate from `validateDraft` because it needs the blocks themselves, not
+ * the flattened text `validateDraft` checks against — the one place a URL
+ * exists in a drafted email is inside a block, and blockText deliberately
+ * does not surface it (a URL is not something a reader reads aloud, so it was
+ * never part of the "text a person sees" that function extracts).
+ */
+export function validateLinks(blocks: EmailBlock[], appUrl: string): ValidationIssue[] {
+  const appHost = (() => {
+    try {
+      return new URL(appUrl).host;
+    } catch {
+      return null;
+    }
+  })();
+
+  const issues: ValidationIssue[] = [];
+  const check = (raw: string | undefined, where: string) => {
+    if (!raw) return;
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      issues.push({
+        severity: 'error',
+        kind: 'fact',
+        found: raw,
+        message: `${where} is not a valid URL.`,
+      });
+      return;
+    }
+    // Only app.hybridx.club links are checkable against a route list — an
+    // external link (a Strava post, a HYROX event page) is legitimately
+    // outside it, and the fact-check is not the place to police those.
+    if (appHost && parsed.host === appHost && !isKnownAppPath(parsed.pathname)) {
+      issues.push({
+        severity: 'error',
+        kind: 'fact',
+        found: raw,
+        message: `${where} links to "${parsed.pathname}", which is not a page the app has. It would 404 for the reader.`,
+      });
+    }
+  };
+
+  for (const block of blocks) {
+    if (block.type === 'cta') check(block.url, 'The button');
+    if (block.type === 'programCard' && block.url) check(block.url, 'The programme card link');
+    if (block.type === 'image' && block.linkUrl) check(block.linkUrl, 'The image link');
+  }
+
+  return issues;
 }
 
 /**

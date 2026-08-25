@@ -18,6 +18,7 @@ import {
   type GeneratableBlock,
 } from '@/lib/marketing/blocks';
 import { getPromptKnowledge } from '@/lib/marketing/knowledge';
+import { validateLinks } from '@/lib/marketing/validate';
 
 const reviseBlockInputSchema = z.object({
   block: z.unknown().describe('The block to revise, as JSON.'),
@@ -79,5 +80,18 @@ export async function reviseBlock(input: ReviseBlockInput): Promise<GeneratableB
       `The revision was not a valid ${raw.type} block: ${rejected[0]?.reason ?? 'unknown reason'}`,
     );
   }
+
+  // The prompt asks the model to leave URLs alone unless the instruction is
+  // about them, but "make the button link to the programs page" is exactly
+  // the instruction where it should touch one — and can invent a path that
+  // 404s just as easily here as in a first draft. Same failure, same check.
+  const linkIssues = validateLinks(
+    blocks,
+    process.env.NEXT_PUBLIC_APP_URL || 'https://app.hybridx.club',
+  );
+  if (linkIssues.length) {
+    throw new Error(linkIssues[0].message);
+  }
+
   return blocks[0];
 }
