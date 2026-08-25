@@ -120,6 +120,29 @@ gcloud scheduler jobs create http marketing-send \
   --location=us-central1
 ```
 
+## A limit on AI-drafted structure
+
+`aiEmailContentSchema.blocks` is capped at 10, and the cap is load-bearing
+rather than stylistic. Gemini rejects the whole request with a bare 400
+`INVALID_ARGUMENT` — naming no field — when this array's `maxItems` is too
+large. Measured against the live API by laddering the bound with everything
+else held constant:
+
+| `maxItems` | Result |
+|---|---|
+| 3, 5, 8, 10, 12 | pass |
+| 15, 20 | fail |
+
+The bound is what matters, not the block schema: the same block schema capped
+at 3 always passed. This fits a constrained-decoding grammar-size limit, since
+the grammar is unrolled per permitted element and the block schema carries 14
+optional properties.
+
+Two consequences. Raising the cap needs re-measuring, not reasoning. So does
+adding fields to `aiBlockSchema`, because that grows the same grammar and can
+lower the usable cap. `src/lib/marketing/__tests__/ai-block-schema.test.ts`
+fails if the cap goes past what was measured.
+
 ## How a send works
 
 1. A campaign's audience is resolved and one `sends` row per recipient is
