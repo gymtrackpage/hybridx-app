@@ -35,6 +35,29 @@ const trivialSchema = z.object({ subject: z.string() });
 /** The block schema alone, wrapped — separates "the union" from "the wrapper". */
 const blocksOnlySchema = z.object({ blocks: z.array(aiBlockSchema).min(1).max(3) });
 
+/**
+ * The wrapper, parameterised.
+ *
+ * Round one showed the block schema passing at maxItems 3 and the real wrapper
+ * failing at 20. Two things differ between them — the cap, and the two extra
+ * string fields — so this varies one at a time, then ladders the cap to find
+ * the exact boundary rather than picking a number that merely looks safe.
+ */
+function wrapper(opts: { max: number; extras: boolean }) {
+  const shape: Record<string, z.ZodTypeAny> = {
+    blocks: z.array(aiBlockSchema).min(1).max(opts.max),
+  };
+  if (opts.extras) {
+    shape.subject = z
+      .string()
+      .describe('Subject line. Under 60 characters so inboxes do not truncate it.');
+    shape.previewText = z
+      .string()
+      .describe('Preheader shown after the subject in the inbox. One short sentence.');
+  }
+  return z.object(shape);
+}
+
 interface ProbeResult {
   name: string;
   ok: boolean;
@@ -145,6 +168,38 @@ export async function GET(request: Request) {
       }),
     ),
   );
+
+  // Part B: isolate the two differences between the passing blocks-only schema
+  // and the failing real one, then find where the cap stops working.
+  results.push(
+    await probe('wrapper: cap 3, no extra fields (control)', () =>
+      ai.generate({
+        model: MODELS.reasoning,
+        output: { schema: wrapper({ max: 3, extras: false }) },
+        prompt: TRIVIAL_PROMPT,
+      }),
+    ),
+  );
+  results.push(
+    await probe('wrapper: cap 3, WITH subject+previewText', () =>
+      ai.generate({
+        model: MODELS.reasoning,
+        output: { schema: wrapper({ max: 3, extras: true }) },
+        prompt: TRIVIAL_PROMPT,
+      }),
+    ),
+  );
+  for (const max of [5, 8, 10, 12, 15, 20]) {
+    results.push(
+      await probe(`wrapper: cap ${max}, no extra fields`, () =>
+        ai.generate({
+          model: MODELS.reasoning,
+          output: { schema: wrapper({ max, extras: false }) },
+          prompt: TRIVIAL_PROMPT,
+        }),
+      ),
+    );
+  }
 
   return NextResponse.json(
     {

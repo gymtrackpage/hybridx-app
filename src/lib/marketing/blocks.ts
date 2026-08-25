@@ -237,7 +237,13 @@ export const aiEmailContentSchema = z.object({
   previewText: z
     .string()
     .describe('Preheader shown after the subject in the inbox. One short sentence.'),
-  blocks: z.array(aiBlockSchema).min(2).max(20),
+  // max 10, not 20. The probe at /api/marketing/ai-probe showed this wrapper
+  // failing while the identical block schema capped at 3 passed, so the cap is
+  // implicated — most likely a constrained-decoding grammar limit, since the
+  // item schema carries 14 optional properties and Gemini names no field in
+  // the 400. 10 is also what the prompt has always asked for ("six to ten
+  // blocks"), so the schema now matches its own instruction.
+  blocks: z.array(aiBlockSchema).min(2).max(10),
 });
 
 export type AiEmailContent = z.infer<typeof aiEmailContentSchema>;
