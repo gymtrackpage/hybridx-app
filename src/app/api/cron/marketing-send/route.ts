@@ -19,6 +19,7 @@ import {
   enqueueCampaign,
   findDueCampaigns,
   getSettings,
+  pauseStaleScheduled,
   recoverStalledSends,
 } from '@/lib/marketing/queue';
 import type { Campaign } from '@/lib/marketing/types';
@@ -31,8 +32,15 @@ export const dynamic = 'force-dynamic';
  * Leave headroom under maxDuration so the handler always returns a useful
  * summary instead of being killed mid-batch. Work that does not fit is simply
  * picked up by the next run.
+ *
+ * This must also stay under the Cloud Scheduler job's `attemptDeadline`, which
+ * is 180s. At the previous 240s a busy drain outlived the deadline: Scheduler
+ * recorded the attempt as failed and retried while the original run was still
+ * going. Overlapping runs are safe — rows are claimed transactionally before
+ * any SMTP call — but they manufacture false failures in the job's history and
+ * duplicate the work. Raising this needs the job's deadline raised first.
  */
-const TIME_BUDGET_MS = 240_000;
+const TIME_BUDGET_MS = 150_000;
 
 export async function GET(request: Request) {
   const denied = requireCronAuth(request, 'marketing-send');
@@ -50,11 +58,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ paused: true, campaigns: [] });
     }
 
+    // Before looking for work: quarantine anything so overdue that sending it
+    // now would surprise its audience. After an outage of this cron the whole
+    // backlog is still marked `scheduled` and would otherwise go out together.
+    const stale = await pauseStaleScheduled(settings.staleScheduleHours);
+
     const db = getAdminDb();
     const campaignIds = await findDueCampaigns();
 
     if (!campaignIds.length) {
-      return NextResponse.json({ campaigns: [], message: 'Nothing due.' });
+      return NextResponse.json({ campaigns: [], pausedAsStale: stale, message: 'Nothing due.' });
     }
 
     const results = [];
@@ -102,6 +115,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       campaigns: results,
+      pausedAsStale: stale,
       elapsedMs: Date.now() - startedAt,
     });
   } catch (error) {

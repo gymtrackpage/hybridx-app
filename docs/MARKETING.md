@@ -109,16 +109,64 @@ All require `Authorization: Bearer $CRON_SECRET`.
 | `/api/cron/marketing-sync` | daily | Reconciles the athlete roster into the subscriber list |
 | `/api/cron/marketing-brief` | weekly | Compiles the week, drafts proposals, emails the brief |
 
-Example Cloud Scheduler entry:
+Outside marketing, the same `CRON_SECRET` guards `/api/cron/daily-coach`,
+`/api/cron/push-notifications` and `/api/cron/garmin-sync`. `setup-scheduler-jobs.sh`
+covers those too — `daily-coach` and `garmin-sync` had no Scheduler job at all
+until it was written, so those endpoints had never once run.
+
+### Creating or repairing the jobs
 
 ```bash
-gcloud scheduler jobs create http marketing-send \
-  --schedule="* * * * *" \
-  --uri="https://app.hybridx.club/api/cron/marketing-send" \
-  --http-method=GET \
-  --headers="Authorization=Bearer ${CRON_SECRET}" \
-  --location=us-central1
+./scripts/setup-scheduler-jobs.sh --dry-run   # show what would change
+./scripts/setup-scheduler-jobs.sh             # create or repair every job
+./scripts/setup-scheduler-jobs.sh marketing-send   # just one
 ```
+
+Use the script rather than a hand-written `gcloud scheduler jobs create`. The
+command this replaced interpolated `${CRON_SECRET}` from the shell:
+
+```bash
+# DO NOT — this is how marketing-send broke
+--headers="Authorization=Bearer ${CRON_SECRET}"
+```
+
+Run that in a shell where the variable is unset and `gcloud` stores the header
+as a literal `Bearer ` without complaint. The job then looks correctly
+configured in every listing while failing authentication on every single run.
+It did exactly that for three days.
+
+The script reads the secret from Secret Manager instead of the environment,
+refuses to run if it is empty or ends in a newline, and re-reads each job
+afterwards to confirm the stored header matches. It is idempotent, so it is
+also the right way to re-point every job after a secret rotation.
+
+**Rotating `CRON_SECRET`** — order matters, because the app only picks up a new
+secret version on a new build:
+
+1. `printf '%s' "$NEW" | firebase apphosting:secrets:set CRON_SECRET --project hyroxedgeai`
+   (`printf`, not `echo` — `echo` appends the newline the script rejects)
+2. Redeploy, and confirm the new build is serving
+3. `./scripts/setup-scheduler-jobs.sh`
+4. Disable the old secret version once the jobs are green
+
+Pause sending in marketing settings for the duration: between steps 2 and 3 the
+jobs still hold the old token and will 401.
+
+## Overdue scheduled campaigns
+
+`findDueCampaigns` matches `scheduledAt <= now` with no lower bound, so every
+campaign that came due while the send cron was down is still marked `scheduled`
+and would go out together on the first run that succeeds. That is how an outage
+turns into a burst — days of campaigns arriving at once, at an audience that
+expected them spread out.
+
+So the drain quarantines them first. A campaign more than `staleScheduleHours`
+past its moment (default 24) moves to `paused`: visible in the campaigns table,
+audience and content intact, waiting for a person to decide it is still worth
+sending. A short delay is not penalised — catching up is what a resumable cron
+is for.
+
+Set `staleScheduleHours` to 0 to disable the rule entirely.
 
 ## A limit on AI-drafted structure
 

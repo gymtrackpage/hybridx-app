@@ -243,6 +243,17 @@ export interface MarketingSettings {
   frequencyCapPerWeek: number;
   /** Master switch — pauses every journey and queued send without losing state. */
   sendingPaused: boolean;
+  /**
+   * How late a scheduled campaign may be and still send automatically.
+   *
+   * A campaign whose moment passed longer ago than this is paused for review
+   * instead of being sent. Without this, any outage of the send cron turns
+   * into a burst: every campaign that came due while it was down goes out at
+   * once the moment it recovers, to an audience expecting them spread over
+   * days. Nobody wants a Tuesday winback arriving on Friday alongside four
+   * others.
+   */
+  staleScheduleHours: number;
   updatedAt?: Stamp;
 }
 
@@ -253,4 +264,5 @@ export const DEFAULT_MARKETING_SETTINGS: MarketingSettings = {
   batchSize: 100,
   frequencyCapPerWeek: 3,
   sendingPaused: false,
+  staleScheduleHours: 24,
 };
