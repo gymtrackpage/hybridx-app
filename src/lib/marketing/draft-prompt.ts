@@ -55,7 +55,9 @@ You produce structured blocks, not HTML. Available block types:
 Every field is optional in the schema because one shape covers all block types,
 so it is on you to send the right ones. Set "type", then only that type's fields:
 - hero: heading (+ optional subheading, imageUrl)
-- heading: text (+ optional level, 2 or 3)
+- heading: text (+ optional level, 2 or 3) — NOT "heading". A block of type
+  "heading" puts its words in "text"; the field called "heading" belongs only
+  to the hero block.
 - paragraph: text
 - bulletList: items
 - cta: label AND url — a cta without a url is discarded

@@ -74,6 +74,43 @@ describe('toEmailBlocks', () => {
     expect(blocks.map((b) => (b as { level: number }).level)).toEqual([3, 2, 3]);
   });
 
+  it('recovers heading text the model put in the "heading" field', () => {
+    // The collision the flat schema creates: a block of type `heading` keeps
+    // its words in `text`, but there is also a field named `heading` (hero's).
+    // Models write into the one that shares the type's name, and the block was
+    // dropped for a missing `text` it had in fact written.
+    const { blocks, rejected } = toEmailBlocks([
+      { type: 'heading', heading: 'What changed this month' },
+    ] as never);
+
+    expect(rejected).toEqual([]);
+    expect(blocks[0]).toEqual({ type: 'heading', text: 'What changed this month', level: 2 });
+  });
+
+  it('recovers hero text put in "text" instead of "heading"', () => {
+    const { blocks, rejected } = toEmailBlocks([
+      { type: 'hero', text: 'Back to the start line' },
+    ] as never);
+
+    expect(rejected).toEqual([]);
+    expect(blocks[0]).toEqual({ type: 'hero', heading: 'Back to the start line' });
+  });
+
+  it('prefers the correct field when both are present', () => {
+    const { blocks } = toEmailBlocks([
+      { type: 'heading', text: 'Right one', heading: 'Wrong one' },
+    ] as never);
+    expect((blocks[0] as { text: string }).text).toBe('Right one');
+  });
+
+  it('still drops a block whose missing field cannot be recovered', () => {
+    // The line the repair must not cross. A cta with no url has no text to
+    // move — inventing a link would put a broken one in front of a subscriber.
+    const { blocks, rejected } = toEmailBlocks([{ type: 'cta', label: 'Go' }] as never);
+    expect(blocks).toEqual([]);
+    expect(rejected[0].reason).toContain('url');
+  });
+
   it('drops a block missing a field its own type requires, with a reason', () => {
     const { blocks, rejected } = toEmailBlocks([
       { type: 'cta', label: 'Broken' },

@@ -86,6 +86,7 @@ export async function draftEmail(input: DraftEmailInput): Promise<DraftEmailResu
   // not something the reviewer should have to notice for themselves.
   const blockIssues: ValidationIssue[] = rejected.map((r) => ({
     severity: 'error',
+    kind: 'structure',
     found: r.type,
     message: `The model returned a ${r.type} block that was not usable and has been dropped (${r.reason}). Redraft, or add the block by hand.`,
   }));
