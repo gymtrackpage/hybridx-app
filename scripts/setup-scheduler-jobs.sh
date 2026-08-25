@@ -88,6 +88,7 @@ fi
 
 SECRET="${SECRET_RAW}"
 echo "Secret looks sane (${#SECRET} chars). Applying jobs..."
+APPLY_FAILED=()
 echo
 
 for entry in "${JOBS[@]}"; do
@@ -107,15 +108,33 @@ for entry in "${JOBS[@]}"; do
     continue
   fi
 
-  gcloud scheduler jobs "${ACTION}" http "${NAME}" \
-    --location="${LOCATION}" \
-    --project="${PROJECT}" \
-    --schedule="${SCHEDULE}" \
-    --uri="${URI}" \
-    --http-method=GET \
-    --attempt-deadline="${DEADLINE}" \
-    --update-headers="Authorization=Bearer ${SECRET}" \
-    >/dev/null
+  # create and update spell this differently: create takes --headers, update
+  # takes --update-headers (it merges rather than replaces). Passing the wrong
+  # one fails the whole command with "unrecognized arguments".
+  if [[ "${ACTION}" == "create" ]]; then
+    HEADER_FLAG="--headers"
+  else
+    HEADER_FLAG="--update-headers"
+  fi
+
+  # Run without `set -e` aborting the loop: one job failing should not leave
+  # the other seven untouched and the operator guessing which applied. Failures
+  # are collected and reported at the end, and the exit code reflects them.
+  #
+  # stderr is captured rather than passed through because gcloud echoes the
+  # arguments it did not understand — which includes the Authorization header,
+  # and therefore the secret, straight into the terminal and its scrollback.
+  if ! OUTPUT="$(gcloud scheduler jobs "${ACTION}" http "${NAME}" \
+      --location="${LOCATION}" \
+      --project="${PROJECT}" \
+      --schedule="${SCHEDULE}" \
+      --uri="${URI}" \
+      --http-method=GET \
+      --attempt-deadline="${DEADLINE}" \
+      "${HEADER_FLAG}=Authorization=Bearer ${SECRET}" 2>&1)"; then
+    echo "    FAILED: ${OUTPUT//${SECRET}/<redacted>}" >&2
+    APPLY_FAILED+=("${NAME}")
+  fi
 done
 
 echo
@@ -126,8 +145,14 @@ fi
 
 # Verify rather than assume. A job whose header is present but empty is the
 # failure this script exists to prevent, so prove it did not just recreate it.
+if (( ${#APPLY_FAILED[@]} )); then
+  echo "Failed to apply: ${APPLY_FAILED[*]}" >&2
+  echo
+fi
+
 echo "Verifying stored headers..."
 FAILED=0
+(( ${#APPLY_FAILED[@]} )) && FAILED=1
 for entry in "${JOBS[@]}"; do
   IFS='|' read -r NAME _ _ <<< "${entry}"
   [[ -n "${ONLY_JOB}" && "${NAME}" != "${ONLY_JOB}" ]] && continue

@@ -150,6 +150,12 @@ refuses to run if it is empty or ends in a newline, and re-reads each job
 afterwards to confirm the stored header matches. It is idempotent, so it is
 also the right way to re-point every job after a secret rotation.
 
+It reports per-job failures and exits non-zero rather than stopping at the
+first one, so a single bad job cannot leave the rest untouched with no
+indication of which applied. Any gcloud error is printed with the secret
+redacted — gcloud echoes arguments it did not understand, which would
+otherwise put the Authorization header in the terminal scrollback.
+
 **Rotating `CRON_SECRET`** — order matters, because the app only picks up a new
 secret version on a new build:
 
