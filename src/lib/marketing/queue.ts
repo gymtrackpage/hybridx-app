@@ -378,6 +378,77 @@ export function isStalled(row: Pick<Send, 'claimedAt'>, cutoffMs: number): boole
   return !claimedMs || claimedMs <= cutoffMs;
 }
 
+/**
+ * Whether a scheduled campaign is so overdue that sending it now would surprise.
+ *
+ * Exported for tests, and kept pure for the same reason `isStalled` is: the
+ * decision is the part worth pinning down, not the Firestore round trip.
+ *
+ * A campaign with no `scheduledAt` at all is never stale. It cannot be judged
+ * late, and quarantining on a missing field would take campaigns out of the
+ * queue for a data problem rather than a timing one.
+ */
+export function isStaleSchedule(
+  scheduledAt: unknown,
+  nowMs: number,
+  staleAfterHours: number,
+): boolean {
+  const stamp = scheduledAt as { toMillis?: () => number } | Date | null | undefined;
+  const scheduledMs = stamp instanceof Date ? stamp.getTime() : (stamp?.toMillis?.() ?? 0);
+  if (!scheduledMs) return false;
+
+  // A non-positive window would quarantine everything the instant it came due,
+  // including campaigns sending normally. Treat it as "no staleness rule".
+  if (!(staleAfterHours > 0)) return false;
+
+  return nowMs - scheduledMs > staleAfterHours * 60 * 60_000;
+}
+
+/**
+ * Move overdue scheduled campaigns to `paused` before the drain looks for work.
+ *
+ * This is the guard against a recovery burst. `findDueCampaigns` matches on
+ * `scheduledAt <= now` with no lower bound, so after any outage of the send
+ * cron every campaign that came due while it was down is still sitting there
+ * and would go out together on the first successful run.
+ *
+ * They are paused rather than failed or deleted: `paused` already exists, shows
+ * in the campaigns table, keeps the audience and content intact, and needs a
+ * person to decide the campaign is still worth sending. Returns what it paused
+ * so the caller can say so.
+ */
+export async function pauseStaleScheduled(staleAfterHours: number): Promise<
+  { campaignId: string; hoursLate: number }[]
+> {
+  const db = getAdminDb();
+  const now = Date.now();
+
+  const snap = await db
+    .collection(CAMPAIGNS)
+    .where('status', '==', 'scheduled')
+    .where('scheduledAt', '<=', new Date(now))
+    .get();
+
+  const paused: { campaignId: string; hoursLate: number }[] = [];
+
+  for (const doc of snap.docs) {
+    const scheduledAt = doc.data().scheduledAt;
+    if (!isStaleSchedule(scheduledAt, now, staleAfterHours)) continue;
+
+    const stamp = scheduledAt as { toMillis?: () => number } | Date;
+    const scheduledMs = stamp instanceof Date ? stamp.getTime() : (stamp?.toMillis?.() ?? 0);
+    const hoursLate = Math.round((now - scheduledMs) / 3_600_000);
+
+    await doc.ref.update({ status: 'paused', updatedAt: FieldValue.serverTimestamp() });
+    paused.push({ campaignId: doc.id, hoursLate });
+    logger.error(
+      `[marketing] campaign ${doc.id} was ${hoursLate}h past its scheduled time; paused for review rather than sent`,
+    );
+  }
+
+  return paused;
+}
+
 /** Campaigns the drain should work on: actively sending, or scheduled and now due. */
 export async function findDueCampaigns(): Promise<string[]> {
   const db = getAdminDb();

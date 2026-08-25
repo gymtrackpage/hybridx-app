@@ -23,18 +23,15 @@ import { z } from 'zod';
 
 // A note on `z.enum(['hero'])` where `z.literal('hero')` would read better.
 //
-// These schemas are sent to Gemini as `generationConfig.responseSchema`, which
-// is a restricted OpenAPI subset, not full JSON Schema. `z.literal()` compiles
-// to `{"const": "hero"}`, and `const` is not a field on Gemini's Schema type —
-// the request is rejected with a 400 INVALID_ARGUMENT before the model runs.
-// `z.enum(['hero'])` compiles to `{"type":"string","enum":["hero"]}`, which is
-// supported and infers the same `'hero'` TypeScript type.
+// This was changed while chasing a 400 INVALID_ARGUMENT on drafting, on the
+// theory that `z.literal()`'s `{"const": "hero"}` was being rejected. That
+// theory was wrong — the real cause was the cap on the blocks array, measured
+// later (see aiEmailContentSchema). `const` is genuinely absent from the
+// schema subset Gemini documents, so this is still correct, and `z.enum` of a
+// single value infers the identical `'hero'` type; it simply was not the bug.
 //
-// Same reason `level` is a bounded integer rather than `z.union([z.literal(2),
-// z.literal(3)])`: that compiles to `{"enum":[2,3]}`, and Gemini's `enum` is a
-// list of *strings*, so numeric members are rejected too.
-//
-// See also src/ai/flows/analyze-and-adjust.ts, which hit this same limit.
+// Recorded because the wrong explanation is worse than none: anyone reading
+// this later should not conclude that `const` breaks drafting.
 
 /** Merge tokens usable inside any text field. Resolved per recipient at send time. */
 export const MERGE_TOKEN_HINT =
@@ -162,18 +159,18 @@ export type EmailContent = z.infer<typeof emailContentSchema>;
 // guaranteed to carry a `url` and a `quote` cannot. That is what storage and
 // render.ts work with, and it stays strict.
 //
-// It cannot be what we ask Gemini for. A zod discriminated union compiles to
-// JSON Schema `anyOf`, and `anyOf` inside `items` is rejected by
-// `generationConfig.responseSchema` with a bare 400 INVALID_ARGUMENT. The
-// natural experiment is in this repo: compose-journey's `plannedStepSchema`
-// and analyze-and-adjust's `WorkoutSchema` are both unions-in-spirit that were
-// already flattened into one object with optional fields, and both work. This
-// union was the only one left, and drafting was the only flow failing.
+// What Gemini is asked for is one flat object per block — a `type` enum plus
+// every field any variant might need, all optional — narrowed back into the
+// strict union by `toEmailBlocks` below. The looseness is confined to the API
+// boundary; nothing downstream sees it.
 //
-// So the model is asked for one flat object per block — a `type` enum plus
-// every field any variant might need, all optional — and the result is narrowed
-// back into the strict union by `toEmailBlocks` below. The looseness is
-// confined to the API boundary; nothing downstream sees it.
+// Honest history: this was flattened on the theory that the union's `anyOf`
+// was what Gemini rejected. It was not; the blocks array cap was. But the flat
+// shape stays, for two reasons. It was never shown to be *wrong*, and the
+// measured cause was grammar size — a ten-branch `anyOf` unrolled across the
+// array would be a considerably larger grammar than one flat object, so
+// restoring the union would most likely lower the usable cap rather than
+// raise it. Reverting it would trade a working schema for an untested one.
 
 /** Every block type an AI flow may emit. Order matches the union above. */
 export const GENERATABLE_BLOCK_TYPES = [
@@ -237,12 +234,25 @@ export const aiEmailContentSchema = z.object({
   previewText: z
     .string()
     .describe('Preheader shown after the subject in the inbox. One short sentence.'),
-  // max 10, not 20. The probe at /api/marketing/ai-probe showed this wrapper
-  // failing while the identical block schema capped at 3 passed, so the cap is
-  // implicated — most likely a constrained-decoding grammar limit, since the
-  // item schema carries 14 optional properties and Gemini names no field in
-  // the 400. 10 is also what the prompt has always asked for ("six to ten
-  // blocks"), so the schema now matches its own instruction.
+  // The cap is load-bearing, and 10 is not arbitrary.
+  //
+  // This array at maxItems 20 is what made every draft fail with a bare 400
+  // INVALID_ARGUMENT. Measured against the live API by laddering the bound
+  // with everything else held constant:
+  //
+  //     3, 5, 8, 10, 12  pass
+  //     15, 20           fail
+  //
+  // So the limit sits between 12 and 15, and it is about the *bound*, not the
+  // block schema: the same block schema capped at 3 always passed, and adding
+  // subject/previewText at cap 3 still passed. Gemini names no field in the
+  // 400, which fits a constrained-decoding grammar-size limit — the item
+  // schema carries 14 optional properties, and the grammar is unrolled per
+  // permitted element.
+  //
+  // 10 keeps clear headroom under the boundary and is what the prompt has
+  // always asked for ("six to ten blocks"). Raising it needs re-measuring, and
+  // so does adding fields to aiBlockSchema, since that grows the same grammar.
   blocks: z.array(aiBlockSchema).min(2).max(10),
 });
 
