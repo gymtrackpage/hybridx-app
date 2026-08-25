@@ -19,6 +19,7 @@ import {
 } from '@/lib/marketing/blocks';
 import { getPromptKnowledge } from '@/lib/marketing/knowledge';
 import { validateLinks } from '@/lib/marketing/validate';
+import { defaultCtaUrl } from '@/lib/marketing/app-routes';
 
 const reviseBlockInputSchema = z.object({
   block: z.unknown().describe('The block to revise, as JSON.'),
@@ -87,7 +88,7 @@ export async function reviseBlock(input: ReviseBlockInput): Promise<GeneratableB
   // 404s just as easily here as in a first draft. Same failure, same check.
   const linkIssues = validateLinks(
     blocks,
-    process.env.NEXT_PUBLIC_APP_URL || 'https://app.hybridx.club',
+    defaultCtaUrl(),
   );
   if (linkIssues.length) {
     throw new Error(linkIssues[0].message);

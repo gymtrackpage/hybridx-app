@@ -19,6 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { BLOCK_LABELS, blockText, type EmailBlock, type EmailBlockType } from '@/lib/marketing/blocks';
+import { APP_MARKETING_PATHS, defaultCtaUrl } from '@/lib/marketing/app-routes';
 import { renderBlocks } from '@/lib/marketing/render';
 import { updateCampaignContent } from '@/lib/marketing/actions';
 import { revalidateContent, reviseEmailBlock, suggestSubjects } from '@/lib/marketing/studio-actions';
@@ -104,6 +105,10 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
   const mutate = (next: EmailBlock[]) => {
     setBlocks(next);
     setDirty(true);
+  };
+
+  const updateBlock = (index: number, next: EmailBlock) => {
+    mutate(blocks.map((b, j) => (j === index ? next : b)));
   };
 
   const check = async (nextBlocks: EmailBlock[], nextSubject: string) => {
@@ -304,7 +309,52 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
                   </Button>
                 </div>
 
-                {blockText(block) && <p className="text-sm">{blockText(block)}</p>}
+                {block.type === 'cta' ? (
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <Label htmlFor={`cta-label-${i}`} className="text-xs text-muted-foreground">
+                        Button text
+                      </Label>
+                      <Input
+                        id={`cta-label-${i}`}
+                        value={block.label}
+                        onChange={(e) => updateBlock(i, { ...block, label: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`cta-url-${i}`} className="text-xs text-muted-foreground">
+                        Links to
+                      </Label>
+                      <Input
+                        id={`cta-url-${i}`}
+                        list="cta-known-urls"
+                        value={block.url}
+                        onChange={(e) => updateBlock(i, { ...block, url: e.target.value })}
+                        onBlur={() => {
+                          // A blank field is not a state worth keeping around to
+                          // fail validation with — land it on the one page that
+                          // works whether or not the reader is signed in, same
+                          // as an AI draft that never set a url would not.
+                          //
+                          // Computed once and reused for both calls rather than
+                          // updateBlock() then reading `blocks` back: setState is
+                          // not synchronous, so `blocks` here would still be the
+                          // array from before this edit and check() would
+                          // validate the wrong, blank URL.
+                          const url = block.url.trim() || defaultCtaUrl();
+                          const next = blocks.map((b, j) => (j === i ? { ...block, url } : b));
+                          mutate(next);
+                          void check(next, subject);
+                        }}
+                        placeholder={`Any URL — blank defaults to ${defaultCtaUrl()}`}
+                        className="h-8 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  blockText(block) && <p className="text-sm">{blockText(block)}</p>
+                )}
 
                 <div className="flex gap-2">
                   <Input
@@ -361,6 +411,12 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
           />
         </TabsContent>
       </Tabs>
+
+      <datalist id="cta-known-urls">
+        {APP_MARKETING_PATHS.map((path) => (
+          <option key={path} value={`https://app.hybridx.club${path === '/' ? '' : path}`} />
+        ))}
+      </datalist>
     </div>
   );
 }
