@@ -21,6 +21,13 @@
 // should be able to link to is added or removed.
 
 export const APP_MARKETING_PATHS = [
+  // The bare root, not just a fallback string elsewhere — src/app/page.tsx
+  // redirects a signed-in reader straight to /dashboard and shows the public
+  // landing page to anyone else. That makes it the one destination that is
+  // correct whether or not the person clicking is currently logged in, which
+  // a marketing email cannot know in advance. It is the default a CTA gets
+  // when no more specific page is chosen — see defaultCtaUrl below.
+  '/',
   '/dashboard',
   '/training',
   '/programs',
@@ -41,4 +48,18 @@ export function isKnownAppPath(pathname: string): boolean {
   const trimmed = pathname.replace(/\/$/, '') || '/';
   if ((APP_MARKETING_PATHS as readonly string[]).includes(trimmed)) return true;
   return APP_MARKETING_PATH_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+}
+
+/**
+ * Where a CTA lands when the author leaves the URL blank.
+ *
+ * Reads the same env var the rest of the app uses for its own base URL, so
+ * this cannot name a different host in one environment (a preview deploy,
+ * say) than everything else already resolves to. Trailing slash stripped so
+ * a value with one does not turn "/dashboard" into "//dashboard" when a path
+ * is appended to it elsewhere.
+ */
+export function defaultCtaUrl(): string {
+  const base = process.env.NEXT_PUBLIC_APP_URL || 'https://app.hybridx.club';
+  return base.replace(/\/$/, '');
 }

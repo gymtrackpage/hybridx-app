@@ -29,7 +29,8 @@ import {
 } from './journeys';
 import { CAMPAIGNS } from './queue';
 import { renderBlocks, renderBlocksAsText } from './render';
-import { validateDraft, type ValidationIssue } from './validate';
+import { validateDraft, validateLinks, type ValidationIssue } from './validate';
+import { defaultCtaUrl } from './app-routes';
 
 export type StudioResult<T> = { success: true; data: T } | { success: false; error: string };
 
@@ -119,7 +120,17 @@ export async function revalidateContent(input: {
       { subject: input.subject, body: blocksToText(input.blocks) },
       snapshot,
     );
-    return { success: true, data: { valid: ok, issues } };
+    // Not previously called here. A drafted email got its links checked in
+    // draftEmail, a revised block got them checked in reviseBlock, but a
+    // block hand-edited in the campaign editor called only this — so a
+    // mistyped app path from a human editor sailed through with no warning
+    // at all, the same failure this was built to catch, through a door that
+    // was left unlocked.
+    const linkIssues = validateLinks(
+      input.blocks,
+      defaultCtaUrl(),
+    );
+    return { success: true, data: { valid: ok && linkIssues.length === 0, issues: [...issues, ...linkIssues] } };
   } catch (err) {
     return fail(err, 'Could not validate the content.');
   }

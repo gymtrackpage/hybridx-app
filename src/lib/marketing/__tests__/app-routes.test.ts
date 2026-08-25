@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import { APP_MARKETING_PATHS, isKnownAppPath } from '@/lib/marketing/app-routes';
+import { APP_MARKETING_PATHS, defaultCtaUrl, isKnownAppPath } from '@/lib/marketing/app-routes';
 
 describe('isKnownAppPath', () => {
   it('accepts every listed path', () => {
@@ -32,8 +32,11 @@ describe('isKnownAppPath', () => {
     expect(isKnownAppPath('/debug')).toBe(false);
   });
 
-  it('treats the bare root as unknown', () => {
-    expect(isKnownAppPath('/')).toBe(false);
+  it('accepts the bare root — the CTA default, not an oversight', () => {
+    // `/` lives outside the (app) route group (src/app/page.tsx, not
+    // src/app/(app)/), so it needs its own case here and its own check below
+    // that the file backing it still exists.
+    expect(isKnownAppPath('/')).toBe(true);
   });
 });
 
@@ -66,10 +69,47 @@ describe('APP_MARKETING_PATHS stays in sync with the routes that actually exist'
 
   it('lists only paths that correspond to a real page', () => {
     for (const path of APP_MARKETING_PATHS) {
+      if (path === '/') continue; // outside (app)/, checked separately below
       const hasExactPage = allReal.includes(path);
       expect(hasExactPage, `${path} is in APP_MARKETING_PATHS but has no page.tsx under src/app/(app)/`).toBe(
         true,
       );
     }
+  });
+
+  it('the root path has a page backing it too, just outside the (app) group', () => {
+    const rootPage = join(process.cwd(), 'src/app/page.tsx');
+    expect(statSync(rootPage).isFile(), 'src/app/page.tsx is missing — "/" in APP_MARKETING_PATHS is stale').toBe(
+      true,
+    );
+  });
+});
+
+describe('defaultCtaUrl', () => {
+  const ORIGINAL = process.env.NEXT_PUBLIC_APP_URL;
+  afterEach(() => {
+    if (ORIGINAL === undefined) delete process.env.NEXT_PUBLIC_APP_URL;
+    else process.env.NEXT_PUBLIC_APP_URL = ORIGINAL;
+  });
+
+  it('falls back to the production URL when unset', () => {
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    expect(defaultCtaUrl()).toBe('https://app.hybridx.club');
+  });
+
+  it('uses NEXT_PUBLIC_APP_URL when set — so a preview deploy never links to production', () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://staging.hybridx.club';
+    expect(defaultCtaUrl()).toBe('https://staging.hybridx.club');
+  });
+
+  it('strips a trailing slash', () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://staging.hybridx.club/';
+    expect(defaultCtaUrl()).toBe('https://staging.hybridx.club');
+  });
+
+  it('is itself a known app path — the default cannot fail its own check', () => {
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    const url = new URL(defaultCtaUrl());
+    expect(isKnownAppPath(url.pathname)).toBe(true);
   });
 });

@@ -52,4 +52,9 @@ describe('validateLinks', () => {
   it('is tolerant of a trailing slash on the configured app URL', () => {
     expect(validateLinks([cta('https://app.hybridx.club/dashboard')], 'https://app.hybridx.club/')).toEqual([]);
   });
+
+  it('passes the bare app root — the CTA default when an author leaves the URL blank', () => {
+    expect(validateLinks([cta('https://app.hybridx.club')], APP_URL)).toEqual([]);
+    expect(validateLinks([cta('https://app.hybridx.club/')], APP_URL)).toEqual([]);
+  });
 });

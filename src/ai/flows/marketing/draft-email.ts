@@ -27,6 +27,7 @@ import {
 } from '@/lib/marketing/draft-prompt';
 import { getPromptKnowledge } from '@/lib/marketing/knowledge';
 import { validateDraft, validateLinks, type ValidationIssue } from '@/lib/marketing/validate';
+import { defaultCtaUrl } from '@/lib/marketing/app-routes';
 import { renderBlocks, renderBlocksAsText } from '@/lib/marketing/render';
 
 export type { DraftEmailInput };
@@ -95,7 +96,7 @@ export async function draftEmail(input: DraftEmailInput): Promise<DraftEmailResu
   // a URL is not something blocksToText surfaces at all.
   const linkIssues = validateLinks(
     blocks,
-    process.env.NEXT_PUBLIC_APP_URL || 'https://app.hybridx.club',
+    defaultCtaUrl(),
   );
 
   return {
