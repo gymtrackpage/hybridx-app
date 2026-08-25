@@ -38,7 +38,7 @@ export default async function CampaignEditPage({
             Back to campaign
           </Link>
         </Button>
-        <h1 className="mt-2 font-headline text-3xl font-bold">
+        <h1 className="mt-2 font-headline text-2xl font-bold sm:text-3xl">
           {campaign.subject || 'Untitled campaign'}
         </h1>
         <p className="mt-1 text-muted-foreground">

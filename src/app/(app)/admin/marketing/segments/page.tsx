@@ -10,7 +10,7 @@ export default async function SegmentsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-headline text-3xl font-bold">Segments</h1>
+        <h1 className="font-headline text-2xl font-bold sm:text-3xl">Segments</h1>
         <p className="mt-1 max-w-2xl text-muted-foreground">
           Named audiences, reusable across campaigns and journeys. Saving one means two campaigns
           aimed at the same people actually reach the same people.

@@ -57,7 +57,7 @@ export default async function CampaignReportPage({
           </Link>
         </Button>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="font-headline text-3xl font-bold">
+          <h1 className="font-headline text-2xl font-bold sm:text-3xl">
             {campaign.subject || 'Untitled campaign'}
           </h1>
           <CampaignStatusBadge status={campaign.status} />
@@ -69,7 +69,7 @@ export default async function CampaignReportPage({
         )}
 
         {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
-          <Button asChild className="mt-4">
+          <Button asChild className="mt-4 w-full sm:w-auto">
             <Link href={`/admin/marketing/campaigns/${campaign.id}/edit`}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit and send
@@ -103,13 +103,13 @@ export default async function CampaignReportPage({
         </Card>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {metrics.map((m) => (
           <Card key={m.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{m.label}</CardTitle>
+            <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
+              <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">{m.label}</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
               <div className="text-2xl font-bold">{m.value}</div>
               {m.sub && <p className="mt-1 text-xs text-muted-foreground">{m.sub}</p>}
             </CardContent>
@@ -126,7 +126,7 @@ export default async function CampaignReportPage({
               so this under-counts rather than over-claims.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-8 text-sm">
+          <CardContent className="grid grid-cols-3 gap-4 text-sm sm:flex sm:flex-wrap sm:gap-8">
             <div>
               <div className="text-2xl font-bold">{conversions.signups.toLocaleString()}</div>
               <p className="text-muted-foreground">signed up</p>
@@ -156,12 +156,12 @@ export default async function CampaignReportPage({
           ) : (
             <ul className="divide-y">
               {linkClicks.map((link) => (
-                <li key={link.id} className="flex items-center justify-between gap-4 py-2.5">
+                <li key={link.id} className="flex items-center justify-between gap-3 py-2.5">
                   <a
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="truncate text-sm hover:underline"
+                    className="min-w-0 flex-1 truncate text-sm hover:underline"
                   >
                     {link.url}
                   </a>
@@ -190,8 +190,8 @@ export default async function CampaignReportPage({
             <ul className="divide-y text-sm">
               {failures.map((f) => (
                 <li key={f.email} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span className="font-mono text-xs">{f.email}</span>
-                  <span className="text-xs text-muted-foreground">{f.error}</span>
+                  <span className="break-all font-mono text-xs">{f.email}</span>
+                  <span className="break-words text-xs text-muted-foreground">{f.error}</span>
                 </li>
               ))}
             </ul>
@@ -207,7 +207,7 @@ export default async function CampaignReportPage({
           <iframe
             srcDoc={campaign.htmlBody}
             title="Campaign preview"
-            className="h-[600px] w-full rounded-md border bg-white"
+            className="h-[60vh] min-h-[320px] w-full rounded-md border bg-white sm:h-[600px]"
             sandbox=""
           />
         </CardContent>

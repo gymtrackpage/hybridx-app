@@ -32,24 +32,24 @@ export default async function JourneyDetailPage({
           </Link>
         </Button>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="font-headline text-3xl font-bold">{journey.name}</h1>
+          <h1 className="font-headline text-2xl font-bold sm:text-3xl">{journey.name}</h1>
           <Badge variant="secondary">{journey.status}</Badge>
         </div>
         <p className="mt-1 text-muted-foreground">{journey.goal}</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {[
           { label: 'In progress', value: journey.runCounts.active },
           { label: 'Completed', value: journey.runCounts.completed },
           { label: 'Exited early', value: journey.runCounts.exited },
         ].map((s) => (
           <Card key={s.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
+            <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
+              <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">{s.label}</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{s.value.toLocaleString()}</div>
+            <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+              <div className="text-xl font-bold sm:text-2xl">{s.value.toLocaleString()}</div>
             </CardContent>
           </Card>
         ))}

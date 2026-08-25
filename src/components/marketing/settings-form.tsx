@@ -136,9 +136,9 @@ export function MarketingSettingsForm({
                 ) : (
                   <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                 )}
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-medium">{c.label}</p>
-                  <p className="text-xs text-muted-foreground">{c.detail}</p>
+                  <p className="break-words text-xs text-muted-foreground">{c.detail}</p>
                 </div>
               </li>
             ))}
@@ -158,7 +158,7 @@ export function MarketingSettingsForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-between gap-4">
-          <Label htmlFor="paused" className="text-base">
+          <Label htmlFor="paused" className="text-sm sm:text-base">
             {paused ? 'Sending is paused' : 'Sending is live'}
           </Label>
           <Switch id="paused" checked={paused} onCheckedChange={handlePauseToggle} />
@@ -230,7 +230,7 @@ export function MarketingSettingsForm({
               </div>
             </div>
 
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" className="w-full sm:w-auto" disabled={saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save settings
             </Button>

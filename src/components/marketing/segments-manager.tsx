@@ -98,12 +98,12 @@ export function SegmentsManager({ segments, tags }: Props) {
     <div className="space-y-4">
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button>
+          <Button className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
             New segment
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto sm:w-full">
           <DialogHeader>
             <DialogTitle>New segment</DialogTitle>
             <DialogDescription>
@@ -125,7 +125,7 @@ export function SegmentsManager({ segments, tags }: Props) {
             <AudiencePicker tags={tags} value={definition} onChange={setDefinition} />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
@@ -151,7 +151,7 @@ export function SegmentsManager({ segments, tags }: Props) {
             <Card key={segment.id}>
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <CardTitle className="text-base">{segment.name}</CardTitle>
                     <CardDescription className="mt-1">{describe(segment.definition)}</CardDescription>
                   </div>

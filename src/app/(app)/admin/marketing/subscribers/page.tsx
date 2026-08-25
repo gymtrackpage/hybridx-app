@@ -17,14 +17,15 @@ export default async function SubscribersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
         <div>
-          <h1 className="font-headline text-3xl font-bold">Subscribers</h1>
+          <h1 className="font-headline text-2xl font-bold sm:text-3xl">Subscribers</h1>
           <p className="mt-1 text-muted-foreground">
             Athletes and leads. Only active subscribers who have consented receive campaigns.
           </p>
         </div>
-        <div className="flex gap-2">
+        {/* Equal halves on a phone so neither action is a sliver. */}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
           <ImportSubscribersDialog />
           <AddSubscriberDialog />
         </div>
