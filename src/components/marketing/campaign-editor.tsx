@@ -19,7 +19,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { BLOCK_LABELS, blockText, type EmailBlock, type EmailBlockType } from '@/lib/marketing/blocks';
-import { APP_MARKETING_PATHS, defaultCtaUrl } from '@/lib/marketing/app-routes';
+import { APP_MARKETING_PATHS } from '@/lib/marketing/app-routes';
+import { BlockFieldsEditor } from '@/components/marketing/block-fields-editor';
 import { renderBlocks } from '@/lib/marketing/render';
 import { updateCampaignContent } from '@/lib/marketing/actions';
 import { revalidateContent, reviseEmailBlock, suggestSubjects } from '@/lib/marketing/studio-actions';
@@ -109,6 +110,18 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
 
   const updateBlock = (index: number, next: EmailBlock) => {
     mutate(blocks.map((b, j) => (j === index ? next : b)));
+  };
+
+  /**
+   * A block field was committed (blurred). Revalidates with the array built
+   * from the value BlockFieldsEditor just handed us, not by reading `blocks`
+   * back out of state — setState is not synchronous, so a re-read here could
+   * still be the array from before this exact edit.
+   */
+  const commitBlock = (index: number, next: EmailBlock) => {
+    const nextBlocks = blocks.map((b, j) => (j === index ? next : b));
+    mutate(nextBlocks);
+    void check(nextBlocks, subject);
   };
 
   const check = async (nextBlocks: EmailBlock[], nextSubject: string) => {
@@ -309,52 +322,13 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
                   </Button>
                 </div>
 
-                {block.type === 'cta' ? (
-                  <div className="space-y-2">
-                    <div className="space-y-1">
-                      <Label htmlFor={`cta-label-${i}`} className="text-xs text-muted-foreground">
-                        Button text
-                      </Label>
-                      <Input
-                        id={`cta-label-${i}`}
-                        value={block.label}
-                        onChange={(e) => updateBlock(i, { ...block, label: e.target.value })}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`cta-url-${i}`} className="text-xs text-muted-foreground">
-                        Links to
-                      </Label>
-                      <Input
-                        id={`cta-url-${i}`}
-                        list="cta-known-urls"
-                        value={block.url}
-                        onChange={(e) => updateBlock(i, { ...block, url: e.target.value })}
-                        onBlur={() => {
-                          // A blank field is not a state worth keeping around to
-                          // fail validation with — land it on the one page that
-                          // works whether or not the reader is signed in, same
-                          // as an AI draft that never set a url would not.
-                          //
-                          // Computed once and reused for both calls rather than
-                          // updateBlock() then reading `blocks` back: setState is
-                          // not synchronous, so `blocks` here would still be the
-                          // array from before this edit and check() would
-                          // validate the wrong, blank URL.
-                          const url = block.url.trim() || defaultCtaUrl();
-                          const next = blocks.map((b, j) => (j === i ? { ...block, url } : b));
-                          mutate(next);
-                          void check(next, subject);
-                        }}
-                        placeholder={`Any URL — blank defaults to ${defaultCtaUrl()}`}
-                        className="h-8 font-mono text-xs"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  blockText(block) && <p className="text-sm">{blockText(block)}</p>
-                )}
+                <BlockFieldsEditor
+                  block={block}
+                  onChange={(next) => updateBlock(i, next)}
+                  onCommit={(next) => commitBlock(i, next)}
+                  idPrefix={`block-${i}`}
+                  urlListId="cta-known-urls"
+                />
 
                 <div className="flex gap-2">
                   <Input

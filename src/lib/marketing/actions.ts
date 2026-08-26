@@ -17,7 +17,14 @@ import { logger } from '@/lib/logger';
 import { renderForSubscriber } from './personalise';
 import { renderBlocks, renderBlocksAsText } from './render';
 import type { EmailBlock } from './blocks';
-import { CAMPAIGNS, enqueueCampaign, getSettings, SETTINGS_DOC } from './queue';
+import {
+  CAMPAIGNS,
+  campaignAudience,
+  enqueueCampaign,
+  getSettings,
+  recomputeCampaignCounts,
+  SETTINGS_DOC,
+} from './queue';
 import { resolveSegment, type SegmentDefinition } from './segments';
 import {
   SUBSCRIBERS,
@@ -311,14 +318,61 @@ export async function pauseCampaign(campaignId: string): Promise<ActionResult> {
 export async function resumeCampaign(campaignId: string): Promise<ActionResult> {
   try {
     await assertAdmin('marketing:campaign:resume');
-    await getAdminDb().collection(CAMPAIGNS).doc(campaignId).update({
-      status: 'sending',
-      updatedAt: FieldValue.serverTimestamp(),
-    });
+    const db = getAdminDb();
+    const campaignRef = db.collection(CAMPAIGNS).doc(campaignId);
+
+    // `paused` has two different histories behind it, and they need different
+    // treatment. The normal one — the "Pause sending" button, only offered
+    // while a campaign is already `sending` — pauses a campaign that was
+    // already enqueued: its `sends` rows and recipientCount already exist, so
+    // flipping the status back is all resuming needs.
+    //
+    // pauseStaleScheduled adds a second history: it can pause a campaign that
+    // was still `scheduled`, before it was ever enqueued at all. Flipping
+    // straight to `sending` in that case would leave a campaign claiming to
+    // be sending with zero `sends` rows underneath it — the next drain finds
+    // nothing pending, nothing in flight, and immediately marks it `sent`
+    // with recipientCount stuck at 0 and no mail ever having gone out.
+    //
+    // Checked directly rather than by remembering which history a campaign
+    // came from, since nothing on the document reliably records that.
+    const hasSends = !(await campaignRef.collection('sends').limit(1).get()).empty;
+
+    if (!hasSends) {
+      const snap = await campaignRef.get();
+      const campaign = snap.data() as Campaign | undefined;
+      if (!campaign) return { success: false, error: 'Campaign not found.' };
+      await enqueueCampaign(campaignId, campaignAudience(campaign));
+    } else {
+      await campaignRef.update({ status: 'sending', updatedAt: FieldValue.serverTimestamp() });
+    }
+
     revalidatePath(MARKETING_PATH);
     return { success: true };
   } catch (err) {
     return fail(err, 'Could not resume the campaign.');
+  }
+}
+
+/**
+ * Recompute a sent campaign's stats from its own `sends` records.
+ *
+ * For when the counters on the campaign document have drifted from what
+ * actually happened — a gap in the write path, not the tracking routes
+ * themselves, which write onto the `sends` record directly and are what this
+ * reads back from. See recomputeCampaignCounts for why that can happen.
+ */
+export async function repairCampaignCounts(
+  campaignId: string,
+): Promise<ActionResult<{ recipientCount: number; openCount: number; clickCount: number; unsubscribeCount: number }>> {
+  try {
+    await assertAdmin('marketing:campaign:repair');
+    const counts = await recomputeCampaignCounts(campaignId);
+    revalidatePath(MARKETING_PATH);
+    revalidatePath(`${MARKETING_PATH}/campaigns/${campaignId}`);
+    return { success: true, data: counts };
+  } catch (err) {
+    return fail(err, 'Could not recompute the campaign stats.');
   }
 }
 
