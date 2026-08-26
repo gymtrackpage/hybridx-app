@@ -221,20 +221,22 @@ export function CampaignStudio({
                 placeholder="Win back athletes who cancelled in the last 60 days — 3 emails over 2 weeks…"
               />
 
-              <div className="flex flex-wrap gap-2">
+              {/* Full-width rows on a phone: these are whole sentences, and
+                  as pills they wrapped into unreadable slivers. */}
+              <div className="grid gap-2 sm:flex sm:flex-wrap">
                 {EXAMPLES.map((example) => (
                   <button
                     key={example}
                     type="button"
                     onClick={() => setPrompt(example)}
-                    className="rounded-full border px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-muted"
+                    className="rounded-lg border px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted sm:rounded-full sm:py-1.5"
                   >
                     {example}
                   </button>
                 ))}
               </div>
 
-              <Button onClick={handleCompose} disabled={busy || !prompt.trim()}>
+              <Button className="w-full sm:w-auto" onClick={handleCompose} disabled={busy || !prompt.trim()}>
                 {busy ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
@@ -269,7 +271,7 @@ export function CampaignStudio({
         <Card>
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <CardTitle>{plan.name}</CardTitle>
                 <CardDescription className="mt-1">{plan.goal}</CardDescription>
               </div>
@@ -317,7 +319,7 @@ export function CampaignStudio({
             <p className="text-xs text-muted-foreground">{plan.reasoning}</p>
 
             {stage === 'plan' && (
-              <div className="flex flex-wrap gap-2">
+              <div className="grid gap-2 sm:flex sm:flex-wrap">
                 <Button onClick={handleDraftAll} disabled={busy}>
                   {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
                   Draft the emails
@@ -389,7 +391,7 @@ export function CampaignStudio({
             />
           ))}
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-center">
             <Button onClick={handleSave} disabled={busy}>
               {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save as draft journey

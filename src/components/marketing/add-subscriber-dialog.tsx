@@ -64,12 +64,12 @@ export function AddSubscriberDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button>
+        <Button className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           Add subscriber
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] overflow-y-auto sm:w-full">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Add a subscriber</DialogTitle>
@@ -136,7 +136,7 @@ export function AddSubscriberDialog() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>

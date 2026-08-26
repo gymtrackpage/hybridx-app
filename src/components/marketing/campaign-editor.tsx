@@ -211,9 +211,9 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col items-stretch gap-3 space-y-0 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <CardTitle className="text-base">Content</CardTitle>
-          <Button onClick={handleSave} disabled={saving || !dirty}>
+          <Button className="sm:w-auto" onClick={handleSave} disabled={saving || !dirty}>
             {saving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -223,7 +223,7 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
           </Button>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
           <div className="space-y-2">
             <Label htmlFor="subject">Subject</Label>
             <div className="flex gap-2">
@@ -236,7 +236,7 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
                 }}
                 onBlur={() => check(blocks, subject)}
               />
-              <Button variant="outline" onClick={handleSuggestSubjects} disabled={loadingSubjects}>
+              <Button variant="outline" size="icon" className="shrink-0" onClick={handleSuggestSubjects} disabled={loadingSubjects}>
                 {loadingSubjects ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
@@ -293,12 +293,12 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
       </Card>
 
       <Tabs defaultValue={legacyHtmlOnly ? 'preview' : 'blocks'}>
-        <TabsList>
-          <TabsTrigger value="blocks" disabled={legacyHtmlOnly}>
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="blocks" className="flex-1 sm:flex-none" disabled={legacyHtmlOnly}>
             <Pencil className="mr-2 h-3.5 w-3.5" />
             Blocks
           </TabsTrigger>
-          <TabsTrigger value="preview">
+          <TabsTrigger value="preview" className="flex-1 sm:flex-none">
             <Eye className="mr-2 h-3.5 w-3.5" />
             Preview
           </TabsTrigger>
@@ -307,7 +307,7 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
         <TabsContent value="blocks" className="space-y-3 pt-4">
           {blocks.map((block, i) => (
             <Card key={i}>
-              <CardContent className="space-y-3 pt-4">
+              <CardContent className="space-y-3 p-4">
                 <div className="flex items-center justify-between gap-2">
                   <Badge variant="outline" className="text-[10px]">
                     {BLOCK_LABELS[block.type]}
@@ -362,7 +362,7 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
 
           <div className="flex items-center gap-2">
             <Select onValueChange={(type) => mutate([...blocks, emptyBlock(type as EmailBlockType)])}>
-              <SelectTrigger className="w-[220px]">
+              <SelectTrigger className="w-full sm:w-[220px]">
                 <SelectValue placeholder="Add a block…" />
               </SelectTrigger>
               <SelectContent>
@@ -380,7 +380,7 @@ export function CampaignEditor({ campaignId, initial, legacyHtmlOnly }: Props) {
           <iframe
             srcDoc={previewHtml}
             title="Campaign preview"
-            className="h-[640px] w-full rounded-md border bg-white"
+            className="h-[60vh] min-h-[320px] w-full rounded-md border bg-white sm:h-[640px]"
             sandbox=""
           />
         </TabsContent>

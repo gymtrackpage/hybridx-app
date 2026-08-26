@@ -46,7 +46,7 @@ export function NewCampaignButton() {
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
       <Button asChild variant="outline">
         <a href="/admin/marketing/studio">
           <Sparkles className="mr-2 h-4 w-4" />
@@ -56,12 +56,12 @@ export function NewCampaignButton() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button>
+          <Button className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
             Blank campaign
           </Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] overflow-y-auto sm:w-full">
           <DialogHeader>
             <DialogTitle>New campaign</DialogTitle>
             <DialogDescription>
@@ -85,7 +85,7 @@ export function NewCampaignButton() {
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>

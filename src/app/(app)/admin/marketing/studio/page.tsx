@@ -11,7 +11,7 @@ export default async function StudioPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-headline text-3xl font-bold">Campaign studio</h1>
+        <h1 className="font-headline text-2xl font-bold sm:text-3xl">Campaign studio</h1>
         <p className="mt-1 max-w-3xl text-muted-foreground">
           Describe what you want to send. The studio plans the sequence, drafts each email against
           live HYBRIDX facts, and wires up the sending — as a one-off broadcast or an automation

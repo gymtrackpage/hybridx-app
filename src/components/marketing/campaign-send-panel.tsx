@@ -127,18 +127,18 @@ export function CampaignSendPanel({ campaignId, status, initialSegment, tags }: 
   return (
     <>
       <Card>
-        <CardHeader>
+        <CardHeader className="p-4 sm:p-6">
           <CardTitle>Audience and sending</CardTitle>
           <CardDescription>
             Choose who receives this, send yourself a test, then send or schedule it.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 p-4 pt-0 sm:p-6 sm:pt-0">
           <AudiencePicker tags={tags} value={segment} onChange={persistSegment} disabled={busy} />
 
           <div className="space-y-2">
             <Label htmlFor="test-email">Send a test</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="test-email"
                 type="email"
@@ -146,7 +146,12 @@ export function CampaignSendPanel({ campaignId, status, initialSegment, tags }: 
                 onChange={(e) => setTestEmail(e.target.value)}
                 placeholder="you@hybridx.club"
               />
-              <Button variant="outline" onClick={handleTest} disabled={sendingTest || !testEmail}>
+              <Button
+                variant="outline"
+                className="sm:shrink-0"
+                onClick={handleTest}
+                disabled={sendingTest || !testEmail}
+              >
                 {sendingTest ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (
@@ -160,13 +165,15 @@ export function CampaignSendPanel({ campaignId, status, initialSegment, tags }: 
             </p>
           </div>
 
-          <div className="flex flex-wrap items-end gap-3 border-t pt-4">
-            <Button onClick={openChecklist} disabled={busy}>
+          {/* Send is the primary action, so on a phone it gets its own
+              full-width row above the scheduling controls. */}
+          <div className="space-y-4 border-t pt-4 sm:flex sm:flex-wrap sm:items-end sm:gap-3 sm:space-y-0">
+            <Button className="w-full sm:w-auto" onClick={openChecklist} disabled={busy}>
               <Send className="mr-2 h-4 w-4" />
               Review and send
             </Button>
 
-            <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="space-y-1">
                 <Label htmlFor="schedule-at" className="text-xs">
                   Or schedule for
@@ -176,10 +183,15 @@ export function CampaignSendPanel({ campaignId, status, initialSegment, tags }: 
                   type="datetime-local"
                   value={scheduleAt}
                   onChange={(e) => setScheduleAt(e.target.value)}
-                  className="w-[220px]"
+                  className="w-full sm:w-[220px]"
                 />
               </div>
-              <Button variant="outline" onClick={handleSchedule} disabled={busy || !scheduleAt}>
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={handleSchedule}
+                disabled={busy || !scheduleAt}
+              >
                 <CalendarClock className="mr-2 h-4 w-4" />
                 Schedule
               </Button>
@@ -189,7 +201,7 @@ export function CampaignSendPanel({ campaignId, status, initialSegment, tags }: 
       </Card>
 
       <Dialog open={checkOpen} onOpenChange={setCheckOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] overflow-y-auto sm:w-full">
           <DialogHeader>
             <DialogTitle>Before you send</DialogTitle>
             <DialogDescription>
@@ -250,7 +262,7 @@ export function CampaignSendPanel({ campaignId, status, initialSegment, tags }: 
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setCheckOpen(false)}>
               Cancel
             </Button>

@@ -147,7 +147,12 @@ export function RoutesManager({ routes, subscriberCounts, journeysByRoute }: Pro
       )}
 
       <div className="flex justify-end">
-        <Button variant="outline" onClick={handleSeed} disabled={seeding}>
+        <Button
+          variant="outline"
+          className="w-full sm:w-auto"
+          onClick={handleSeed}
+          disabled={seeding}
+        >
           {seeding ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
@@ -157,7 +162,103 @@ export function RoutesManager({ routes, subscriberCounts, journeysByRoute }: Pro
         </Button>
       </div>
 
-      <div className="rounded-md border">
+      {/* Mobile: a card per route. Configure is a full-width button here rather
+          than a small ghost link in a sixth table column. */}
+      <div className="space-y-3 lg:hidden">
+        {routes.map((route) => {
+          const journeys = journeysByRoute[route.id] ?? [];
+          return (
+            <div
+              key={route.id}
+              className={`space-y-3 rounded-md border p-4 ${
+                route.status === 'archived' ? 'opacity-60' : ''
+              }`}
+            >
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{route.label}</span>
+                  {route.status === 'unconfigured' && (
+                    <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400">
+                      New
+                    </Badge>
+                  )}
+                  {route.status === 'archived' && <Badge variant="outline">Archived</Badge>}
+                  {route.builtIn && (
+                    <Badge variant="outline" className="text-[10px]">
+                      built-in
+                    </Badge>
+                  )}
+                </div>
+                <div className="break-all font-mono text-xs text-muted-foreground">{route.id}</div>
+              </div>
+
+              <dl className="grid grid-cols-3 gap-2 border-y py-3 text-sm">
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted-foreground">Property</dt>
+                  <dd className="truncate">{PROPERTY_LABELS[route.property]}</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted-foreground">Consent</dt>
+                  <dd className="truncate">{route.consentPolicy}</dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-xs text-muted-foreground">Subscribers</dt>
+                  <dd className="tabular-nums">
+                    {(subscriberCounts[route.id] ?? 0).toLocaleString()}
+                  </dd>
+                </div>
+              </dl>
+
+              <div>
+                <p className="text-xs text-muted-foreground">Welcome journey</p>
+                {journeys.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">None</p>
+                ) : (
+                  <div className="space-y-1">
+                    {journeys.map((j) => (
+                      <div key={j.id} className="flex items-center gap-2 text-sm">
+                        <Link
+                          href={`/admin/marketing/journeys/${j.id}`}
+                          className="underline underline-offset-2"
+                        >
+                          {j.name}
+                        </Link>
+                        {j.status === 'live' ? (
+                          <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]">
+                            {j.status}
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setEditing(route)}>
+                  Configure
+                </Button>
+                {!route.builtIn && route.status !== 'archived' && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0"
+                    aria-label={`Archive ${route.label}`}
+                    disabled={pending}
+                    onClick={() => handleArchive(route)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="hidden rounded-md border lg:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -236,6 +337,7 @@ export function RoutesManager({ routes, subscriberCounts, journeysByRoute }: Pro
                       <Button
                         variant="ghost"
                         size="sm"
+                        aria-label={`Archive ${route.label}`}
                         disabled={pending}
                         onClick={() => handleArchive(route)}
                       >
@@ -300,7 +402,7 @@ function RouteDialog({ route, onClose }: { route: RouteRow | null; onClose: () =
 
   return (
     <Dialog open={!!route} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[85dvh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto sm:w-full">
         <DialogHeader>
           <DialogTitle>Configure route</DialogTitle>
           <DialogDescription>
@@ -380,7 +482,7 @@ function RouteDialog({ route, onClose }: { route: RouteRow | null; onClose: () =
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="ghost" onClick={onClose} disabled={pending}>
             Cancel
           </Button>

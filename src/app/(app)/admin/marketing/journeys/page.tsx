@@ -11,15 +11,15 @@ export default async function JourneysPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
         <div>
-          <h1 className="font-headline text-3xl font-bold">Journeys</h1>
+          <h1 className="font-headline text-2xl font-bold sm:text-3xl">Journeys</h1>
           <p className="mt-1 max-w-2xl text-muted-foreground">
             Automations that send on a trigger — a welcome series, a trial-ending nudge, a winback.
             A one-off broadcast is a journey too, with a manual trigger and one email.
           </p>
         </div>
-        <Button asChild>
+        <Button asChild className="w-full sm:w-auto">
           <Link href="/admin/marketing/studio">
             <Sparkles className="mr-2 h-4 w-4" />
             New in studio

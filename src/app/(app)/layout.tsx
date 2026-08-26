@@ -290,7 +290,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
             </SidebarFooter>
             </Sidebar>
-            <SidebarInset>
+            {/*
+              min-w-0: without it this flex item takes its automatic minimum
+              size from its contents, so one long unbreakable string (an email
+              address, a route id, a wide table) stretches the whole page and
+              the viewport scrolls sideways on a phone. With it, wide content
+              stays inside the scroll container below and truncation works.
+            */}
+            <SidebarInset className="min-w-0">
             {/*
               min-h rather than a fixed h: Android 15 draws the webview behind
               the status bar, so pt-safe adds real padding here. With a fixed

@@ -107,9 +107,9 @@ export function EmailDraftCard({ draft, index, audienceDescription, onChange }: 
 
   return (
     <Card className={errors.length ? 'border-destructive/50' : undefined}>
-      <CardHeader>
+      <CardHeader className="p-4 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <CardTitle className="text-base">
               {index + 1}. {draft.workingTitle}
             </CardTitle>
@@ -127,7 +127,7 @@ export function EmailDraftCard({ draft, index, audienceDescription, onChange }: 
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-4 pt-0 sm:p-6 sm:pt-0">
         {(errors.length > 0 || warnings.length > 0) && (
           <ul className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
             {[...errors, ...warnings].map((issue, i) => (
@@ -138,7 +138,7 @@ export function EmailDraftCard({ draft, index, audienceDescription, onChange }: 
                   }`}
                 />
                 <span>
-                  <strong className="font-mono text-xs">{issue.found}</strong> — {issue.message}
+                  <strong className="break-all font-mono text-xs">{issue.found}</strong> — {issue.message}
                 </span>
               </li>
             ))}
@@ -154,7 +154,7 @@ export function EmailDraftCard({ draft, index, audienceDescription, onChange }: 
               onChange={(e) => onChange({ ...draft, subject: e.target.value })}
               onBlur={() => revalidate(draft)}
             />
-            <Button variant="outline" onClick={handleSuggestSubjects} disabled={loadingSubjects}>
+            <Button variant="outline" size="icon" className="shrink-0" onClick={handleSuggestSubjects} disabled={loadingSubjects}>
               {loadingSubjects ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -203,12 +203,12 @@ export function EmailDraftCard({ draft, index, audienceDescription, onChange }: 
         </div>
 
         <Tabs defaultValue="blocks">
-          <TabsList>
-            <TabsTrigger value="blocks">
+          <TabsList className="w-full sm:w-auto">
+            <TabsTrigger value="blocks" className="flex-1 sm:flex-none">
               <Pencil className="mr-2 h-3.5 w-3.5" />
               Content
             </TabsTrigger>
-            <TabsTrigger value="preview">
+            <TabsTrigger value="preview" className="flex-1 sm:flex-none">
               <Eye className="mr-2 h-3.5 w-3.5" />
               Preview
             </TabsTrigger>
@@ -287,7 +287,7 @@ export function EmailDraftCard({ draft, index, audienceDescription, onChange }: 
             <iframe
               srcDoc={previewHtml}
               title={`Preview of ${draft.workingTitle}`}
-              className="h-[520px] w-full rounded-md border bg-white"
+              className="h-[60vh] min-h-[320px] w-full rounded-md border bg-white sm:h-[520px]"
               sandbox=""
             />
           </TabsContent>

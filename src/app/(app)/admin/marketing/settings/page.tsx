@@ -29,7 +29,7 @@ export default async function MarketingSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-headline text-3xl font-bold">Marketing settings</h1>
+        <h1 className="font-headline text-2xl font-bold sm:text-3xl">Marketing settings</h1>
         <p className="mt-1 text-muted-foreground">
           Sender identity, delivery throughput and the global sending switch.
         </p>

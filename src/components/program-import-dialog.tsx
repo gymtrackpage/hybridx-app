@@ -340,7 +340,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[85dvh] w-[calc(100%-1.5rem)] overflow-y-auto sm:w-full">
         <DialogHeader>
           <DialogTitle>Import Program from CSV</DialogTitle>
           <DialogDescription>
@@ -433,7 +433,7 @@ export function ProgramImportDialog({ isOpen, setIsOpen, onSuccess }: ProgramImp
             )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="ghost" onClick={() => handleOpenChange(false)}>Cancel</Button>
           <Button
             onClick={handleImport}

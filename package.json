@@ -15,7 +15,8 @@
     "seed:journeys": "tsx scripts/seed-journeys.ts",
     "test": "vitest",
     "test:run": "vitest run",
-    "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes --project hyroxedgeai"
+    "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes --project hyroxedgeai",
+    "port:leads": "tsx scripts/port-website-leads.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",

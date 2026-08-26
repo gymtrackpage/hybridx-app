@@ -32,9 +32,9 @@ export default async function MarketingDashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
         <div>
-          <h1 className="font-headline text-3xl font-bold">Marketing</h1>
+          <h1 className="font-headline text-2xl font-bold sm:text-3xl">Marketing</h1>
           <p className="mt-1 text-muted-foreground">
             Campaigns, subscribers and delivery for HYBRIDX.
           </p>
@@ -42,14 +42,14 @@ export default async function MarketingDashboardPage() {
         <NewCampaignButton />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {tiles.map(({ label, value, hint, icon: Icon }) => (
           <Card key={label}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-              <Icon className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 p-4 pb-2 sm:p-6 sm:pb-2">
+              <CardTitle className="text-xs font-medium text-muted-foreground sm:text-sm">{label}</CardTitle>
+              <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
               <div className="text-2xl font-bold">{value}</div>
               <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
             </CardContent>
@@ -85,8 +85,8 @@ export default async function MarketingDashboardPage() {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Recent campaigns</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+          <CardTitle className="text-base sm:text-lg">Recent campaigns</CardTitle>
           <Button asChild variant="ghost" size="sm">
             <Link href="/admin/marketing/campaigns">View all</Link>
           </Button>
@@ -102,11 +102,11 @@ export default async function MarketingDashboardPage() {
               {campaigns.map((c) => {
                 const openRate = c.recipientCount ? (c.openCount ?? 0) / c.recipientCount : null;
                 return (
-                  <li key={c.id} className="flex items-center justify-between gap-4 py-3">
-                    <div className="min-w-0">
+                  <li key={c.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0 flex-1">
                       <Link
                         href={`/admin/marketing/campaigns/${c.id}`}
-                        className="truncate font-medium hover:underline"
+                        className="block truncate font-medium hover:underline"
                       >
                         {c.subject || 'Untitled campaign'}
                       </Link>
