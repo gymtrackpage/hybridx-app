@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { BLOCK_LABELS, blockText, type EmailBlock } from '@/lib/marketing/blocks';
-import { APP_MARKETING_PATHS, defaultCtaUrl } from '@/lib/marketing/app-routes';
+import { APP_MARKETING_PATHS } from '@/lib/marketing/app-routes';
+import { BlockFieldsEditor } from '@/components/marketing/block-fields-editor';
 import { renderBlocks } from '@/lib/marketing/render';
 import type { ValidationIssue } from '@/lib/marketing/validate';
 import {
@@ -215,10 +216,25 @@ export function EmailDraftCard({ draft, index, audienceDescription, onChange }: 
 
           <TabsContent value="blocks" className="space-y-2 pt-3">
             {draft.blocks.map((block, i) => {
-              const text = blockText(block);
+              /**
+               * Every keystroke. No revalidation here — this only rebuilds
+               * the array and lifts it up, same as onChange elsewhere.
+               */
               const updateBlock = (next: EmailBlock) => {
                 const blocks = draft.blocks.map((b, j) => (j === i ? next : b));
                 onChange({ ...draft, blocks });
+              };
+              /**
+               * A field committed on blur. Takes the FINAL value directly
+               * from BlockFieldsEditor rather than re-reading `block` or
+               * `draft.blocks` — draft is this render's prop and updateBlock
+               * above has almost certainly already changed it, so revalidate
+               * must be given the array built from the value just handed to
+               * it, not from a second, possibly-stale read of state.
+               */
+              const commitBlock = (next: EmailBlock) => {
+                const blocks = draft.blocks.map((b, j) => (j === i ? next : b));
+                void revalidate({ ...draft, blocks });
               };
               return (
                 <div key={i} className="rounded-lg border p-3">
@@ -227,46 +243,15 @@ export function EmailDraftCard({ draft, index, audienceDescription, onChange }: 
                       {BLOCK_LABELS[block.type]}
                     </Badge>
                   </div>
-                  {block.type === 'cta' ? (
-                    <div className="mt-2 space-y-2">
-                      <div className="space-y-1">
-                        <Label htmlFor={`cta-label-${index}-${i}`} className="text-xs text-muted-foreground">
-                          Button text
-                        </Label>
-                        <Input
-                          id={`cta-label-${index}-${i}`}
-                          value={block.label}
-                          onChange={(e) => updateBlock({ ...block, label: e.target.value })}
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor={`cta-url-${index}-${i}`} className="text-xs text-muted-foreground">
-                          Links to
-                        </Label>
-                        <Input
-                          id={`cta-url-${index}-${i}`}
-                          list="cta-known-urls"
-                          value={block.url}
-                          onChange={(e) => updateBlock({ ...block, url: e.target.value })}
-                          onBlur={() => {
-                            // A blank field is not worth keeping around to fail
-                            // validation with — land it on the one page that
-                            // works whether or not the reader is signed in.
-                            const url = block.url.trim() || defaultCtaUrl();
-                            const blocks = draft.blocks.map((b, j) =>
-                              j === i ? { ...block, url } : b,
-                            );
-                            void revalidate({ ...draft, blocks });
-                          }}
-                          placeholder={`Any URL — blank defaults to ${defaultCtaUrl()}`}
-                          className="h-8 font-mono text-xs"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    text && <p className="mt-2 text-sm">{text}</p>
-                  )}
+                  <div className="mt-2">
+                    <BlockFieldsEditor
+                      block={block}
+                      onChange={updateBlock}
+                      onCommit={commitBlock}
+                      idPrefix={`draft-${index}-block-${i}`}
+                      urlListId="cta-known-urls"
+                    />
+                  </div>
                   <div className="mt-2 flex gap-2">
                     <Input
                       value={instruction[i] ?? ''}

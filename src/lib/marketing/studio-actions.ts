@@ -29,7 +29,7 @@ import {
 } from './journeys';
 import { CAMPAIGNS } from './queue';
 import { renderBlocks, renderBlocksAsText } from './render';
-import { validateDraft, validateLinks, type ValidationIssue } from './validate';
+import { validateDraft, validateLinks, validateBlockShapes, type ValidationIssue } from './validate';
 import { defaultCtaUrl } from './app-routes';
 
 export type StudioResult<T> = { success: true; data: T } | { success: false; error: string };
@@ -126,11 +126,19 @@ export async function revalidateContent(input: {
     // mistyped app path from a human editor sailed through with no warning
     // at all, the same failure this was built to catch, through a door that
     // was left unlocked.
-    const linkIssues = validateLinks(
-      input.blocks,
-      defaultCtaUrl(),
-    );
-    return { success: true, data: { valid: ok && linkIssues.length === 0, issues: [...issues, ...linkIssues] } };
+    const linkIssues = validateLinks(input.blocks, defaultCtaUrl());
+    // Hand-editing is now possible (direct field editing in the campaign
+    // editor and the Studio card, not only AI drafting/revision), so a block
+    // can be emptied into an invalid shape the same way a bad link could
+    // already be typed by hand — checked here for the same reason.
+    const shapeIssues = validateBlockShapes(input.blocks);
+    return {
+      success: true,
+      data: {
+        valid: ok && linkIssues.length === 0 && shapeIssues.length === 0,
+        issues: [...issues, ...linkIssues, ...shapeIssues],
+      },
+    };
   } catch (err) {
     return fail(err, 'Could not validate the content.');
   }

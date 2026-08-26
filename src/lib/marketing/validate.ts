@@ -13,7 +13,7 @@
 // mechanically, and (c) cause real damage when wrong.
 
 import type { KnowledgeSnapshot } from './knowledge';
-import type { EmailBlock } from './blocks';
+import { emailBlockSchema, type EmailBlock } from './blocks';
 import { isKnownAppPath } from './app-routes';
 
 export type IssueSeverity = 'error' | 'warning';
@@ -71,6 +71,39 @@ function toText(input: string): string {
 /** Normalise a programme name for comparison: lowercase, punctuation-insensitive. */
 function normaliseName(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Check that every block is still a shape the app can render.
+ *
+ * Every block reaching here was, at some point, a real `EmailBlock` — it did
+ * not need this check when the only way to produce one was `toEmailBlocks`,
+ * which already narrows AI output through this same schema and drops
+ * anything that fails it. What changed is that a block can now be hand-edited
+ * in the campaign editor: clear a bulletList's textarea down to nothing, or a
+ * hero's headline, and the in-memory object is no longer a valid block, but
+ * nothing stopped `updateCampaignContent` from writing it to Firestore anyway
+ * — the render or the send would have been where it surfaced, not the editor.
+ */
+export function validateBlockShapes(blocks: EmailBlock[]): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  blocks.forEach((block, index) => {
+    const parsed = emailBlockSchema.safeParse(block);
+    if (parsed.success) return;
+
+    const reason = parsed.error.issues
+      .map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message))
+      .join('; ');
+    issues.push({
+      severity: 'error',
+      kind: 'structure',
+      found: `${block.type} (block ${index + 1})`,
+      message: `This ${block.type} block is incomplete and would not render correctly: ${reason}.`,
+    });
+  });
+
+  return issues;
 }
 
 /**

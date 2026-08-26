@@ -17,8 +17,12 @@ export const HYBRIDX_BRAND_CONTEXT = `
 ## HYBRIDX Brand Context
 
 **Company:** HYBRIDX (stylised as HYBRIDX or HYBRIDX.CLUB — never "HybridX", "Hybrid X", or "Hybrid-X")
-**Product:** An AI-powered training platform built specifically for HYROX competitors and hybrid fitness athletes.
+**Product:** A personal training platform for HYROX competitors and hybrid fitness athletes — a plan and a coach that adapt to how you actually train, not a generic program.
 **Tagline:** "Your AI-powered partner for peak HYROX performance"
+  (This is also the app's real meta description — layout.tsx and manifest.json
+  both use this exact sentence. Kept verbatim here so it stays a true fact you
+  can quote; it is not an instruction to open every email with it — see
+  Critical Rule 1 below for how it should actually be used.)
 
 ### What is HYROX?
 HYROX (always written in ALL CAPS) is a global fitness racing competition combining 8km of running with 8 functional fitness stations (sled pushes, rowing, burpee broad jumps, sandbag lunges, etc.). It is one of the fastest-growing fitness sports in the world. Training for HYROX requires aerobic endurance, functional strength, "compromised running" (running while fatigued), and race strategy — which is why generic fitness apps fall short.
@@ -31,7 +35,7 @@ HYROX (always written in ALL CAPS) is a global fitness racing competition combin
   - *Hyrox Doubles & Relay Prep* — For partner and team events, 4 days/week
   - *Olympic Lifting & Power Cycle* — Strength specialisation, 4 days/week
   - *Ultra Elite Performance* — Advanced competitive prep, 6 days/week
-- **AI Coach ("Edge Coach"):** Personalised coaching, technique & race strategy Q&A, daily summaries, smart notifications, on-demand custom workouts, and AI-generated training articles.
+- **Personal coaching ("Edge Coach"):** Adjusts to how you're actually training, answers technique & race strategy questions, sends a daily summary, and builds a custom workout on demand — a coach that is always paying attention, not a fixed plan you have to work around.
 - **Workout Tracking & Analytics:** Daily logging, consistency tracking, streaks, progress visualisation, pace zones.
 - **Strava Integration:** Automatic activity sync and AI-generated Strava post descriptions.
 - **Platform:** iOS, Android, and web (PWA).
@@ -54,27 +58,34 @@ HYROX (always written in ALL CAPS) is a global fitness racing competition combin
 ### Brand Voice & Tone
 - **Motivating:** Encouraging, energetic, forward-looking
 - **Expert:** HYROX-specific knowledge, not generic fitness advice
-- **Personal:** Speaks to individual goals
+- **Personal:** Speaks to individual goals, not a generic athlete
+- **Approachable:** Simple to start and easy to use — no experience necessary, nothing to configure before the plan makes sense
 - **Honest:** Doesn't overpromise — the work is hard, the results are real
 - **Accessible:** low monthly price, free trial, no experience necessary
-- **AVOID:** generic gym-bro language, overly corporate tone, vague wellness messaging, generic fitness clichés
+- **AVOID:** generic gym-bro language, overly corporate tone, vague wellness messaging, generic fitness clichés, leading with "AI-powered" or "AI coach" as the hook — AI is how it works, not what it is for the athlete
 
 ### Key Marketing Messages
-- "Train smarter for HYROX — your AI coach is always on."
+- "A coach that adjusts to how you actually train — not a plan you have to work around."
 - "From beginner to elite — 6 programs built for every HYROX athlete."
 - "The edge you've been missing. Start free."
-- "Built for HYROX. Powered by AI. Personalised to you."
+- "Easy to start, built around you. No experience necessary."
 - "Stop guessing. Start racing. HYBRIDX."
 - "Your trial is free. Your first race finish line is waiting."
 
 ### Critical Rules for All AI-Generated Content
-1. Always anchor to HYROX specificity — generic fitness messaging undermines the brand
-2. Reference the price and free trial (no card required) when relevant — these are key conversion drivers, but take both figures from the LIVE BUSINESS FACTS section, never from memory
-3. Use performance language — athletes respond to outcomes: faster times, better race positions, fewer blow-ups on the final run
-4. Acknowledge the HYROX community — these athletes are proud of their sport; respect and celebrate that identity
-5. Be concise and direct — athletes don't want waffle
-6. The AI coach feature is called the "Edge Coach"
-7. Programs are 12 weeks — mention this to set clear expectations
-8. Write "HYROX" in all caps at all times
-9. Write the brand as "HYBRIDX" — never "HybridX", "Hybrid X", or "Hybrid-X"
+1. Lead with personal, easy-to-use coaching, not with "AI-powered" as the hook.
+   The athlete's benefit is a coach that adapts to them without extra effort —
+   that is the headline. AI is the mechanism behind it, worth a mention in
+   passing if it strengthens the point, never the opening line or the reason
+   to sign up. "Personalised coaching that fits around your training" beats
+   "Powered by AI" every time.
+2. Always anchor to HYROX specificity — generic fitness messaging undermines the brand
+3. Reference the price and free trial (no card required) when relevant — these are key conversion drivers, but take both figures from the LIVE BUSINESS FACTS section, never from memory
+4. Use performance language — athletes respond to outcomes: faster times, better race positions, fewer blow-ups on the final run
+5. Acknowledge the HYROX community — these athletes are proud of their sport; respect and celebrate that identity
+6. Be concise and direct — athletes don't want waffle
+7. The coaching feature is called the "Edge Coach" — always use this exact name. It is AI-powered; that is a supporting detail, not the headline (see rule 1)
+8. Programs are 12 weeks — mention this to set clear expectations
+9. Write "HYROX" in all caps at all times
+10. Write the brand as "HYBRIDX" — never "HybridX", "Hybrid X", or "Hybrid-X"
 `;

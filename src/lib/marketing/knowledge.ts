@@ -59,11 +59,17 @@ export interface KnowledgeSnapshot {
  *
  * Kept as a typed constant rather than prose in the brand file so that adding a
  * feature to the app and telling the AI about it is one edit in one place.
+ *
+ * The Edge Coach and adaptive-analysis lines lead with what the athlete gets,
+ * not with "AI" — src/ai/brand-context.ts asks drafts to do the same, and a
+ * fact bullet that opens "AI coaching..." would hand the model a ready-made
+ * AI-first headline regardless of what the brand voice rules say. Still
+ * exactly the same features; only which word comes first changed.
  */
 export const APP_FEATURES = [
   'Six structured 12-week HYROX training programmes across every experience level',
-  'Edge Coach — AI coaching, technique and race-strategy Q&A, and daily summaries',
-  'Adaptive weekly AI analysis that reshapes upcoming sessions around actual training',
+  'Edge Coach — personal coaching that adapts to your training, answers technique and race-strategy questions, and sends daily summaries',
+  'Weekly plan adjustments that reshape upcoming sessions around how you actually trained',
   'Race-day planner that counts back from an event date with a periodised build',
   'Strava integration — activity sync and AI-generated post descriptions',
   'Garmin integration — push workouts to the watch and pull activities back',
