@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { Archive, MoreHorizontal, Pause, Pencil, Play, Search, XCircle } from 'lucide-react';
+import { Archive, MoreHorizontal, Pause, Pencil, Play, RefreshCw, Search, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -25,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   cancelSchedule,
   pauseCampaign,
+  repairCampaignCounts,
   resumeCampaign,
   setCampaignArchived,
 } from '@/lib/marketing/actions';
@@ -34,8 +35,19 @@ import { CampaignStatusBadge } from './campaign-status-badge';
 const FILTERS = ['active', 'draft', 'sent', 'archived'] as const;
 type Filter = (typeof FILTERS)[number];
 
+/**
+ * A percentage, or '—' when there is nothing to divide by.
+ *
+ * A real, positive numerator with a zero denominator is not "nothing
+ * happened" — opens and clicks cannot exist without recipients, so that
+ * combination means recipientCount itself has drifted from what the sends
+ * actually record (see recomputeCampaignCounts). Collapsing it to the same
+ * '—' as a genuine zero would hide the exact signal that caught this bug in
+ * the first place, so it is shown instead as the raw count with a marker —
+ * present, but visibly not a rate.
+ */
 function rate(numerator: number | undefined, denominator: number): string {
-  if (!denominator) return '—';
+  if (!denominator) return numerator ? `${numerator.toLocaleString()}*` : '—';
   return `${(((numerator ?? 0) / denominator) * 100).toFixed(1)}%`;
 }
 
@@ -153,10 +165,24 @@ export function CampaignsTable({ campaigns }: { campaigns: SerialisableCampaign[
                   <TableCell className="text-right tabular-nums">
                     {c.recipientCount ? c.recipientCount.toLocaleString() : '—'}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell
+                    className="text-right tabular-nums"
+                    title={
+                      !c.recipientCount && c.openCount
+                        ? 'Recipient count is missing even though opens were recorded — try Recalculate stats.'
+                        : undefined
+                    }
+                  >
                     {rate(c.openCount, c.recipientCount)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell
+                    className="text-right tabular-nums"
+                    title={
+                      !c.recipientCount && c.clickCount
+                        ? 'Recipient count is missing even though clicks were recorded — try Recalculate stats.'
+                        : undefined
+                    }
+                  >
                     {rate(c.clickCount, c.recipientCount)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -200,6 +226,16 @@ export function CampaignsTable({ campaigns }: { campaigns: SerialisableCampaign[
                           >
                             <Play className="mr-2 h-4 w-4" />
                             Resume sending
+                          </DropdownMenuItem>
+                        )}
+                        {c.status === 'sent' && (
+                          <DropdownMenuItem
+                            onClick={() =>
+                              run('Stats recalculated', () => repairCampaignCounts(c.id))
+                            }
+                          >
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            Recalculate stats
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem

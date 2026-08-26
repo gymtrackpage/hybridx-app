@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isStaleSchedule, isStalled, sendDocId } from '../queue';
+import { campaignAudience, isStaleSchedule, isStalled, sendDocId } from '../queue';
 import type { Send } from '../types';
 
 describe('sendDocId', () => {
@@ -103,5 +103,33 @@ describe('isStaleSchedule — the recovery-burst guard', () => {
 
   it('never quarantines a campaign scheduled for the future', () => {
     expect(isStaleSchedule(stamp(now + 3_600_000), now, HOURS)).toBe(false);
+  });
+});
+
+describe('campaignAudience — shared by the cron and resumeCampaign', () => {
+  it('prefers the stored segment over targetTags', () => {
+    const audience = campaignAudience({
+      segment: { anyTags: ['from-segment'] },
+      targetTags: ['from-legacy-tags'],
+    } as never);
+    expect(audience).toEqual({ anyTags: ['from-segment'] });
+  });
+
+  it('falls back to targetTags when there is no segment', () => {
+    // The HXMailer-migration shape. Reading it in preference to a real
+    // segment would silently widen the audience of any campaign whose
+    // segment used predicates targetTags cannot express — this is why the
+    // fallback only applies when segment is entirely absent.
+    const audience = campaignAudience({ targetTags: ['winback'] } as never);
+    expect(audience).toEqual({ anyTags: ['winback'] });
+  });
+
+  it('is an empty filter — everyone — when neither is set', () => {
+    expect(campaignAudience({} as never)).toEqual({});
+  });
+
+  it('ignores an empty targetTags array rather than filtering to nothing', () => {
+    const audience = campaignAudience({ targetTags: [] } as never);
+    expect(audience).toEqual({});
   });
 });

@@ -75,6 +75,30 @@ export interface EnqueueResult {
  * still skipped, because the drain re-checks status per message, but someone
  * who joins mid-send is not silently added to a campaign already in flight.
  */
+/**
+ * The audience a campaign's own stored choice describes.
+ *
+ * `segment` is what the admin actually picked and saw a count for in the
+ * studio or editor, including athlete predicates. `targetTags` is the older,
+ * tags-only shape kept for campaigns migrated from HXMailer; reading it in
+ * preference would silently widen the audience of any campaign whose segment
+ * used predicates the tags-only shape cannot express.
+ *
+ * Shared by every caller that needs to (re-)enqueue a campaign from what it
+ * was actually configured with — the send cron for a scheduled campaign
+ * coming due, and resumeCampaign for one being resumed without ever having
+ * been enqueued — so the fallback rule lives in one place rather than in each
+ * caller, quietly drifting apart the next time one of them is edited.
+ */
+export function campaignAudience(
+  campaign: Pick<Campaign, 'segment' | 'targetTags'>,
+): SegmentDefinition {
+  return (
+    (campaign.segment as SegmentDefinition | undefined) ??
+    (campaign.targetTags?.length ? { anyTags: campaign.targetTags } : {})
+  );
+}
+
 export async function enqueueCampaign(
   campaignId: string,
   segment: SegmentDefinition,
@@ -447,6 +471,53 @@ export async function pauseStaleScheduled(staleAfterHours: number): Promise<
   }
 
   return paused;
+}
+
+/**
+ * Recompute a campaign's stats from its `sends` records — the authoritative
+ * source — and write them back onto the campaign document.
+ *
+ * `recipientCount`, `openCount`, `clickCount` and `unsubscribeCount` are
+ * write-once/increment-only fields, set at enqueue time and nudged up by the
+ * tracking routes as events arrive. That is fast day-to-day, but it means any
+ * gap in the write path — a failed update after the sends themselves were
+ * already created, a status transition that skips enqueueCampaign entirely —
+ * leaves the campaign showing "—" forever with no self-correction, even
+ * though the underlying sends prove real mail went out. This is the repair:
+ * count what actually happened and overwrite the drifted aggregate with it.
+ *
+ * Uses count() aggregate queries rather than fetching every send document, so
+ * this stays cheap to run on a campaign with a large audience — one read per
+ * count, not one per recipient.
+ */
+export async function recomputeCampaignCounts(campaignId: string): Promise<{
+  recipientCount: number;
+  openCount: number;
+  clickCount: number;
+  unsubscribeCount: number;
+}> {
+  const sendsRef = getAdminDb().collection(CAMPAIGNS).doc(campaignId).collection('sends');
+
+  const [total, opened, clicked, unsubscribed] = await Promise.all([
+    sendsRef.count().get(),
+    sendsRef.where('opened', '==', true).count().get(),
+    sendsRef.where('clicked', '==', true).count().get(),
+    sendsRef.where('unsubscribed', '==', true).count().get(),
+  ]);
+
+  const counts = {
+    recipientCount: total.data().count,
+    openCount: opened.data().count,
+    clickCount: clicked.data().count,
+    unsubscribeCount: unsubscribed.data().count,
+  };
+
+  await getAdminDb().collection(CAMPAIGNS).doc(campaignId).update({
+    ...counts,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return counts;
 }
 
 /** Campaigns the drain should work on: actively sending, or scheduled and now due. */
