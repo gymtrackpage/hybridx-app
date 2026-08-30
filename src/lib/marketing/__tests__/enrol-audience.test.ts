@@ -72,7 +72,7 @@ function addSubscriber(id: string, patch: Partial<Subscriber> = {}) {
   subscribers[id] = {
     email: `${id}@hybridx.club`,
     status: 'active',
-    consent: { marketing: true },
+    consent: { marketing: true, at: null, method: 'test' },
     tags: [],
     ...patch,
   };
@@ -146,7 +146,10 @@ describe('enrolSubscriber honours the journey audience', () => {
 
   it('still refuses the unmailable before it looks at the audience', async () => {
     addSubscriber('gone', { status: 'unsubscribed', tags: ['route:magnet-athx-guide'] });
-    addSubscriber('noconsent', { consent: { marketing: false }, tags: ['route:magnet-athx-guide'] });
+    addSubscriber('noconsent', {
+      consent: { marketing: false, at: null, method: 'test' },
+      tags: ['route:magnet-athx-guide'],
+    });
 
     const journey = journeyWith({ allTags: ['route:magnet-athx-guide'] });
     expect(await enrolSubscriber(journey, 'gone')).toBe('not-eligible');
@@ -157,10 +160,10 @@ describe('enrolSubscriber honours the journey audience', () => {
 describe('athlete predicates in an entry audience', () => {
   it('reads the linked athlete and applies the predicate', async () => {
     addSubscriber('athlete', { userId: 'u1', tags: [] });
-    users.u1 = { subscriptionStatus: 'trialing', completedWorkouts: 0 };
+    users.u1 = { subscriptionStatus: 'trial', completedWorkouts: 0 };
 
     expect(
-      await enrolSubscriber(journeyWith({ athlete: { subscriptionStatus: ['trialing'] } }), 'athlete'),
+      await enrolSubscriber(journeyWith({ athlete: { subscriptionStatus: ['trial'] } }), 'athlete'),
     ).toBe('enrolled');
 
     expect(
@@ -172,7 +175,7 @@ describe('athlete predicates in an entry audience', () => {
     addSubscriber('lead', { tags: [] });
 
     expect(
-      await enrolSubscriber(journeyWith({ athlete: { subscriptionStatus: ['trialing'] } }), 'lead'),
+      await enrolSubscriber(journeyWith({ athlete: { subscriptionStatus: ['trial'] } }), 'lead'),
     ).toBe('not-eligible');
   });
 

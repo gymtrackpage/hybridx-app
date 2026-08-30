@@ -23,7 +23,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { emitMarketingEvent } from './events';
 import { resolveRouteFor, type ResolveOptions } from './route-store';
-import { grantsConsentOnCapture, tagsForRoute } from './sources';
+import { grantsConsentOnCapture, tagsForRoute, type ConsentPolicy } from './sources';
 import {
   SUBSCRIBERS,
   isPlausibleEmail,
@@ -75,6 +75,11 @@ export interface CaptureInput {
   consent?: boolean;
   /** How consent was captured. Defaults to the route id. */
   consentMethod?: string;
+  /**
+   * How the funnel obtains consent, for a route being seen for the first time.
+   * Distinct from `consent`, which answers only for this submission.
+   */
+  consentPolicy?: ConsentPolicy;
   userId?: string;
   attribution?: CaptureAttribution;
   /** Truncated IP, for consent evidence. */
@@ -134,6 +139,7 @@ export async function captureLead(input: CaptureInput): Promise<CaptureResult> {
   // that grants nothing.
   const route = await resolveRouteFor(input.route, {
     consentGranted: input.consent === true,
+    consentPolicy: input.consentPolicy,
     ...input.routeHints,
   });
 

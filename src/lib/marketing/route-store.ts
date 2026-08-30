@@ -158,6 +158,13 @@ export interface ResolveOptions {
   property?: IntakeProperty;
   /** What the caller asserted about consent, used as the new route's posture. */
   consentGranted?: boolean;
+  /**
+   * The funnel's declared consent posture, which beats the inference below when
+   * it is supplied. A double opt-in funnel's first lead carries no consent, so
+   * inferring from that alone records it as granting none — see the note in
+   * autoRegister for why that particular wrong answer is the costly one.
+   */
+  consentPolicy?: ConsentPolicy;
   /** Free-text note about the caller, for the console. */
   seenFrom?: string;
   /** Set false to look up without ever creating. Used by read-only callers. */
@@ -241,10 +248,20 @@ async function autoRegister(
 
     const property: IntakeProperty = options.property ?? 'website';
 
-    // The posture the caller asserted, not a guess. A funnel that says its form
-    // promised ongoing email is recorded as `implied`; one that says nothing
-    // grants nothing until someone configures it.
-    const consentPolicy: ConsentPolicy = options.consentGranted ? 'implied' : 'none';
+    // The posture the funnel declares, if it declares one. Only when it does not
+    // is the posture inferred from this single submission: a funnel that says
+    // its form promised ongoing email is recorded as `implied`, and one that
+    // says nothing grants nothing until someone configures it.
+    //
+    // The inference is wrong for exactly one case, and it is the case that
+    // matters. A confirmed opt-in funnel's first lead carries consent: false,
+    // so it registered as `none` — and the routes console excludes `none` from
+    // its warning about funnels no journey is acting on, since such a route was
+    // never going to be mailed anyway. A double opt-in funnel could therefore
+    // run for months, collecting confirmed and mailable subscribers, and be the
+    // one kind of funnel the warning stayed quiet about.
+    const consentPolicy: ConsentPolicy =
+      options.consentPolicy ?? (options.consentGranted ? 'implied' : 'none');
 
     const route: StoredRoute = {
       id: slug,

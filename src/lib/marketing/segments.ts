@@ -251,6 +251,48 @@ export async function subscriberMatchesSegment(
   return matchesAthlete(snap.data() as User, pred);
 }
 
+/**
+ * A segment in one plain sentence, for the screens where somebody decides
+ * whether to press send.
+ *
+ * Lives here rather than in the page so that a filter added to SegmentDefinition
+ * is described in the same file that implements it. A description that silently
+ * omits a predicate is worse than none: it reads as a complete account of who
+ * will be mailed.
+ */
+export function describeAudience(def: SegmentDefinition | undefined): string {
+  if (!def) return 'Everyone who may be emailed.';
+
+  const parts: string[] = [];
+  if (def.anyTags?.length) parts.push(`tagged any of ${def.anyTags.join(', ')}`);
+  if (def.allTags?.length) parts.push(`tagged all of ${def.allTags.join(', ')}`);
+  if (def.noneTags?.length) parts.push(`not tagged ${def.noneTags.join(', ')}`);
+
+  const athlete = def.athlete;
+  if (athlete) {
+    if (athlete.hasAccount === false) parts.push('with no HYBRIDX account');
+    if (athlete.hasAccount === true) parts.push('with a HYBRIDX account');
+    if (athlete.subscriptionStatus?.length) {
+      parts.push(`subscription ${athlete.subscriptionStatus.join(' or ')}`);
+    }
+    if (athlete.experience?.length) parts.push(`experience ${athlete.experience.join(' or ')}`);
+    if (athlete.goal?.length) parts.push(`goal ${athlete.goal.join(' or ')}`);
+    if (athlete.programId) parts.push(`on programme ${athlete.programId}`);
+    if (athlete.minCompletedWorkouts !== undefined) {
+      parts.push(`at least ${athlete.minCompletedWorkouts} workouts logged`);
+    }
+    if (athlete.maxCompletedWorkouts !== undefined) {
+      parts.push(`at most ${athlete.maxCompletedWorkouts} workouts logged`);
+    }
+    if (athlete.inactiveForDays !== undefined) {
+      parts.push(`inactive for ${athlete.inactiveForDays}+ days`);
+    }
+  }
+
+  if (!parts.length) return 'Everyone who may be emailed.';
+  return `Everyone who may be emailed and is ${parts.join(', ')}.`;
+}
+
 /** Firestore hands back Timestamps or Dates depending on the path. Normalise. */
 function toDate(value: unknown): Date | null {
   if (!value) return null;

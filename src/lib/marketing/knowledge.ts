@@ -20,6 +20,8 @@ import type { Program } from '@/models/types';
 import { CAMPAIGNS } from './queue';
 import { SUBSCRIBERS } from './subscribers';
 import type { Campaign } from './types';
+import { listRoutes } from './route-store';
+import { routeTag } from './sources';
 
 export interface ProgramFact {
   id: string;
@@ -32,6 +34,25 @@ export interface ProgramFact {
 export interface AudienceFact {
   tag: string;
   count: number;
+}
+
+/**
+ * A funnel somebody can arrive by, as the planner needs to see it.
+ *
+ * Present because a campaign for a specific funnel is the commonest thing
+ * anybody asks the studio for, and it could not be planned: the model was shown
+ * a flat list of tags with no way to tell `route:magnet-athx-guide` from
+ * `interest:android`, and no vocabulary for "the people who came in this way".
+ */
+export interface RouteFact {
+  id: string;
+  label: string;
+  description: string;
+  /** The tag every subscriber from this route carries. */
+  tag: string;
+  count: number;
+  /** True when consent is only granted by a clicked confirmation link. */
+  confirmedOptIn: boolean;
 }
 
 export interface CampaignPerformanceFact {
@@ -48,6 +69,8 @@ export interface KnowledgeSnapshot {
   features: string[];
   totalMailable: number;
   topSegments: AudienceFact[];
+  /** Every live intake route, so a campaign can be aimed at one funnel's cohort. */
+  intakeRoutes: RouteFact[];
   /** Best- and worst-performing past campaigns, so drafts learn from real outcomes. */
   bestCampaigns: CampaignPerformanceFact[];
   worstCampaigns: CampaignPerformanceFact[];
@@ -142,6 +165,36 @@ export async function getKnowledgeSnapshot(): Promise<KnowledgeSnapshot> {
     }
   }
 
+  // Routes come from the store rather than the code registry, so a funnel that
+  // registered itself last Thursday is offered to the planner today — which is
+  // the whole reason routes are data. Archived ones are left out: a retired
+  // funnel should not be proposed as a target.
+  //
+  // Counts are read from the tag census already gathered above rather than a
+  // query per route. It samples 5,000 subscribers, so these are indicative
+  // sizes for choosing between funnels, not the audience figure a send reports.
+  let intakeRoutes: RouteFact[] = [];
+  try {
+    intakeRoutes = (await listRoutes())
+      .filter((route) => route.status !== 'archived')
+      .map((route) => ({
+        id: route.id,
+        label: route.label,
+        description: route.description,
+        tag: routeTag(route.id),
+        count: tagCounts.get(routeTag(route.id)) ?? 0,
+        confirmedOptIn: route.consentPolicy === 'confirmed',
+      }))
+      .sort((a, b) => b.count - a.count);
+  } catch (err) {
+    // The snapshot feeds every AI flow. A route lookup that throws must cost
+    // the planner its funnel list, not the drafting of an email.
+    logger.error(
+      '[marketing/knowledge] could not read intake routes:',
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+
   const snapshot: KnowledgeSnapshot = {
     trialDays: TRIAL_DAYS,
     priceLabel: process.env.MARKETING_PRICE_LABEL || '£5/month',
@@ -152,6 +205,7 @@ export async function getKnowledgeSnapshot(): Promise<KnowledgeSnapshot> {
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 25),
+    intakeRoutes,
     bestCampaigns: performance.slice(0, 5),
     worstCampaigns: performance.slice(-3).reverse(),
     capturedAt: new Date().toISOString(),
@@ -192,6 +246,20 @@ export function formatKnowledgeForPrompt(snapshot: KnowledgeSnapshot): string {
         .join('\n')
     : '- (Not enough history.)';
 
+  // Named funnels, listed apart from the flat tag census. The planner cannot
+  // aim a campaign at "the people who took the ATHX guide" from a tag list that
+  // says only `route:magnet-athx-guide: 412` — it needs the label, what the
+  // person actually did, and the tag that selects them.
+  const routeLines = snapshot.intakeRoutes.length
+    ? snapshot.intakeRoutes
+        .map(
+          (r) =>
+            `- ${r.id} — "${r.label}" (${r.count} subscribers, tag \`${r.tag}\`` +
+            `${r.confirmedOptIn ? ', confirmed opt-in' : ''}): ${r.description}`,
+        )
+        .join('\n')
+    : '- (No intake routes found. Do not narrow a campaign to a funnel.)';
+
   return `## LIVE BUSINESS FACTS
 
 These are read from the live HYBRIDX system. Use ONLY these values for anything
@@ -212,6 +280,9 @@ ${snapshot.features.map((f) => `- ${f}`).join('\n')}
 
 **Largest segments (tag: subscriber count):**
 ${snapshot.topSegments.slice(0, 12).map((s) => `- ${s.tag}: ${s.count}`).join('\n')}
+
+**Funnels people arrive by (route id — label (size, tag): what they did):**
+${routeLines}
 
 **Subject lines that performed best with this audience:**
 ${performanceLines}

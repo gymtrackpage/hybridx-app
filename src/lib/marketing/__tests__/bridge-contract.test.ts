@@ -148,6 +148,25 @@ describe('leadPayloadSchema', () => {
     // a type confusion, which is the one place guessing is unacceptable.
     expect(leadPayloadSchema.safeParse({ ...valid, consent: 'true' }).success).toBe(false);
   });
+
+  it('accepts the consent posture a double opt-in funnel declares', () => {
+    const result = leadPayloadSchema.safeParse({ ...valid, consentPolicy: 'confirmed' });
+    expect(result.success && result.data.consentPolicy).toBe('confirmed');
+  });
+
+  it('rejects a posture it does not know rather than storing it', () => {
+    // A route's posture decides whether the console warns that a funnel has no
+    // journey attached. An unrecognised value silently stored would be worse
+    // than the absence it replaces.
+    expect(leadPayloadSchema.safeParse({ ...valid, consentPolicy: 'double' }).success).toBe(false);
+  });
+
+  it('leaves the posture undefined when unstated, so the old inference applies', () => {
+    // Additive and optional: a funnel deployed before this field existed keeps
+    // working exactly as it did.
+    const result = leadPayloadSchema.safeParse(valid);
+    expect(result.success && result.data.consentPolicy).toBeUndefined();
+  });
 });
 
 describe('describeContract — what a future funnel reads instead of guessing', () => {

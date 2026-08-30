@@ -10,6 +10,7 @@ const snapshot: KnowledgeSnapshot = {
     { id: 'p2', name: 'Hyrox Fusion Balance', description: '', programType: 'hyrox', weeks: 12 },
   ],
   features: [],
+  intakeRoutes: [],
   totalMailable: 100,
   topSegments: [],
   bestCampaigns: [],
