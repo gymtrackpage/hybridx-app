@@ -117,6 +117,20 @@ export const INTAKE_ROUTES: readonly IntakeRoute[] = [
     aliases: ['hyrox_rules_card'],
   },
   {
+    id: 'magnet-athx-guide',
+    label: 'What is ATHX? one-page guide',
+    description:
+      'Requested the one-page ATHX guide from the ATHX 2027 pre-launch funnel. Confirmed ' +
+      'opt-in — the guide is delivered by an emailed link, and consent is granted only ' +
+      'when that link is clicked. This cohort is pre-launch demand for the ATHX 2027 books ' +
+      'rather than general training interest.',
+    property: 'website',
+    source: 'landing',
+    consentPolicy: 'confirmed',
+    tags: ['source:website', 'magnet:athx-guide'],
+    aliases: ['athx_2027_guide'],
+  },
+  {
     id: 'website-signup',
     label: 'Marketing site sign-up',
     description: 'Signed up for email directly on the marketing site, without a magnet.',
