@@ -31,6 +31,7 @@ import { CAMPAIGNS } from './queue';
 import { renderBlocks, renderBlocksAsText } from './render';
 import { validateDraft, validateLinks, validateBlockShapes, type ValidationIssue } from './validate';
 import { defaultCtaUrl } from './app-routes';
+import { stripUndefined } from '@/lib/firestore-values';
 
 export type StudioResult<T> = { success: true; data: T } | { success: false; error: string };
 
@@ -190,7 +191,7 @@ export async function saveJourney(
       }
 
       const campaignRef = db.collection(CAMPAIGNS).doc();
-      await campaignRef.set({
+      await campaignRef.set(stripUndefined({
         subject: step.subject,
         previewText: step.previewText,
         blocks: step.blocks,
@@ -206,7 +207,7 @@ export async function saveJourney(
         clickCount: 0,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-      });
+      }));
 
       steps.push({
         id: `step-${index}`,
@@ -216,7 +217,10 @@ export async function saveJourney(
       });
     }
 
-    await journeyRef.set({
+    // `brief` is optional on an email step, and the audience and trigger both
+    // carry optional fields the planner may not have set. Any one of them left
+    // undefined would fail the whole write rather than simply be absent.
+    await journeyRef.set(stripUndefined({
       name: input.name,
       goal: input.goal,
       trigger: input.trigger,
@@ -233,7 +237,7 @@ export async function saveJourney(
       stats: { entered: 0, completed: 0, exitedEarly: 0 },
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    }));
 
     revalidatePath(STUDIO_PATH);
     revalidatePath('/admin/marketing/journeys');
