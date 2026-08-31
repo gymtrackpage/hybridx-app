@@ -21,6 +21,7 @@ import { draftEmail } from '@/ai/flows/marketing/draft-email';
 import { JOURNEYS } from '@/lib/marketing/journeys';
 import { CAMPAIGNS } from '@/lib/marketing/queue';
 import { renderBlocks, renderBlocksAsText } from '@/lib/marketing/render';
+import { stripUndefined } from '@/lib/firestore-values';
 import type { EmailBlock } from '@/lib/marketing/blocks';
 
 export const maxDuration = 300;
@@ -57,8 +58,15 @@ async function draftProposal(proposal: CampaignProposal): Promise<ProposalResult
         continue;
       }
 
+      // The planner may return a step with no brief of its own — `brief` is
+      // optional in its schema, and a single-email broadcast in particular is
+      // often planned with the goal carrying the whole instruction. Resolve it
+      // once, so the brief stored on the step is the one the copy was actually
+      // written from and regenerating the email reproduces it.
+      const brief = step.brief?.trim() || plan.goal;
+
       const draft = await draftEmail({
-        brief: step.brief ?? plan.goal,
+        brief,
         journeyGoal: plan.goal,
         audienceDescription: plan.audienceDescription,
         siblingSubjects: written,
@@ -70,7 +78,7 @@ async function draftProposal(proposal: CampaignProposal): Promise<ProposalResult
       const campaignRef = db.collection(CAMPAIGNS).doc();
       const blocks = draft.blocks as EmailBlock[];
 
-      await campaignRef.set({
+      await campaignRef.set(stripUndefined({
         subject: draft.subject,
         previewText: draft.previewText,
         blocks,
@@ -89,12 +97,12 @@ async function draftProposal(proposal: CampaignProposal): Promise<ProposalResult
         validationIssues: draft.issues,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-      });
+      }));
 
-      steps.push({ id: stepId, type: 'sendEmail', campaignId: campaignRef.id, brief: step.brief });
+      steps.push({ id: stepId, type: 'sendEmail', campaignId: campaignRef.id, brief });
     }
 
-    await journeyRef.set({
+    await journeyRef.set(stripUndefined({
       name: plan.name,
       goal: plan.goal,
       trigger: plan.trigger,
@@ -112,7 +120,7 @@ async function draftProposal(proposal: CampaignProposal): Promise<ProposalResult
       stats: { entered: 0, completed: 0, exitedEarly: 0 },
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    });
+    }));
 
     return { ...proposal, journeyId: journeyRef.id };
   } catch (err) {
