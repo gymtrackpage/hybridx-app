@@ -34,6 +34,18 @@ const composeJourneyOutputSchema = z.object({
     type: z.enum(ALL_TRIGGERS),
     days: z.number().optional(),
     tag: z.string().optional(),
+    /**
+     * Narrow an event trigger to one intake route.
+     *
+     * This is how "welcome the people who took the ATHX guide" differs from
+     * "welcome everyone", and without it that request could not be planned:
+     * the audience field filters who *stays* in a journey, but the trigger is
+     * what decides who enters it in the first place.
+     */
+    route: z
+      .string()
+      .optional()
+      .describe('Route id from the funnel list in the facts. Event triggers only.'),
   }),
   audienceDescription: z.string().describe('Plain-English description of who should receive this.'),
   audience: z
@@ -103,6 +115,17 @@ Rules:
   same email, merge them.
 - Use only tags that appear in the segment list in the facts above. If no tag
   fits, leave audience.anyTags empty and describe the audience in words instead.
+- When the request names a funnel — a guide, a magnet, a landing page — set
+  trigger.route to that funnel's route id from the list above, and put its tag
+  in audience.anyTags as well. The trigger decides who enters; the audience
+  decides who qualifies. Setting only one of them is a campaign that reaches
+  the wrong people or nobody.
+- trigger.route applies to event triggers only. A manual or scheduled broadcast
+  is aimed with audience.anyTags alone, because nobody enters it by an event.
+- Prefer consentGranted over subscriberCreated for anything that greets a new
+  arrival from a confirmed opt-in funnel: someone who has been sent a
+  confirmation link has not yet clicked it, and greeting them before they do
+  mails an address that never agreed to hear from us.
 - Pick exitOnConversion so the journey stops as soon as its purpose is met. A
   winback ends when the subscription becomes active; an activation series ends
   when a workout is logged. Use "none" only for pure newsletters.

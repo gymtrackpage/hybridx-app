@@ -21,7 +21,7 @@
 import { z } from 'zod';
 
 /** Bumped when a field's meaning changes. Reported by the contract endpoint. */
-export const BRIDGE_CONTRACT_VERSION = '1.1.0';
+export const BRIDGE_CONTRACT_VERSION = '1.2.0';
 
 /**
  * A tag a funnel may attach. Constrained rather than trusted: this arrives from
@@ -65,6 +65,23 @@ export const leadPayloadSchema = z.object({
   consent: z.boolean().optional(),
 
   consentMethod: z.string().trim().max(120).optional(),
+
+  /**
+   * The funnel's consent *posture*, as distinct from `consent`, which is the
+   * answer for this one submission.
+   *
+   * The two differ exactly where it matters most. A confirmed opt-in funnel
+   * sends `consent: false` on capture and `true` on the click, so a route
+   * auto-registered from the first lead was recorded as granting no consent at
+   * all — and the routes console excludes `none` routes from its "collecting
+   * addresses nothing will act on" warning, on the reasonable grounds that
+   * such a route was never going to be mailed. A double opt-in funnel was
+   * therefore the one kind that could go live with no journey attached and no
+   * warning, which is the opposite of what the warning is for.
+   *
+   * Optional and additive: a caller that omits it gets the old inference.
+   */
+  consentPolicy: z.enum(['implied', 'explicit', 'confirmed', 'none']).optional(),
 
   utm: utmSchema,
 
@@ -173,6 +190,14 @@ export function describeContract() {
         note: 'Omit to let the route decide. Only send true with real evidence.',
       },
       consentMethod: { type: 'string', required: false },
+      consentPolicy: {
+        type: "'implied' | 'explicit' | 'confirmed' | 'none'",
+        required: false,
+        note:
+          'How this funnel obtains consent, as opposed to what one submission ' +
+          'answered. Send "confirmed" from a double opt-in funnel: without it a ' +
+          'route auto-registers from its first (unconsented) lead as "none".',
+      },
       utm: {
         type: 'object<string,string>',
         required: false,

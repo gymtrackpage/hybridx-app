@@ -33,6 +33,9 @@ const DRY_RUN = process.argv.includes('--dry-run');
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.hybridx.club';
 
+/** The marketing site. Funnel journeys link back to the page they came from. */
+const SITE_URL = process.env.MARKETING_SITE_URL || 'https://hybridx.club';
+
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'hyroxedgeai';
 
 /**
@@ -77,6 +80,15 @@ interface SeedJourney {
   goal: string;
   trigger: { type: string; days?: number; route?: string };
   exitOnConversion?: 'workoutLogged' | 'subscriptionActive' | 'programStarted';
+  /**
+   * Who may enter. Omitted, the journey is open to everyone its trigger fires
+   * for, which is the right default for a trigger that is already specific.
+   *
+   * A `manual` broadcast has no such specificity — it fires for whoever is
+   * enrolled — so a broadcast aimed at one funnel's cohort has to say so here,
+   * or "send it" means "send it to the whole list".
+   */
+  segment?: { allTags?: string[]; anyTags?: string[]; noneTags?: string[] };
   /** Alternating email / wait, mirroring the cadence of the cron it replaces. */
   steps: Array<{ kind: 'email'; email: SeedEmail } | { kind: 'wait'; hours: number }>;
 }
@@ -309,6 +321,79 @@ const JOURNEYS: SeedJourney[] = [
       },
     ],
   },
+
+  // ── ATHX 2027 ──────────────────────────────────────────────────────────
+  //
+  // The campaign behind the ATHX 2027 pre-launch funnel on the marketing site
+  // (hybridx.club/athx-2027). That page captures an address, emails a signed
+  // link to the one-page guide, and files the lead under the
+  // `magnet-athx-guide` route once the link is clicked.
+  //
+  // There is deliberately no drip. The page's own micro-copy promises the
+  // guide, then one more email when the training plans launch, and then
+  // nothing — to an audience the brief describes as athletes who will smell a
+  // manufactured sequence. A nurture series here would be the first broken
+  // promise this list ever received, from the one cohort assembled specifically
+  // to be sold to at launch.
+  //
+  // So the campaign is exactly the email that was promised, modelled the way
+  // this system models a broadcast: a `manual` trigger with a single send. It
+  // waits, as a paused draft, until the books are actually on sale.
+  {
+    id: 'athx-2027-launch-announcement',
+    name: 'ATHX 2027 launch announcement',
+    goal:
+      'Convert the ATHX guide list into buyers on the day the two editions go on sale. ' +
+      'This is the one follow-up the funnel promised, so it is also the last.',
+    // Broadcast, not automation: nobody knows the launch date yet, and a wait
+    // measured from the day somebody downloaded a guide would reach each person
+    // on a different day for no reason.
+    trigger: { type: 'manual' },
+    // Narrowed to the funnel's own cohort. Without this a manual send reaches
+    // everyone enrolled, and most of the list never asked about ATHX at all.
+    segment: { allTags: ['route:magnet-athx-guide'] },
+    steps: [
+      {
+        kind: 'email',
+        email: {
+          subject: 'The ATHX 2027 plans are out',
+          previewText: 'Twelve weeks, 84 daily pages, Men’s and Women’s editions.',
+          blocks: [
+            {
+              type: 'hero',
+              heading: 'The ATHX 2027 plans are here',
+              subheading: 'Twelve weeks, written for the way the day is actually scored.',
+            },
+            {
+              type: 'paragraph',
+              text: 'Hi [First Name] — a while back you took the one-page guide to ATHX. This is the email we said we would send, and it is the last one about this.',
+            },
+            {
+              type: 'paragraph',
+              text: 'Both editions are out. Half of each book explains the event: the three zones, how the rank scoring adds up, and where the placings are actually won. Half is the plan, with every day carrying the session, what to eat around it, what to drink, how to recover from it, and one thing worth knowing.',
+            },
+            {
+              type: 'bulletList',
+              items: [
+                'Men’s Edition, 154 pages',
+                'Women’s Edition, 156 pages, with a cycle-integrated block structure',
+                '12-week plan, 84 daily pages, in Lite, ATHX and Pro loadings',
+              ],
+            },
+            {
+              type: 'paragraph',
+              text: 'ATHX London is 23 and 24 January 2027, so a twelve-week build starts in early November. If London is the target, this is the week to start.',
+            },
+            { type: 'cta', label: 'See both editions', url: `${SITE_URL}/books` },
+            {
+              type: 'paragraph',
+              text: 'If you still have the pacing calculator open somewhere, the Endurance Zone chapter is the long version of what it shows you.',
+            },
+          ],
+        },
+      },
+    ],
+  },
 ];
 
 async function seed() {
@@ -375,7 +460,7 @@ async function seed() {
           name: journey.name,
           goal: journey.goal,
           trigger: journey.trigger,
-          entryRules: { onceOnly: true, segment: {} },
+          entryRules: { onceOnly: true, segment: journey.segment ?? {} },
           exitRules: journey.exitOnConversion
             ? { exitOnConversion: { type: journey.exitOnConversion } }
             : {},

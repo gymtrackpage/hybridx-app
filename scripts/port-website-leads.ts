@@ -96,6 +96,12 @@ const ROUTE_BY_SOURCE: Record<string, string> = {
   hyrox_rules_card: 'magnet-race-card',
   free_hyrox_plan: 'magnet-free-plan',
   sign_up: 'website-signup',
+  // Launched after the bridge existed, so its leads arrive live and there is
+  // nothing here to backfill. Carried anyway: without an entry this script
+  // reports every ATHX lead as an unknown source and skips it, which is the
+  // wrong answer on the one day it matters — a prolonged bridge outage, when
+  // this is the recovery path.
+  athx_2027_guide: 'magnet-athx-guide',
 };
 
 /** Tags each route carries, mirroring tagsForRoute() in sources.ts. */
@@ -104,10 +110,11 @@ const TAGS_BY_ROUTE: Record<string, string[]> = {
   'magnet-race-card': ['route:magnet-race-card', 'source:website', 'magnet:race-card'],
   'magnet-free-plan': ['route:magnet-free-plan', 'source:website', 'magnet:free-plan'],
   'website-signup': ['route:website-signup', 'source:website'],
+  'magnet-athx-guide': ['route:magnet-athx-guide', 'source:website', 'magnet:athx-guide'],
 };
 
 /** Routes whose consent is only real once a confirmation link has been clicked. */
-const CONFIRMED_OPT_IN = new Set(['magnet-race-card']);
+const CONFIRMED_OPT_IN = new Set(['magnet-race-card', 'magnet-athx-guide']);
 
 function subscriberId(email: string): string {
   return createHash('sha256').update(email.trim().toLowerCase()).digest('hex');

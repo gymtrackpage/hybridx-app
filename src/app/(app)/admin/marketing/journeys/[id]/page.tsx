@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getJourney } from '@/lib/marketing/journey-queries';
+import { getAllRoutes } from '@/lib/marketing/route-store';
+import { describeAudience } from '@/lib/marketing/segments';
 import { TRIGGER_DESCRIPTIONS, validateJourney, type TriggerType } from '@/lib/marketing/journeys';
 import { JourneyActivation } from '@/components/marketing/journey-activation';
 
@@ -21,6 +23,14 @@ export default async function JourneyDetailPage({
 
   const problems = validateJourney(journey);
   const emailByStep = new Map(journey.emails.map((e) => [e.stepId, e]));
+
+  // Who this journey will actually reach, spelled out. This page is the review
+  // step before activation, and it used to show the trigger type and nothing
+  // else — so "welcome the ATHX guide list" and "welcome the entire list"
+  // looked identical here, right up to the send.
+  const routes = await getAllRoutes();
+  const triggerRoute = journey.trigger.route ? routes.get(journey.trigger.route) : undefined;
+  const audience = describeAudience(journey.entryRules?.segment);
 
   return (
     <div className="space-y-6">
@@ -72,6 +82,21 @@ export default async function JourneyDetailPage({
             <strong>Starts when:</strong>{' '}
             {TRIGGER_DESCRIPTIONS[journey.trigger.type as TriggerType] ?? journey.trigger.type}
             {journey.trigger.days ? ` (${journey.trigger.days} days)` : ''}
+          </p>
+          {journey.trigger.route && (
+            <p>
+              <strong>Only people who arrived by:</strong>{' '}
+              {triggerRoute?.label ?? journey.trigger.route}
+              {!triggerRoute && (
+                <span className="text-destructive">
+                  {' '}
+                  — no such route, so this journey will never enrol anybody
+                </span>
+              )}
+            </p>
+          )}
+          <p>
+            <strong>Audience:</strong> {audience}
           </p>
           <p className="text-muted-foreground">
             {journey.entryRules.onceOnly

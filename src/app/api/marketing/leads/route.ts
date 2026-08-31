@@ -87,6 +87,9 @@ export async function POST(request: Request) {
     // The funnel knows what its own form said, so its answer wins. Absent one,
     // the route's posture applies, which is the conservative reading.
     consent: body.consent,
+    // The funnel's posture, not this submission's answer. Only consulted when
+    // the route is new; an existing route keeps whatever it was configured with.
+    consentPolicy: body.consentPolicy,
     consentMethod: body.consentMethod ?? (body.source ? `magnet:${body.source}` : 'website'),
     attribution: normaliseUtm(body.utm),
   });

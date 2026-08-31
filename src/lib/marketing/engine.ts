@@ -28,7 +28,7 @@ import {
 } from './journeys';
 import { CAMPAIGNS, getSettings, sendDocId } from './queue';
 import { SEGMENTS, type SavedSegment } from './segment-store';
-import { matchesAthlete, resolveSegment } from './segments';
+import { matchesAthlete, resolveSegment, subscriberMatchesSegment } from './segments';
 import { SUBSCRIBERS } from './subscribers';
 import type { Send, Subscriber } from './types';
 
@@ -64,6 +64,24 @@ export async function enrolSubscriber(
   // Enrolling someone who cannot be emailed would fill the runs collection with
   // journeys that can only ever no-op.
   if (sub.status !== 'active' || sub.consent?.marketing !== true) return 'not-eligible';
+
+  // The journey's own entry audience, checked here rather than at each call
+  // site so that nothing can enrol past it by accident.
+  //
+  // It used to be checked at exactly one call site — runManualJourney — which
+  // meant an event-triggered journey ignored it entirely. The studio plans an
+  // audience, shows it to whoever is composing, and saves it to this field, so
+  // a welcome sequence narrowed to one funnel looked correct in the console and
+  // then enrolled everybody who granted consent, from any funnel. The audience
+  // a person was shown has to be the audience that receives the mail.
+  //
+  // runManualJourney resolves the same segment before calling here, so that
+  // path now evaluates it twice. Accepted: for the tag-only segments a funnel
+  // uses this is an in-memory comparison, and the alternative — a "already
+  // filtered" flag — is a bypass that only has to be forgotten once.
+  if (!(await subscriberMatchesSegment(sub, journey.entryRules?.segment))) {
+    return 'not-eligible';
+  }
 
   return db.runTransaction(async (tx) => {
     const existing = await tx.get(runRef);

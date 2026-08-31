@@ -97,12 +97,7 @@ export async function resolveSegment(def: SegmentDefinition): Promise<ResolvedAu
       continue;
     }
 
-    const tags = sub.tags ?? [];
-    if (def.allTags?.length && !def.allTags.every((t) => tags.includes(t))) {
-      excluded.failedPredicates++;
-      continue;
-    }
-    if (def.noneTags?.length && def.noneTags.some((t) => tags.includes(t))) {
+    if (!matchesSegmentTags(sub, def)) {
       excluded.failedPredicates++;
       continue;
     }
@@ -193,6 +188,109 @@ export function matchesAthlete(user: User, pred: AthletePredicates): boolean {
   }
 
   return true;
+}
+
+/**
+ * Does one subscriber's tags satisfy a segment?
+ *
+ * Factored out of resolveSegment rather than written twice. The batch path
+ * narrows `anyTags` in the Firestore query and the rest in memory; the
+ * single-subscriber path below has no query to lean on and must check all
+ * three. Two copies of this rule would be two chances for a journey's audience
+ * to mean one thing when it is previewed and another when it sends.
+ *
+ * Re-checking `anyTags` on the batch path is a deliberate no-op: the query has
+ * already guaranteed it, and asking again costs nothing and keeps one answer.
+ */
+export function matchesSegmentTags(sub: Subscriber, def: SegmentDefinition): boolean {
+  const tags = sub.tags ?? [];
+  if (def.anyTags?.length && !def.anyTags.some((t) => tags.includes(t))) return false;
+  if (def.allTags?.length && !def.allTags.every((t) => tags.includes(t))) return false;
+  if (def.noneTags?.length && def.noneTags.some((t) => tags.includes(t))) return false;
+  return true;
+}
+
+/**
+ * Does one subscriber match a segment, tags and athlete predicates alike?
+ *
+ * The per-person counterpart to resolveSegment, for the paths that already have
+ * somebody in hand and only need a yes or no — enrolment, above all. Answering
+ * that by resolving the whole segment and searching it would mean reading the
+ * entire list to decide one person.
+ *
+ * Costs a single athlete read, and only when the segment actually constrains
+ * the athlete record. A tag-only segment — which is what a funnel's audience
+ * is — is answered in memory.
+ *
+ * Mailability is deliberately NOT checked here, unlike resolveSegment: callers
+ * that need it check it themselves and distinguish *why* somebody was dropped.
+ * Folding it in would make "not in the audience" and "unsubscribed" the same
+ * answer, and they call for very different follow-up.
+ */
+export async function subscriberMatchesSegment(
+  sub: Subscriber,
+  def: SegmentDefinition | undefined,
+): Promise<boolean> {
+  if (!def) return true;
+  if (!matchesSegmentTags(sub, def)) return false;
+
+  const pred = def.athlete;
+  if (!pred) return true;
+
+  // Mirrors applyAthletePredicates, which decides both of these without a
+  // lookup: an explicit "no account" wants exactly the people with none, and
+  // every other athlete predicate is unanswerable without one.
+  if (pred.hasAccount === false) return !sub.userId;
+  if (!sub.userId) return false;
+
+  const snap = await getAdminDb().collection('users').doc(sub.userId).get();
+  // A subscriber pointing at a deleted athlete fails any athlete predicate,
+  // rather than being mailed on the strength of a record that is gone.
+  if (!snap.exists) return false;
+
+  return matchesAthlete(snap.data() as User, pred);
+}
+
+/**
+ * A segment in one plain sentence, for the screens where somebody decides
+ * whether to press send.
+ *
+ * Lives here rather than in the page so that a filter added to SegmentDefinition
+ * is described in the same file that implements it. A description that silently
+ * omits a predicate is worse than none: it reads as a complete account of who
+ * will be mailed.
+ */
+export function describeAudience(def: SegmentDefinition | undefined): string {
+  if (!def) return 'Everyone who may be emailed.';
+
+  const parts: string[] = [];
+  if (def.anyTags?.length) parts.push(`tagged any of ${def.anyTags.join(', ')}`);
+  if (def.allTags?.length) parts.push(`tagged all of ${def.allTags.join(', ')}`);
+  if (def.noneTags?.length) parts.push(`not tagged ${def.noneTags.join(', ')}`);
+
+  const athlete = def.athlete;
+  if (athlete) {
+    if (athlete.hasAccount === false) parts.push('with no HYBRIDX account');
+    if (athlete.hasAccount === true) parts.push('with a HYBRIDX account');
+    if (athlete.subscriptionStatus?.length) {
+      parts.push(`subscription ${athlete.subscriptionStatus.join(' or ')}`);
+    }
+    if (athlete.experience?.length) parts.push(`experience ${athlete.experience.join(' or ')}`);
+    if (athlete.goal?.length) parts.push(`goal ${athlete.goal.join(' or ')}`);
+    if (athlete.programId) parts.push(`on programme ${athlete.programId}`);
+    if (athlete.minCompletedWorkouts !== undefined) {
+      parts.push(`at least ${athlete.minCompletedWorkouts} workouts logged`);
+    }
+    if (athlete.maxCompletedWorkouts !== undefined) {
+      parts.push(`at most ${athlete.maxCompletedWorkouts} workouts logged`);
+    }
+    if (athlete.inactiveForDays !== undefined) {
+      parts.push(`inactive for ${athlete.inactiveForDays}+ days`);
+    }
+  }
+
+  if (!parts.length) return 'Everyone who may be emailed.';
+  return `Everyone who may be emailed and is ${parts.join(', ')}.`;
 }
 
 /** Firestore hands back Timestamps or Dates depending on the path. Normalise. */

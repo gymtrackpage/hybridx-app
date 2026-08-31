@@ -370,6 +370,17 @@ export function validateJourney(journey: Pick<Journey, 'steps' | 'trigger' | 'na
   if (journey.trigger.type === 'segmentEntered' && !journey.trigger.segmentId) {
     problems.push('A segmentEntered trigger needs a saved segment to watch.');
   }
+  // Route narrowing is checked against the event payload, and a manual or
+  // scheduled journey enrols from its audience rather than from an event — so a
+  // route set on one is silently ignored. Said plainly here, because the review
+  // screen would otherwise show "only people who arrived by the ATHX funnel"
+  // above a broadcast that goes to everybody in its audience.
+  if (journey.trigger.route && !isEventTrigger(journey.trigger.type)) {
+    problems.push(
+      `A ${journey.trigger.type} trigger cannot be narrowed to a route — nobody enters it ` +
+        'from an event. Narrow the audience instead.',
+    );
+  }
 
   return problems;
 }

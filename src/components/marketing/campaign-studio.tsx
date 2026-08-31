@@ -172,7 +172,15 @@ export function CampaignStudio({
     const result = await saveJourney({
       name: plan.name,
       goal: plan.goal,
-      trigger: { type: plan.trigger.type as TriggerType, days: plan.trigger.days, tag: plan.trigger.tag },
+      trigger: {
+        type: plan.trigger.type as TriggerType,
+        days: plan.trigger.days,
+        tag: plan.trigger.tag,
+        // Dropping this was how a journey planned for one funnel came to enrol
+        // from all of them: the planner chose a route, the studio displayed the
+        // narrowed audience, and the field never reached Firestore.
+        route: plan.trigger.route,
+      },
       audience,
       exitOnConversion: plan.exitOnConversion,
       steps,
