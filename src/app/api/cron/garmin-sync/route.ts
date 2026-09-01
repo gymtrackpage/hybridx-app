@@ -7,20 +7,26 @@
 //   Authorization: Bearer <CRON_SECRET>
 //   Schedule: 0 3 */10 * *  (03:00 UTC every 10 days — safety net only)
 //   Immediate re-sync is triggered automatically when a user changes program.
+//
+// The actual push is the shared reconciler in src/lib/garmin/plan-sync.ts, so
+// this run and an on-demand sync behave identically: unchanged sessions are
+// left alone and replaced ones are unscheduled and deleted before the new copy
+// goes out.
 import { NextResponse } from 'next/server';
 import { requireCronAuth } from '@/lib/cron-auth';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { getValidGarminToken } from '@/lib/garmin/token';
-import { workoutToDays } from '@/lib/garmin/program-adapter';
-import { mapWorkoutDay } from '@/lib/garmin/workout-mapper';
 import {
   createWorkout,
   deleteWorkout,
   scheduleWorkout,
+  unscheduleWorkout,
 } from '@/lib/garmin/training-api';
+import { reconcileGarminPlan, type PlanSyncState } from '@/lib/garmin/plan-sync';
+import { acquireGarminSyncLock } from '@/lib/garmin/sync-lock';
 import { getProgram } from '@/services/program-service';
 import { logger } from '@/lib/logger';
-import type { GarminPlanSync } from '@/models/types';
+import { stripUndefined } from '@/lib/firestore-values';
 import { Timestamp } from 'firebase-admin/firestore';
 
 export const maxDuration = 300;
@@ -39,9 +45,11 @@ const HORIZON_DAYS = 14;
  */
 const TIME_BUDGET_MS = 150_000;
 
-// Helper to convert date to ISO
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+function toDate(value: unknown): Date | undefined {
+  if (value instanceof Timestamp) return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value === 'string' || typeof value === 'number') return new Date(value);
+  return undefined;
 }
 
 export async function GET(request: Request) {
@@ -50,7 +58,7 @@ export async function GET(request: Request) {
 
   const db = getAdminDb();
   const startedAt = Date.now();
-  const results = { processed: 0, synced: 0, skipped: 0, errors: 0, deferred: 0 };
+  const results = { processed: 0, synced: 0, skipped: 0, errors: 0, deferred: 0, locked: 0 };
 
   // Query users who have connected Garmin (garminConnectedAt is set).
   const usersSnap = await db
@@ -79,18 +87,14 @@ export async function GET(request: Request) {
       if (!data.programId || !data.startDate) { results.skipped++; continue; }
 
       // Skip if synced within the last 8 days — program-change events handle fresher syncs.
-      const lastSynced: Date | undefined = data.garminPlanSync?.lastSyncedAt instanceof Timestamp
-        ? data.garminPlanSync.lastSyncedAt.toDate()
-        : data.garminPlanSync?.lastSyncedAt ? new Date(data.garminPlanSync.lastSyncedAt) : undefined;
+      const lastSynced = toDate(data.garminPlanSync?.lastSyncedAt);
       if (lastSynced && (today.getTime() - lastSynced.getTime()) < 8 * 86400000) {
         results.skipped++;
         continue;
       }
 
-      const startDateRaw: Date =
-        data.startDate instanceof Timestamp
-          ? data.startDate.toDate()
-          : new Date(data.startDate);
+      const startDateRaw = toDate(data.startDate);
+      if (!startDateRaw) { results.skipped++; continue; }
       // Snap to UTC midnight of intended calendar day (browser stores local midnight).
       const startMs = Math.round(startDateRaw.getTime() / 86400000) * 86400000;
 
@@ -101,80 +105,63 @@ export async function GET(request: Request) {
       try {
         accessToken = await getValidGarminToken(userId);
       } catch (e) {
-        const error = e as any;
+        const error = e as { code?: string };
         // logger.error, not warn: warn is compiled out in production, and a
         // token that will not refresh is the single most likely reason an
         // athlete silently stops receiving workouts.
-        logger.error(`[cron/garmin-sync] token refresh failed for ${userId}:`, (error as any).code);
+        logger.error(`[cron/garmin-sync] token refresh failed for ${userId}:`, error.code);
         results.skipped++;
         continue;
       }
 
-      const todayMs = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
-      const todayDayNum = Math.floor((todayMs - startMs) / 86400000) + 1;
-      const fromDay = Math.max(1, todayDayNum);
-      const toDay = todayDayNum + HORIZON_DAYS;
+      const userRef = db.collection('users').doc(userId);
 
-      const targetWorkouts = program.workouts.filter(
-        (w) => w.day >= fromDay && w.day < toDay,
-      );
-
-      const prevSync: GarminPlanSync | undefined = data.garminPlanSync;
-      const programChanged = prevSync && prevSync.programId !== data.programId;
-
-      if (programChanged && prevSync) {
-        for (const entry of Object.values(prevSync.workouts)) {
-          try { await deleteWorkout(accessToken, entry.workoutId); } catch { /* ignore stale */ }
-        }
+      // If an on-demand sync is mid-flight for this athlete, leave them to it —
+      // two syncs racing is how duplicate workouts get onto the watch.
+      const lock = await acquireGarminSyncLock(userRef);
+      if (!lock) {
+        logger.log(`[cron/garmin-sync] user ${userId} already syncing; skipping`);
+        results.locked++;
+        continue;
       }
 
-      const newSync: GarminPlanSync = {
-        programId: data.programId,
-        workouts: {},
-        lastSyncedAt: new Date(),
-      };
+      try {
+        const todayMs = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+        const todayDayNum = Math.floor((todayMs - startMs) / 86400000) + 1;
 
-      let userPushed = 0;
+        const outcome = await reconcileGarminPlan({
+          api: {
+            createWorkout: (w) => createWorkout(accessToken, w),
+            scheduleWorkout: (id, date) => scheduleWorkout(accessToken, id, date),
+            deleteWorkout: (id) => deleteWorkout(accessToken, id),
+            unscheduleWorkout: (id) => unscheduleWorkout(accessToken, id),
+          },
+          programId: data.programId,
+          startMs,
+          workouts: program.workouts,
+          todayDayNum,
+          horizonDays: HORIZON_DAYS,
+          prevSync: data.garminPlanSync
+            ? ({ ...data.garminPlanSync, lastSyncedAt: lastSynced } as Partial<PlanSyncState>)
+            : undefined,
+          persist: (state) =>
+          userRef.update({ garminPlanSync: stripUndefined(state) }).then(() => undefined),
+          onWarn: (message, error) =>
+            logger.error(
+              `[cron/garmin-sync] ${message} (user ${userId}):`,
+              error instanceof Error ? error.message : String(error ?? ''),
+            ),
+        });
 
-      for (const w of targetWorkouts) {
-        const dayStr = String(w.day);
-
-        // Clean up all stale entries for this day (supports old single-key and
-        // new session-indexed key formats).
-        const staleKeys = Object.keys(prevSync?.workouts ?? {}).filter(
-          (k) => k === dayStr || k.startsWith(`${dayStr}_`),
+        results.synced++;
+        logger.log(
+          `[cron/garmin-sync] user ${userId}: ${outcome.created} pushed, ${outcome.unchanged} unchanged, ${outcome.removed} removed, ${outcome.failed} failed`,
         );
-        for (const key of staleKeys) {
-          try { await deleteWorkout(accessToken, prevSync!.workouts[key].workoutId); } catch { /* ignore */ }
-        }
-
-        const sessions = workoutToDays(w);
-        const scheduledDate = isoDate(new Date(startMs + (w.day - 1) * 86400000));
-
-        for (const [sessionIdx, session] of sessions.entries()) {
-          const garminWorkout = mapWorkoutDay(session);
-          if (!garminWorkout) continue;
-
-          const dayKey = sessions.length > 1 ? `${dayStr}_${sessionIdx}` : dayStr;
-
-          try {
-            const { workoutId } = await createWorkout(accessToken, garminWorkout);
-            const { scheduleId } = await scheduleWorkout(accessToken, workoutId, scheduledDate);
-            newSync.workouts[dayKey] = { workoutId, scheduledDate, ...(scheduleId ? { scheduleId } : {}) };
-            userPushed++;
-          } catch (e) {
-            const error = e as any;
-            logger.error(`[cron/garmin-sync] push failed day ${w.day} session ${sessionIdx} user ${userId}:`, error instanceof Error ? error.message : String(error));
-          }
-        }
+      } finally {
+        await lock.release();
       }
-
-      await db.collection('users').doc(userId).update({ garminPlanSync: newSync });
-      results.synced++;
-      logger.log(`[cron/garmin-sync] synced ${userPushed} workouts for user ${userId}`);
-
     } catch (err) {
-      const error = err as any;
+      const error = err as Error;
       logger.error(`[cron/garmin-sync] error for user ${userId}:`, error instanceof Error ? error.message : String(error));
       results.errors++;
     }

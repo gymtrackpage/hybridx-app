@@ -360,7 +360,10 @@ export default function ProgramViewPage({ params }: { params: Promise<{ programI
 
         // If Garmin is connected, push the new plan immediately (fire-and-forget).
         if (user.garminConnectedAt) {
-            fetch('/api/garmin/sync-plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+            // keepalive: the redirect below tears down this page, and a
+            // cancelled sync request used to leave the pushed workouts
+            // unrecorded — which is what made the next sync duplicate them.
+            fetch('/api/garmin/sync-plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', keepalive: true })
                 .catch(() => {});
         }
 

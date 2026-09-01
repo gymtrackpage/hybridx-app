@@ -114,7 +114,50 @@ Only set these if your Partner Training API spec uses different hosts
 
 ---
 
-## 6. Limitations / TODO
+## 6. How the outbound sync avoids duplicates
+
+Both the on-demand route and the nightly cron delegate to the reconciler in
+[src/lib/garmin/plan-sync.ts](../src/lib/garmin/plan-sync.ts). It is a
+*reconcile*, not a re-push:
+
+- **Every pushed session carries a content hash** (`garminPlanSync.workouts[key].hash`).
+  A session whose mapped content and calendar date are unchanged is left
+  completely alone — a repeat sync of an unchanged plan makes zero Garmin write
+  calls. This is the main defence against duplicates: nothing is deleted and
+  re-created unless it actually changed.
+- **Keys are `${day}_${sessionIndex}`**, indexed over *all* sessions of that day
+  gathered across every program row for the day. Two program rows can share a
+  `day` (the CSV importer buckets by `day::title`), and under the old bare-`day`
+  key they overwrote each other in the record — orphaning one real workout per
+  sync. Legacy bare-`day` keys are migrated on read.
+- **State is persisted after every mutation**, not once at the end. If the run
+  is cut short (route timeout, or the fire-and-forget sync being cancelled when
+  the page navigates), the record still reflects exactly what is on the watch,
+  so the next run replaces rather than duplicates.
+- **Replacing unschedules before deleting.** Deleting the workout does not
+  reliably clear its calendar entry, so the schedule goes first.
+- **Failed removals are queued**, not swallowed: `garminPlanSync.pendingDeletes`
+  is retried on every later sync until Garmin confirms the workout is gone
+  (a 404 counts as gone).
+- **One sync per athlete at a time**, enforced by a 5-minute lease in
+  `users/{uid}.garminSyncLock`
+  ([src/lib/garmin/sync-lock.ts](../src/lib/garmin/sync-lock.ts)). The card
+  button, the program-change push and the cron can all fire at once; without
+  the lease each would read the same record and push its own copy. The
+  on-demand route returns **409** when a sync is already running.
+
+Anything outside the horizon window is left untouched: past days are the
+athlete's history, and days beyond the horizon are still-valid future workouts.
+
+> **Cleaning up duplicates created before this change.** Copies that were
+> pushed but never recorded are invisible to the reconciler — there is no local
+> id for them. Delete them in Garmin Connect (Training → Workouts, and the
+> calendar entries), or disconnect and reconnect the account and re-sync.
+> Everything pushed from now on is tracked.
+
+---
+
+## 7. Limitations / TODO
 
 - **Strength weights aren't pushed** — the mapper omits `weightValue`
   until per-user 1RM data is wired through. Fill it in at
