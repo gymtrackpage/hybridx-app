@@ -36,6 +36,7 @@ export async function POST(_req: NextRequest) {
       garmin: FieldValue.delete(),
       garminConnectedAt: FieldValue.delete(),
       garminPlanSync: FieldValue.delete(),
+      garminSyncLock: FieldValue.delete(),
     });
 
     return NextResponse.json({ success: true });
