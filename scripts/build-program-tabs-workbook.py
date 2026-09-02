@@ -5,8 +5,12 @@ One tab per program, each holding the Garmin Training API payload the sync
 would push, step by step, with the stored source row that produced each step
 alongside it. Filtered to the program types given on the command line.
 
+Pass a proposals file (from scripts/propose-garmin-fixes.ts) as --proposals to
+add the first-pass "what this should be" columns for review.
+
 Usage:
-    python3 scripts/build-program-tabs-workbook.py plans.json out.xlsx running hybrid
+    python3 scripts/build-program-tabs-workbook.py plans.json out.xlsx running hybrid \
+        --proposals proposals.json
 """
 
 import json
@@ -29,6 +33,8 @@ BAND = PatternFill("solid", fgColor="F2F5FA")   # alternate day shading
 REST_FILL = PatternFill("solid", fgColor="EDEDED")
 FLAG_FILL = PatternFill("solid", fgColor="FCE4D6")
 MISS_FILL = PatternFill("solid", fgColor="FFF2CC")  # unresolved Garmin field
+FIX_FILL = PatternFill("solid", fgColor="E2EFDA")   # a proposed change
+FIX_HDR = PatternFill("solid", fgColor="375623")    # proposed-columns header
 
 STEP_HEADERS = [
     "Day", "Week", "Day title", "Session #", "Sync key", "Session type",
@@ -38,10 +44,21 @@ STEP_HEADERS = [
     "Exercise category", "Exercise name", "Weight", "Weight unit",
     "Source row", "Source details",
 ]
+FIX_HEADERS = [
+    "Fix?", "→ Duration type", "→ Duration value", "→ Duration value type",
+    "→ Reads as", "→ Target", "→ Exercise category", "→ Exercise name",
+    "Confidence", "Why",
+]
+FIX_WIDTHS = [6, 15, 15, 19, 24, 42, 20, 26, 11, 96]
 STEP_WIDTHS = [6, 6, 30, 9, 9, 12, 14, 30, 20, 11,
                7, 10, 9, 11, 46, 14, 14, 12, 11, 11,
                19, 26, 8, 11, 26, 52]
+NSTEP = len(STEP_HEADERS)
 
+
+# Rows that read as coaching prose rather than work. They become steps the
+# athlete has to lap through on the watch.
+NOTE_ROW = re.compile(r"^(notes?|session notes|format|coaching|focus|cue|reminder)\b", re.I)
 
 # What a human reads as sets x reps. parseSetsReps() in the mapper is stricter:
 # it matches an ASCII "x" only, so the Unicode multiplication sign and the
@@ -123,9 +140,9 @@ def style_table(ws, headers, widths, nrows, freeze="D2"):
         ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{nrows + 1}"
 
 
-def build_program_sheet(wb, p, used_titles, ambiguous):
+def build_program_sheet(wb, p, used_titles, ambiguous, props):
     ws = wb.create_sheet(sheet_title(p, used_titles, ambiguous))
-    ws.append(STEP_HEADERS)
+    ws.append(STEP_HEADERS + (FIX_HEADERS if props is not None else []))
 
     rows_meta = []   # (row_index, day_number, is_rest, missing_category)
     for day in p["days"]:
@@ -144,11 +161,13 @@ def build_program_sheet(wb, p, used_titles, ambiguous):
                            "— nothing pushed to Garmin —", "", None,
                            None, "", None, "", "", "", None, "", None, None,
                            "", "", None, "", "", ""])
-                rows_meta.append((ws.max_row, dno, True, False))
+                rows_meta.append((ws.max_row, dno, True, False, False))
                 continue
 
             for repeat_no, repeat_val, st in steps:
                 src_name, src_details = match_source(st.get("description"), day)
+                fx = props.get((p["id"], day["entryIdx"], s["sessionIdx"], st["stepOrder"])) \
+                    if props is not None else None
                 ws.append([
                     dno, week, title, s["sessionIdx"], s["dayKey"],
                     s.get("sessionType") or "", s["category"],
@@ -160,37 +179,53 @@ def build_program_sheet(wb, p, used_titles, ambiguous):
                     st.get("exerciseCategory") or "", st.get("exerciseName") or "",
                     st.get("weightValue"), st.get("weightDisplayUnit") or "",
                     src_name, src_details,
-                ])
+                ] + ([
+                    "FIX" if fx else "", fx.get("durationType") or "" if fx else "",
+                    fx.get("durationValue") if fx else None,
+                    fx.get("durationValueType") or "" if fx else "",
+                    fx.get("human") or "" if fx else "", fx.get("target") or "" if fx else "",
+                    fx.get("exerciseCategory") or "" if fx else "",
+                    fx.get("exerciseName") or "" if fx else "",
+                    fx.get("confidence") or "" if fx else "", fx.get("reason") or "" if fx else "",
+                ] if props is not None else []))
                 missing = (st["intensity"] == "ACTIVE"
                            and w["sport"] == "STRENGTH_TRAINING"
                            and not st.get("exerciseCategory"))
-                rows_meta.append((ws.max_row, dno, False, missing))
+                rows_meta.append((ws.max_row, dno, False, missing, bool(fx)))
 
         if not day["sessions"]:
             ws.append([dno, week, title, "", "", "", "(no session generated)",
                        "— nothing pushed to Garmin —", "", None,
                        None, "", None, "", "", "", None, "", None, None,
                        "", "", None, "", "", ""])
-            rows_meta.append((ws.max_row, dno, True, False))
+            rows_meta.append((ws.max_row, dno, True, False, False))
 
-    style_table(ws, STEP_HEADERS, STEP_WIDTHS, ws.max_row - 1)
+    style_table(ws, STEP_HEADERS + (FIX_HEADERS if props is not None else []),
+                STEP_WIDTHS + (FIX_WIDTHS if props is not None else []), ws.max_row - 1)
+    if props is not None:
+        for c in range(NSTEP + 1, NSTEP + len(FIX_HEADERS) + 1):
+            ws.cell(1, c).fill = FIX_HDR
 
     # Shade alternate day numbers so each day reads as a block, and highlight
     # the two things a reviewer is scanning for.
     order, seen = {}, []
-    for _, dno, _, _ in rows_meta:
+    for _, dno, _, _, _ in rows_meta:
         if dno not in order:
             order[dno] = len(seen)
             seen.append(dno)
-    for r, dno, is_rest, missing in rows_meta:
+    ncols = NSTEP + (len(FIX_HEADERS) if props is not None else 0)
+    for r, dno, is_rest, missing, has_fix in rows_meta:
         if order[dno] % 2 == 1:
-            for c in range(1, len(STEP_HEADERS) + 1):
+            for c in range(1, ncols + 1):
                 ws.cell(r, c).fill = BAND
         if is_rest:
-            for c in range(1, len(STEP_HEADERS) + 1):
+            for c in range(1, ncols + 1):
                 ws.cell(r, c).fill = REST_FILL
         if missing:
             ws.cell(r, 21).fill = MISS_FILL
+        if has_fix:
+            for c in range(NSTEP + 1, ncols + 1):
+                ws.cell(r, c).fill = FIX_FILL
     return ws
 
 
@@ -226,6 +261,14 @@ def program_flags(p):
                         f"(category: {', '.join(sorted({s['category'] for s in sessions})) or 'none'})."])
         for msg in d.get("dataFlags", []):
             out.append([pname, dno, title, "Stored data shape", msg])
+
+        notes = [e for e in d["exercises"]
+                 if NOTE_ROW.match((e.get("name") or "").strip().lstrip("\U0001F4CB\U0001F511\U0001F4A1\u26A0\uFE0F ").strip())]
+        if notes and mapped:
+            out.append([pname, dno, title, "Prose row sent as a step",
+                        f"{len(notes)} row(s) are coaching prose, not work "
+                        f"({', '.join((e.get('name') or '').strip() for e in notes)}), but they are "
+                        "emitted as workout steps the athlete has to lap through on the watch."])
 
         for s in mapped:
             w = s["workout"]
@@ -294,9 +337,21 @@ def program_flags(p):
 
 
 def main():
-    src = sys.argv[1]
-    out = sys.argv[2]
-    wanted = [a.lower() for a in sys.argv[3:]] or ["running", "hybrid"]
+    argv = sys.argv[1:]
+    prop_path = None
+    if "--proposals" in argv:
+        i = argv.index("--proposals")
+        prop_path = argv[i + 1]
+        argv = argv[:i] + argv[i + 2:]
+    src, out = argv[0], argv[1]
+    wanted = [a.lower() for a in argv[2:]] or ["running", "hybrid"]
+
+    props = restructures = None
+    if prop_path:
+        raw = json.load(open(prop_path))
+        props = {(x["programId"], x["entryIdx"], x["sessionIdx"], x["stepOrder"]): x
+                 for x in raw["proposals"]}
+        restructures = raw["restructures"]
 
     data = json.load(open(src))
     programs = [p for p in data["programs"] if (p["programType"] or "").lower() in wanted]
@@ -312,7 +367,7 @@ def main():
 
     used, index_rows, flag_rows, source_rows = set(), [], [], []
     for p in programs:
-        ws = build_program_sheet(wb, p, used, ambiguous)
+        ws = build_program_sheet(wb, p, used, ambiguous, props)
         steps_n = sum(len(all_steps(s["workout"])) for d in p["days"] for s in d["sessions"])
         sess_n = sum(len(d["sessions"]) for d in p["days"])
         pushed = sum(1 for d in p["days"] for s in d["sessions"] if s["workout"])
@@ -359,6 +414,118 @@ def main():
                    "Counts are extracted values except 'Garmin steps', which counts the rows on "
                    "each program tab. Rows for sessions that push nothing are included there.")
     note.font = Font(name=FONT, size=9, italic=True, color="595959")
+
+    # ── Proposed Fixes (summary) ─────────────────────────────────────────────
+    if props is not None:
+        by_prog = Counter()
+        by_kind = Counter()
+        for x in props.values():
+            pname = next((r[1] for r in index_rows if r[4] == x["programId"]), x["programId"])
+            dt, dc = x.get("durationType"), x.get("durationChanged")
+            kind = ("Duration: use the stored distance" if dt == "DISTANCE" and dc
+                    else "Duration: re-read the stated time" if dt == "TIME" and dc
+                    else "Sets/reps: add a rep target" if dt == "REPS"
+                    else "Sets stated, reps missing from the plan" if "reps not stated" in (x.get("human") or "")
+                    else "Exercise: add the Garmin category" if x.get("exerciseCategory")
+                    else "Target: add an HR zone from RPE")
+            by_prog[(pname, kind)] += 1
+            by_kind[kind] += 1
+
+        ws = wb.create_sheet("Proposed Fixes")
+        ws.append(["Change", "Steps affected", "Programs"])
+        for kind, n in by_kind.most_common():
+            progs_hit = sorted({k[0] for k in by_prog if k[1] == kind})
+            ws.append([kind, n, ", ".join(progs_hit)])
+        style_table(ws, [None] * 3, [40, 15, 96], len(by_kind), freeze="A2")
+        r0 = len(by_kind) + 3
+        ws.cell(r0, 1, "Per program").font = BOLD
+        ws.cell(r0 + 1, 1, "Program").font = HDR_FONT
+        ws.cell(r0 + 1, 1).fill = HDR_FILL
+        ws.cell(r0 + 1, 2, "Change").font = HDR_FONT
+        ws.cell(r0 + 1, 2).fill = HDR_FILL
+        ws.cell(r0 + 1, 3, "Steps").font = HDR_FONT
+        ws.cell(r0 + 1, 3).fill = HDR_FILL
+        for i, ((pname, kind), n) in enumerate(sorted(by_prog.items()), start=r0 + 2):
+            ws.cell(i, 1, pname).font = BODY
+            ws.cell(i, 2, kind).font = BODY
+            ws.cell(i, 3, n).font = BODY
+
+    # ── Spec Conformance ─────────────────────────────────────────────────────
+    # Checked against Garmin Connect Developer Program, Training API V2,
+    # version 1.0 (26/05/2025), section 3.2.1 Field Definitions.
+    ws = wb.create_sheet("Spec Conformance")
+    ws.append(["Field / rule", "Training API V2 says", "What we send", "Verdict"])
+    conformance = [
+        ("sport",
+         "RUNNING, CYCLING, LAP_SWIMMING, STRENGTH_TRAINING, CARDIO_TRAINING, GENERIC, YOGA, PILATES",
+         "RUNNING, STRENGTH_TRAINING, CARDIO_TRAINING", "OK"),
+        ("intensity",
+         "REST, WARMUP, COOLDOWN, RECOVERY, ACTIVE, INTERVAL, MAIN (swim only)",
+         "WARMUP, ACTIVE, INTERVAL, RECOVERY, REST, COOLDOWN", "OK"),
+        ("durationType",
+         "TIME, DISTANCE, HR_LESS_THAN, HR_GREATER_THAN, CALORIES, OPEN, POWER_*, FIXED_REST; "
+         "REPS for HIIT / CARDIO / STRENGTH_TRAINING only",
+         "TIME, DISTANCE, OPEN, REPS — REPS only on STRENGTH_TRAINING", "OK"),
+        ("repeatType",
+         "REPEAT_UNTIL_STEPS_CMPLT and seven conditional variants",
+         "REPEAT_UNTIL_STEPS_CMPLT", "OK"),
+        ("Steps per workout",
+         "100 for a single-segment workout",
+         "17 at most", "OK"),
+        ("Step description",
+         "512 characters, longer is truncated",
+         "206 at most", "OK"),
+        ("workoutProvider / workoutSourceId",
+         "20 characters max", '"HybridX"', "OK"),
+        ("weightValue / weightDisplayUnit",
+         "Kilograms; display unit KILOGRAM or POUND; STRENGTH_TRAINING only",
+         "Always null — no program stores weightKg", "Gap: no weights sent"),
+        ("targetType",
+         "SPEED, HEART_RATE, CADENCE, POWER, GRADE, RESISTANCE, POWER_*, SPEED_LAP, "
+         "HEART_RATE_LAP, OPEN, PACE (as speed in m/s)",
+         "OPEN on all 1,672 steps", "Gap: no targets sent"),
+        ("targetValue",
+         "The target HR zone (1-5) or power zone (1-7). Zones must already be defined "
+         "and saved on the athlete's Garmin account.",
+         "buildStep() hardcodes targetValue: null and exposes only "
+         "targetValueLow/High, so a zone target cannot be expressed at all",
+         "Gap: blocks the HR-zone fix"),
+        ("targetValueLow / High",
+         "A custom range, used instead of a zone in targetValue",
+         "Set only by paceTarget(), which never fires because no program stores targetPace",
+         "Unused in practice"),
+        ("durationValueType",
+         "Field description says it modifies HR and POWER only (PERCENT), but every "
+         "DISTANCE example in the spec sets it to METER",
+         "Always null, including on the 75 DISTANCE steps",
+         "Confirm with Garmin"),
+        ("estimatedDurationInSecs",
+         "Calculated server-side; ignored on Create and Update",
+         "Sent on run workouts",
+         "Harmless, but it is not what drives the watch — the step's own "
+         "durationValue is"),
+        ("exerciseCategory / exerciseName",
+         "STRENGTH_TRAINING, CARDIO_TRAINING, HIIT, PILATES, YOGA only. Valid values are "
+         "in Appendix A and B, supplied as a separate Excel file.",
+         "Values come from the lookup table in program-enricher.ts",
+         "Unverified: Appendix B was not in the PDF"),
+    ]
+    for r in conformance:
+        ws.append(list(r))
+    style_table(ws, [None] * 4, [30, 74, 62, 34], len(conformance), freeze="A2")
+    for row in ws.iter_rows(min_row=2, min_col=4, max_col=4):
+        for cell in row:
+            if cell.value and cell.value != "OK":
+                cell.fill = FLAG_FILL
+
+    # ── Session Restructures ─────────────────────────────────────────────────
+    if restructures:
+        ws = wb.create_sheet("Session Restructures")
+        ws.append(["Program", "Day", "Day title", "Currently", "Proposed structure", "Why"])
+        for x in restructures:
+            ws.append([x["programName"], x["day"], x["title"], x["current"],
+                       x["proposed"], x["reason"]])
+        style_table(ws, [None] * 6, [30, 6, 28, 24, 74, 92], len(restructures), freeze="D2")
 
     # ── Review Flags ─────────────────────────────────────────────────────────
     ws = wb.create_sheet("Review Flags")
@@ -428,6 +595,35 @@ def main():
         ("• The sync's ~14-day horizon is ignored: every day of every program is mapped so the whole plan", BODY),
         ("  can be reviewed at once.", BODY),
         ("", BODY),
+        ("The proposed-fix columns (green header)", BOLD),
+        ("A first pass at what each step should carry, derived from the stored program data rather", BODY),
+        ("than from the mapper's current output. NOTHING HAS BEEN CHANGED — these are for your review.", BODY),
+        ("'Fix?' marks a row with a proposal. The '→' columns hold the proposed value, and 'Why' says", BODY),
+        ("what it was read from. Three kinds of change:", BODY),
+        ("  Duration, re-read from text   The session states its own length ('1 hr 45 min', '2 hrs').", BODY),
+        ("                                parseDurationMinutes() takes the first 'N min' it sees, so", BODY),
+        ("                                '1 hr 45 min' currently becomes 45 minutes.", BODY),
+        ("  Duration from stored distance The running plans hold no duration in the text but do store", BODY),
+        ("                                distance in km. Those are distance runs and should be sent as", BODY),
+        ("                                DISTANCE in metres, not a defaulted 30:00.", BODY),
+        ("  Target from RPE               Every one of the 1,672 steps ships targetType OPEN, because no", BODY),
+        ("                                program sets targetPace. effortLevel is stored on all 811 runs", BODY),
+        ("                                and rpeToHrZone() already maps it to a zone — it is computed at", BODY),
+        ("                                sync time and then never used.", BODY),
+        ("", BODY),
+        ("Target shape is now settled against the spec (Training API V2 v1.0, 26/05/2025, §3.2.1): a zone", BODY),
+        ("target sets targetType HEART_RATE and puts the zone 1-5 in targetValue, leaving targetValueLow", BODY),
+        ("and targetValueHigh null — those two are for a custom bpm range instead of a zone. Note that", BODY),
+        ("buildStep() hardcodes targetValue to null and never exposes it, so this fix needs that opened up", BODY),
+        ("first, and the athlete must already have HR zones saved on their Garmin account.", BODY),
+        ("", BODY),
+        ("See the Spec Conformance tab for the field-by-field check, including the one open question", BODY),
+        ("(durationValueType on DISTANCE steps) and the one thing the PDF could not settle (the exercise", BODY),
+        ("category enum lives in Appendix B, a separate Excel file).", BODY),
+        ("", BODY),
+        ("Session Restructures lists days whose whole step structure is wrong, not just a value —", BODY),
+        ("stored as warm-up / reps / recovery / cool-down rows but flattened into one step.", BODY),
+        ("", BODY),
         ("What the flags mean", BOLD),
         ("Sync key collision         Two workouts[] entries share a day number and produce the same sync key.", BODY),
         ("                           Both are created on Garmin, but garminPlanSync stores only the last, so", BODY),
@@ -445,6 +641,8 @@ def main():
         ("mismatch                   because it was read out of the description text.", BODY),
         ("Intervals flattened        Interval or tempo runs on a day the classifier did not read as intervals.", BODY),
         ("Nothing pushed to Garmin   The day holds content but the mapper returned null for every session.", BODY),
+        ("Prose row sent as a step   A 'Notes' or 'Format' row is coaching text, not work, but it becomes", BODY),
+        ("                           a step the athlete has to lap past mid-session.", BODY),
     ]
     for i, (text, font) in enumerate(lines, start=1):
         c = ws.cell(i, 1, text)

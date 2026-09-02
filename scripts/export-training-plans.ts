@@ -47,6 +47,9 @@ interface SessionExport {
 }
 
 interface DayExport {
+  /** Position in program.workouts[]. The day number alone is not unique —
+   *  some programs store paired sessions as two entries sharing a day. */
+  entryIdx: number;
   day: number;
   title: string;
   sourceKind: 'running' | 'hyrox';
@@ -92,7 +95,7 @@ function credential(): admin.credential.Credential {
  * `workoutToDays`, the day key is bare for single-session days and
  * `${day}_${idx}` once a day splits, and a null mapper result is a skip.
  */
-function exportDay(w: Workout | RunningWorkout): DayExport {
+function exportDay(w: Workout | RunningWorkout, entryIdx: number): DayExport {
   const runs: PlannedRun[] = (w as RunningWorkout).runs ?? [];
   const dataFlags: string[] = [];
 
@@ -110,6 +113,7 @@ function exportDay(w: Workout | RunningWorkout): DayExport {
   const dayStr = String(w.day);
 
   return {
+    entryIdx,
     day: w.day,
     title: w.title,
     sourceKind: runs.length > 0 ? 'running' : 'hyrox',
@@ -138,7 +142,7 @@ function exportProgram(p: Program, collection: string): ProgramExport {
     visibility: p.visibility,
     assignedUserCount: p.assignedUserIds?.length ?? 0,
     retainedUserCount: p.retainedUserIds?.length ?? 0,
-    days: (p.workouts ?? []).map(exportDay),
+    days: (p.workouts ?? []).map((w, i) => exportDay(w, i)),
   };
 }
 
