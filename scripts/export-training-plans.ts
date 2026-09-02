@@ -22,6 +22,7 @@ import * as fs from 'fs';
 import * as admin from 'firebase-admin';
 import { workoutToDays } from '@/lib/garmin/program-adapter';
 import { mapWorkoutDay, classifyWorkout } from '@/lib/garmin/workout-mapper';
+import { buildDesiredSessions } from '@/lib/garmin/plan-sync';
 import type { WorkoutDay, GarminWorkout, WorkoutStep } from '@/lib/garmin/workout-mapper';
 import type { Program, Workout, RunningWorkout, Exercise, PlannedRun } from '@/models/types';
 
@@ -89,28 +90,38 @@ function credential(): admin.credential.Credential {
 // ── Mapping ───────────────────────────────────────────────────────────────────
 
 /**
+ * `workoutToDays` reads `w.exercises` unguarded, so a stored day without the
+ * field throws there and takes the whole sync request down with it (and
+ * would do the same inside buildDesiredSessions() below). Applied once per
+ * entry, before either consumer sees it, so one bad document doesn't cost
+ * the export of every other one.
+ */
+function normaliseEntry(w: Workout | RunningWorkout): Workout | RunningWorkout {
+  return { ...w, exercises: (w.exercises as Exercise[]) ?? [] } as Workout | RunningWorkout;
+}
+
+/**
  * Runs one program day through the real sync path.
  *
  * Mirrors src/app/api/garmin/sync-plan/route.ts: sessions come from
- * `workoutToDays`, the day key is bare for single-session days and
- * `${day}_${idx}` once a day splits, and a null mapper result is a skip.
+ * `workoutToDays`, and a null mapper result is a skip. `keyByDayAndPayload`
+ * supplies the key `reconcileGarminPlan` would actually assign — see
+ * `desiredSessionKeys()` below for how it's built. `w` must already be
+ * normalised (see `normaliseEntry`).
  */
-function exportDay(w: Workout | RunningWorkout, entryIdx: number): DayExport {
+function exportDay(
+  w: Workout | RunningWorkout,
+  entryIdx: number,
+  hadNoExercises: boolean,
+  keyByDayAndPayload: Map<string, string>,
+): DayExport {
   const runs: PlannedRun[] = (w as RunningWorkout).runs ?? [];
-  const dataFlags: string[] = [];
+  const dataFlags: string[] = hadNoExercises
+    ? ['stored day has no exercises[] — workoutToDays throws on this shape']
+    : [];
+  const exercises: Exercise[] = w.exercises as Exercise[];
 
-  // `workoutToDays` reads `w.exercises` unguarded, so a stored day without the
-  // field throws there and takes the whole sync request down with it. Record
-  // that and hand the mapper a normalised day, so one bad document doesn't
-  // cost us the export of every other one.
-  if (w.exercises == null) {
-    dataFlags.push('stored day has no exercises[] — workoutToDays throws on this shape');
-  }
-  const exercises: Exercise[] = (w.exercises as Exercise[]) ?? [];
-  const normalised = { ...w, exercises } as Workout | RunningWorkout;
-
-  const sessions = workoutToDays(normalised);
-  const dayStr = String(w.day);
+  const sessions = workoutToDays(w);
 
   return {
     entryIdx,
@@ -120,15 +131,51 @@ function exportDay(w: Workout | RunningWorkout, entryIdx: number): DayExport {
     exercises,
     runs,
     dataFlags,
-    sessions: sessions.map((session: WorkoutDay, idx: number) => ({
-      sessionIdx: idx,
-      dayKey: sessions.length > 1 ? `${dayStr}_${idx}` : dayStr,
-      sessionType: session.sessionType,
-      garminSport: session.garminSport,
-      category: classifyWorkout(session),
-      workout: mapWorkoutDay(session),
-    })),
+    sessions: sessions.map((session: WorkoutDay, sessionIdx: number) => {
+      const workout = mapWorkoutDay(session);
+      // The key reconcileGarminPlan would assign, looked up by exact payload
+      // rather than recomputed — see desiredSessionKeys(). A session with no
+      // match either mapped to null (nothing is ever created for it, so no
+      // real key exists) or was deduplicated against an identical sibling
+      // session on the same day; either way this fallback is for the
+      // spreadsheet's readability only, not a claim about what Garmin holds.
+      const dayKey = (workout && keyByDayAndPayload.get(payloadKey(w.day, workout)))
+        ?? (sessions.length > 1 ? `${w.day}_${sessionIdx}` : String(w.day));
+      return {
+        sessionIdx,
+        dayKey,
+        sessionType: session.sessionType,
+        garminSport: session.garminSport,
+        category: classifyWorkout(session),
+        workout,
+      };
+    }),
   };
+}
+
+/** Join key for matching a mapped workout back to the reconciler's key for it. */
+function payloadKey(day: number, workout: GarminWorkout): string {
+  return `${day}::${JSON.stringify(workout)}`;
+}
+
+/**
+ * The key `reconcileGarminPlan` would assign to every session in this
+ * program, keyed by (day, exact mapped payload) so exportDay can look its own
+ * sessions up without recomputing the reconciler's indexing or its
+ * content-based deduplication — both live in plan-sync.ts, and reading them
+ * back through buildDesiredSessions() is what keeps this export unable to
+ * drift from what a real sync would actually create.
+ *
+ * buildDesiredSessions() takes a horizon window; passed 1 and (max day + 1)
+ * here so it covers the whole program rather than the ~14 days a real sync
+ * would use — this export is for reviewing the plan's content, not one
+ * athlete's calendar, and scheduledDate (which needs a real start date) is
+ * not read from its output.
+ */
+function desiredSessionKeys(workouts: Array<Workout | RunningWorkout>): Map<string, string> {
+  const maxDay = workouts.reduce((max, w) => Math.max(max, w.day), 0);
+  const desired = buildDesiredSessions(workouts, 1, maxDay + 1, 0);
+  return new Map(desired.map((d) => [payloadKey(d.day, d.workout), d.key]));
 }
 
 function exportProgram(p: Program, collection: string): ProgramExport {
@@ -142,7 +189,12 @@ function exportProgram(p: Program, collection: string): ProgramExport {
     visibility: p.visibility,
     assignedUserCount: p.assignedUserIds?.length ?? 0,
     retainedUserCount: p.retainedUserIds?.length ?? 0,
-    days: (p.workouts ?? []).map((w, i) => exportDay(w, i)),
+    days: (() => {
+      const raw = p.workouts ?? [];
+      const normalised = raw.map(normaliseEntry);
+      const keyByDayAndPayload = desiredSessionKeys(normalised);
+      return normalised.map((w, i) => exportDay(w, i, raw[i].exercises == null, keyByDayAndPayload));
+    })(),
   };
 }
 

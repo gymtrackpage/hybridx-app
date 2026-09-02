@@ -192,10 +192,16 @@ export function parseDistanceMeters(text: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
+// An ASCII "x" is not the only way these plans write a multiplier: the
+// Unicode multiplication sign ("3 sets × 25 reps") and the spelled-out
+// "N sets of M" ("work up to 2 sets of 3 at 85% of your 1RM") both appear
+// throughout, and previously fell through both parsers below entirely.
 export function parseTimedSets(
   text: string,
 ): { sets: number; timeS: number } | null {
-  const m = text.match(/(\d+)\s*x\s*(\d+)\s*(?:seconds?|secs?|s\b)/i);
+  const m =
+    text.match(/(\d+)\s*(?:sets?)?\s*[x×]\s*(\d+)\s*(?:seconds?|secs?|s\b)/i) ??
+    text.match(/(\d+)\s*sets?\s+of\s+(\d+)\s*(?:seconds?|secs?)\b/i);
   if (!m) return null;
   return { sets: parseInt(m[1], 10), timeS: parseInt(m[2], 10) };
 }
@@ -208,7 +214,12 @@ export function parseSetsReps(
   if (/\bAMRAP\b/i.test(text) && !/\d+\s*min.*AMRAP/i.test(text)) {
     return { sets: 1, reps: 0, isAmrap: true };
   }
-  const m = text.match(/(\d+)\s*x\s*(\d+)(?:\s*[-–]\s*(\d+))?\b(?!\s*(?:m\b|sec|s\b))/i);
+  // The lookahead excludes a following distance/time unit so a rep count is
+  // never confused with "5x800m" or "3x90sec" — those are timed or distance
+  // reps, handled by parseTimedSets or the run-interval parsers instead.
+  const m =
+    text.match(/(\d+)\s*(?:sets?)?\s*[x×]\s*(\d+)(?:\s*[-–]\s*(\d+))?\b(?!\s*(?:m\b|sec|s\b))/i) ??
+    text.match(/(\d+)\s*sets?\s+of\s+(\d+)\b(?!\s*(?:m\b|sec|s\b))/i);
   if (m) {
     return {
       sets: parseInt(m[1], 10),
@@ -475,6 +486,23 @@ function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s;
 }
 
+/**
+ * Rows that are pure coaching commentary, never the work itself. Deliberately
+ * excludes "Format" and "Work N" — in a circuit day those name the round
+ * structure and the prescribed movements ("Format: 4 rounds for time" /
+ * "Work 1: 500m row · 15 burpees..."), and dropping them would lose the
+ * workout, not just tidy it.
+ *
+ * A skipped row still reaches the athlete: workoutDescription() below reads
+ * day.exercises directly, not the filtered step list, so the text lands in
+ * the workout's own description field instead of becoming a step to lap past.
+ */
+const NOTE_ROW = /^[^\w]*(notes?|session\s+notes|coaching\s+notes?|focus|cue|reminder)\b/i;
+
+function isNoteRow(name: string): boolean {
+  return NOTE_ROW.test(name.trim());
+}
+
 function workoutName(day: WorkoutDay): string {
   return truncate(`D${day.day} – ${day.title}`, 50);
 }
@@ -733,6 +761,8 @@ function mapStrength(day: WorkoutDay, sport: GarminSport = 'STRENGTH_TRAINING'):
   }));
 
   for (const ex of day.exercises) {
+    if (isNoteRow(ex.name)) continue;
+
     const rpe = parseRpe(ex.details);
 
     // Resolve exercise category: prefer structured field, fall back to keyword lookup
@@ -893,14 +923,16 @@ function mapHyroxCircuit(day: WorkoutDay, sport: GarminSport = 'CARDIO_TRAINING'
       durationType: 'OPEN',
       targetType: 'OPEN',
     }),
-    ...day.exercises.map((ex) =>
-      buildStep(counter, {
-        intensity: 'ACTIVE',
-        description: `${ex.name}: ${truncate(ex.details, 180)}`,
-        durationType: 'OPEN',
-        targetType: 'OPEN',
-      }),
-    ),
+    ...day.exercises
+      .filter((ex) => !isNoteRow(ex.name))
+      .map((ex) =>
+        buildStep(counter, {
+          intensity: 'ACTIVE',
+          description: `${ex.name}: ${truncate(ex.details, 180)}`,
+          durationType: 'OPEN',
+          targetType: 'OPEN',
+        }),
+      ),
     buildStep(counter, {
       intensity: 'COOLDOWN',
       description: 'Cool down — press lap when done',

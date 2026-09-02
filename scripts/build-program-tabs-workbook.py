@@ -58,17 +58,43 @@ NSTEP = len(STEP_HEADERS)
 
 # Rows that read as coaching prose rather than work. They become steps the
 # athlete has to lap through on the watch.
-NOTE_ROW = re.compile(r"^(notes?|session notes|format|coaching|focus|cue|reminder)\b", re.I)
+# Matches workout-mapper.ts's NOTE_ROW exactly — "format" and "work N" are
+# deliberately excluded there (they carry the circuit's actual round
+# structure and prescribed movements, not commentary), so they must be
+# excluded here too or this flag would fire on rows the mapper is right to
+# keep as steps.
+NOTE_ROW = re.compile(r"^(notes?|session\s+notes|coaching\s+notes?|focus|cue|reminder)\b", re.I)
+
+# The circuit-header rows the mapper deliberately keeps as steps (they carry
+# real content), but which were never going to resolve to a Garmin exercise.
+FORMAT_OR_WORK_ROW = re.compile(r"^(format|work\s*\d*)\b", re.I)
 
 # A rest day stored as an empty run row. Pushing nothing for one is correct,
 # so it must not be reported as a day that reaches the watch with nothing.
 REST_TITLE = re.compile(r"^(rest|rest or cross[- ]?train|what's next|full rest)", re.I)
 
-# What a human reads as sets x reps. parseSetsReps() in the mapper is stricter:
-# it matches an ASCII "x" only, so the Unicode multiplication sign and the
-# spelled-out "3 sets x 20 reps" shape both fall through it.
-SETS_REPS = re.compile(r"(\d+)\s*(?:sets?)?\s*[x\u00d7]\s*(\d+)|(\d+)\s*sets?\s+of\s+(\d+)", re.I)
-MAPPER_SETS_REPS = re.compile(r"(\d+)\s*x\s*(\d+)(?:\s*[-\u2013]\s*(\d+))?\b(?!\s*(?:m\b|sec|s\b))", re.I)
+# A loose "looks like it states sets and reps somewhere" check, used only to
+# decide whether MAPPER_SETS_REPS (below) is worth running at all. Carries the
+# same distance/timed exclusion so "3 x 20m" (a loaded-carry distance) isn't
+# treated as a candidate rep count in the first place. The \b before the
+# lookahead matters: without it, "20m" lets (\d+) backtrack to "2" \u2014 "0" and
+# "m" are both word characters, so the lookahead no longer sees "m" right
+# there and wrongly reports a match on "20m" as if it read "2".
+SETS_REPS = re.compile(
+    r"(\d+)\s*(?:sets?)?\s*[x\u00d7]\s*(\d+)\b(?!\s*(?:m\b|sec|s\b))"
+    r"|(\d+)\s*sets?\s+of\s+(\d+)\b(?!\s*(?:m\b|sec|s\b))",
+    re.I,
+)
+
+# Mirrors parseSetsReps() in workout-mapper.ts exactly, including the
+# negative lookahead that excludes a distance or timed shape ("3 x 20m",
+# "3x90sec") so a loaded-carry distance is never misread as a rep count.
+# Kept in sync by hand \u2014 if that function changes, update this too.
+MAPPER_SETS_REPS = re.compile(
+    r"(\d+)\s*(?:sets?)?\s*[x\u00d7]\s*(\d+)(?:\s*[-\u2013]\s*(\d+))?\b(?!\s*(?:m\b|sec|s\b))"
+    r"|(\d+)\s*sets?\s+of\s+(\d+)\b(?!\s*(?:m\b|sec|s\b))",
+    re.I,
+)
 
 
 def flatten(steps, repeat_no=None, repeat_val=None):
@@ -250,14 +276,20 @@ def program_flags(p):
             colliding = [k for k in {s["dayKey"] for x in p["days"] if x["day"] == dno
                                      for s in x["sessions"]} if key_counts[k] > 1]
             if colliding:
+                # Should not happen post-fix (sync-keys.ts gives every colliding
+                # entry a distinct key) — kept as a canary in case that ever
+                # regresses, rather than assuming it can't.
                 out.append([pname, dno, title, "Sync key collision",
                             f"Day {dno} is stored as {day_counts[dno]} separate workouts[] entries, and "
                             f"{len(colliding)} of their sync keys collide ({', '.join(sorted(colliding))}). "
                             "Both are created on Garmin, but garminPlanSync records only the last, so the "
                             "earlier one is never cleaned up on the next sync."])
             else:
-                out.append([pname, dno, title, "Duplicate day number",
-                            f"Day {dno} appears in {day_counts[dno]} separate workouts[] entries."])
+                out.append([pname, dno, title, "Paired sessions share a day number",
+                            f"Day {dno} is stored as {day_counts[dno]} separate workouts[] entries (e.g. a "
+                            "run and a strength day). This is fine — sync-keys.ts gives each one its own "
+                            "sync key so they don't overwrite each other — but worth a glance to confirm "
+                            "it's the intended pairing, not an accidental duplicate."])
 
         is_rest = bool(REST_TITLE.match(title.strip())) and not any(
             (r.get("distance") or 0) > 0 for r in d["runs"])
@@ -268,13 +300,22 @@ def program_flags(p):
         for msg in d.get("dataFlags", []):
             out.append([pname, dno, title, "Stored data shape", msg])
 
-        notes = [e for e in d["exercises"]
-                 if NOTE_ROW.match((e.get("name") or "").strip().lstrip("\U0001F4CB\U0001F511\U0001F4A1\u26A0\uFE0F ").strip())]
-        if notes and mapped:
-            out.append([pname, dno, title, "Prose row sent as a step",
-                        f"{len(notes)} row(s) are coaching prose, not work "
-                        f"({', '.join((e.get('name') or '').strip() for e in notes)}), but they are "
-                        "emitted as workout steps the athlete has to lap through on the watch."])
+        # A canary, not an expected finding: workout-mapper.ts strips a
+        # NOTE_ROW-matching exercise from the step list (its text still
+        # reaches the workout description, just not as a step), so this
+        # checks the actual emitted steps rather than the stored exercise
+        # list \u2014 the source row is untouched and would always match.
+        note_names = {(e.get("name") or "").strip() for e in d["exercises"]
+                      if NOTE_ROW.match((e.get("name") or "").strip()
+                                        .lstrip("\U0001F4CB\U0001F511\U0001F4A1\u26A0\uFE0F ").strip())}
+        if note_names:
+            emitted = {(st.get("description") or "").split(" \u2014 ")[0].split(":")[0].strip()
+                       for s in mapped for _, _, st in all_steps(s["workout"])}
+            leaked = note_names & emitted
+            if leaked:
+                out.append([pname, dno, title, "Prose row sent as a step",
+                            f"{', '.join(sorted(leaked))} matches the coaching-prose pattern but still "
+                            "appears as a step description \u2014 check NOTE_ROW in workout-mapper.ts."])
 
         for s in mapped:
             w = s["workout"]
@@ -282,7 +323,12 @@ def program_flags(p):
             actives = [st for _, _, st in steps if st["intensity"] == "ACTIVE"]
 
             if w["sport"] == "STRENGTH_TRAINING":
-                unmatched = [st for st in actives if not st.get("exerciseCategory")]
+                # "Format"/"Work N" rows are prescribed content, not an
+                # exercise — they were never going to have a Garmin category,
+                # so counting them here would misreport a design choice as a
+                # lookup-table gap.
+                unmatched = [st for st in actives if not st.get("exerciseCategory")
+                             and not FORMAT_OR_WORK_ROW.match((st.get("description") or "").split(":")[0].strip())]
                 if unmatched:
                     names = sorted({(st.get("description") or "").split(" — ")[0]
                                     for st in unmatched})[:6]
@@ -636,9 +682,12 @@ def main():
         ("stored as warm-up / reps / recovery / cool-down rows but flattened into one step.", BODY),
         ("", BODY),
         ("What the flags mean", BOLD),
-        ("Sync key collision         Two workouts[] entries share a day number and produce the same sync key.", BODY),
-        ("                           Both are created on Garmin, but garminPlanSync stores only the last, so", BODY),
-        ("                           the earlier one is orphaned and never cleaned up on the next sync.", BODY),
+        ("Sync key collision         Two workouts[] entries share a day number AND produce the same sync key —", BODY),
+        ("                           sync-keys.ts should make this impossible; a report here is a regression,", BODY),
+        ("                           not an expected finding.", BODY),
+        ("Paired sessions share a    Two workouts[] entries share a day number (e.g. a run + a strength day).", BODY),
+        ("day number                 Each gets its own sync key, so this is informational — confirm it's the", BODY),
+        ("                           intended pairing, not an accidental duplicate.", BODY),
         ("No Garmin exercise match   Strength steps with no exerciseCategory — unnamed generic steps on the", BODY),
         ("                           watch. Fix by renaming so program-enricher.ts matches, or setting it.", BODY),
         ("No measurable targets      Every work step is OPEN with no target; the watch cannot auto-advance.", BODY),
@@ -652,8 +701,11 @@ def main():
         ("mismatch                   because it was read out of the description text.", BODY),
         ("Intervals flattened        Interval or tempo runs on a day the classifier did not read as intervals.", BODY),
         ("Nothing pushed to Garmin   The day holds content but the mapper returned null for every session.", BODY),
-        ("Prose row sent as a step   A 'Notes' or 'Format' row is coaching text, not work, but it becomes", BODY),
-        ("                           a step the athlete has to lap past mid-session.", BODY),
+        ("Prose row sent as a step   Canary, not an expected finding: a 'Notes'/'Coaching Note' row still", BODY),
+        ("                           reached the watch as a step. workout-mapper.ts's NOTE_ROW should", BODY),
+        ("                           already exclude these — 'Format' and 'Work N' rows are deliberately", BODY),
+        ("                           NOT excluded, since they carry the circuit's actual round structure", BODY),
+        ("                           and prescribed movements, not commentary.", BODY),
     ]
     for i, (text, font) in enumerate(lines, start=1):
         c = ws.cell(i, 1, text)

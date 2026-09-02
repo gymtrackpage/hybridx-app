@@ -145,7 +145,10 @@ Rest days stored as an empty run row push nothing. Their `sessionType` is
 
 Days that come from a CSV import carry no `RunStepSpec` and still map through
 the older text-parsing builders.
-## 6. How the outbound sync avoids duplicates
+
+---
+
+## 7. How the outbound sync avoids duplicates
 
 Both the on-demand route and the nightly cron delegate to the reconciler in
 [src/lib/garmin/plan-sync.ts](../src/lib/garmin/plan-sync.ts). It is a
@@ -188,14 +191,24 @@ athlete's history, and days beyond the horizon are still-valid future workouts.
 
 ---
 
-## 7. Limitations / TODO
+## 8. Limitations / TODO
 
 - **Strength weights aren't pushed** — the mapper omits `weightValue`
   until per-user 1RM data is wired through. Fill it in at
   [src/lib/garmin/workout-mapper.ts](../src/lib/garmin/workout-mapper.ts) `mapStrength()`.
-- **Hyrox simulations** are emitted as a single OTHER step with the
-  full prose. Switch to per-station OTHER steps once the simulation
-  schema supports it.
+- **Hyrox simulations, and CrossFit-conditioning circuit days more generally,**
+  are emitted as a run of OPEN steps carrying the full prose — one per
+  "Format" / "Work N" row — rather than structured steps with real targets.
+  `mapHyroxCircuit()` deliberately keeps these rows (unlike a pure "Notes"
+  row, they carry the round count and the prescribed movements, so dropping
+  them would lose the workout), but nothing downstream gives the athlete a
+  target to hit or lets the watch auto-advance. Switch to structured
+  per-station steps once the simulation schema supports it.
+- **A "Notes" / "Session Notes" / "Coaching Note" row is not sent as a
+  step.** `mapStrength()` and `mapHyroxCircuit()` both skip rows matching
+  `NOTE_ROW` in `workout-mapper.ts` — the text still reaches the athlete via
+  the workout's own `description` field, just not as something to lap past
+  mid-session. "Format" and "Work N" are deliberately exempt (see above).
 - **Activity → WorkoutSession linking** is not yet implemented; the
   webhook just persists raw payloads. Add a downstream worker that
   matches `garminActivities` against `workoutSessions` by date or
