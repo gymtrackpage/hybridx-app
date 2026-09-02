@@ -43,6 +43,27 @@ export interface WorkoutDayExercise {
   reps?: number;
   // For run steps: target pace in m/s
   targetPaceMps?: number;
+  /** Structured run data, when the day came from a stored program rather than a CSV. */
+  runSpec?: RunStepSpec;
+}
+
+/**
+ * One planned run, resolved to a single Garmin unit before it reaches the
+ * mapper. Built by program-adapter.ts, which still has the PlannedRun to hand;
+ * reading it here avoids re-deriving the session from its own prose.
+ */
+export interface RunStepSpec {
+  role: 'warmup' | 'work' | 'recovery' | 'cooldown';
+  /** Exactly one unit per step — a step is timed or measured, never both. */
+  durationType: 'TIME' | 'DISTANCE' | 'OPEN';
+  durationValue: number | null;
+  /** Repeat count when this row describes intervals. */
+  reps?: number;
+  /** Recovery between reps, when the row itself states one. */
+  recovery?: { durationType: 'TIME' | 'DISTANCE'; durationValue: number };
+  /** HR zone derived from the row's RPE. */
+  hrZone?: number;
+  description?: string;
 }
 
 export interface WorkoutDay {
@@ -80,6 +101,7 @@ export interface WorkoutStepItem {
   durationValue: number | null;
   durationValueType: null;
   targetType: 'OPEN' | 'HEART_RATE' | 'PACE' | 'SPEED' | 'CADENCE' | 'POWER';
+  /** For a zone target this is the zone itself: HR 1-5, power 1-7 (§3.2.1). */
   targetValue: number | null;
   targetValueLow: number | null;
   targetValueHigh: number | null;
@@ -224,6 +246,75 @@ export function parseRunIntervals(
   return null;
 }
 
+/**
+ * Phrases that turn a following time into an aside rather than the length of
+ * the session. "A pace you could hold for approx. 1 hour" describes an effort
+ * and "fuel every 30-40 min" is a fuelling note; reading either as a duration
+ * turns a 5 km threshold run into an hour on the watch.
+ */
+const ADVISORY_LEAD = /(hold for|every|each|before|after)/i;
+
+/** The duration a description states as the length of the run, in seconds. */
+export function parseStatedDuration(text: string): number | null {
+  if (!text) return null;
+  const patterns: Array<[RegExp, (m: RegExpMatchArray) => number]> = [
+    // Longest form first, so "1 hr 45 min" is not read as its trailing "45 min".
+    [/(\d+)\s*(?:hrs?|hours?|h)\b\s*(?:and\s+)?(\d+)\s*(?:mins?|minutes?)\b/i,
+      (m) => +m[1] * 3600 + +m[2] * 60],
+    [/(\d+(?:\.\d+)?)\s*(?:hrs?|hours?)\b/i, (m) => Math.round(parseFloat(m[1]) * 3600)],
+    [/(\d+)\s*[-–]\s*(\d+)\s*(?:mins?|minutes?)\b/i, (m) => Math.round(((+m[1] + +m[2]) / 2) * 60)],
+    [/(\d+)\s*(?:mins?|minutes?)\b/i, (m) => +m[1] * 60],
+  ];
+  for (const [re, toSeconds] of patterns) {
+    const m = text.match(re);
+    if (!m) continue;
+    if (ADVISORY_LEAD.test(text.slice(Math.max(0, m.index! - 30), m.index!))) continue;
+    return toSeconds(m);
+  }
+  return null;
+}
+
+/**
+ * The distance a description gives for the run itself, in metres.
+ *
+ * Kilometres only. A bare metre figure in this prose is never the session — it
+ * is strides ("a few 100m strides"), a hill length, or vertical gain ("800m+
+ * vert") — and the stored distance covers every row that has one, so reading
+ * metres here only ever mistakes an aside for the run.
+ */
+export function parseStatedRunDistanceMeters(text: string): number | null {
+  if (!text) return null;
+  const km = text.match(/(\d+(?:\.\d+)?)\s*km\b/i);
+  return km ? Math.round(parseFloat(km[1]) * 1000) : null;
+}
+
+/**
+ * The recovery a work row spells out, kept in whichever unit it uses.
+ *
+ * Every plan that prescribes one writes it the same way — "with 400m easy jog
+ * recovery", "with 90 seconds easy jog recovery" — so the figure is required to
+ * sit between "with" and "recovery", separated by nothing but filler. Matching
+ * loosely reads the rep itself as its own recovery: "run 4x1 minute at race
+ * effort with full recovery" is a one-minute rep and an unspecified recovery,
+ * not a one-minute recovery.
+ */
+export function parseStatedRecovery(
+  text: string,
+): { durationType: 'TIME' | 'DISTANCE'; durationValue: number } | null {
+  if (!text) return null;
+  const m = text.match(
+    /with\s+(?:full\s+)?(\d+(?:\.\d+)?)\s*(km|m|mins?|minutes?|secs?|seconds?)\b(?:\s+(?:easy|jog|walk|slow|float))*\s+recover/i,
+  );
+  if (!m) return null;
+
+  const value = parseFloat(m[1]);
+  const unit = m[2].toLowerCase();
+  if (unit === 'km') return { durationType: 'DISTANCE', durationValue: Math.round(value * 1000) };
+  if (unit === 'm') return { durationType: 'DISTANCE', durationValue: Math.round(value) };
+  if (unit.startsWith('min')) return { durationType: 'TIME', durationValue: Math.round(value * 60) };
+  return { durationType: 'TIME', durationValue: Math.round(value) };
+}
+
 export function parseRecoverySeconds(text: string): number | 'open' {
   const min = text.match(/(\d+)\s*min(?:ute)?s?\s*(?:jog\s*)?(?:recovery|rest)/i);
   if (min) return parseInt(min[1], 10) * 60;
@@ -311,6 +402,9 @@ export function classifyWorkout(day: WorkoutDay): WorkoutCategory {
 // STEP BUILDERS
 // ============================================================
 
+/** Added only to a structured run session that stores no warm-up of its own. */
+const DEFAULT_WARMUP_SECS = 900;
+
 class StepCounter {
   private n = 0;
   next(): number {
@@ -324,6 +418,7 @@ interface BuildStepParams {
   durationType?: WorkoutStepItem['durationType'];
   durationValue?: number | null;
   targetType?: WorkoutStepItem['targetType'];
+  targetValue?: number | null;
   targetValueLow?: number | null;
   targetValueHigh?: number | null;
   exerciseCategory?: string | null;
@@ -341,7 +436,7 @@ function buildStep(counter: StepCounter, params: BuildStepParams): WorkoutStepIt
     durationValue: params.durationValue ?? null,
     durationValueType: null,
     targetType: params.targetType ?? 'OPEN',
-    targetValue: null,
+    targetValue: params.targetValue ?? null,
     targetValueLow: params.targetValueLow ?? null,
     targetValueHigh: params.targetValueHigh ?? null,
     targetValueType: null,
@@ -821,6 +916,149 @@ function mapHyroxCircuit(day: WorkoutDay, sport: GarminSport = 'CARDIO_TRAINING'
 // MAIN DISPATCHER
 // ============================================================
 
+/**
+ * Titles whose sessions get bookended with a warm-up and a cool-down. Anything
+ * with repeats gets them too, whatever it is called.
+ */
+const STRUCTURED_RUN_TITLE =
+  /interval|hill|threshold|tempo|vo2|repetition|treadmill incline|race[- ]pace|sharpening|race-sim/i;
+
+/** Rest days stored as a run row with nothing in it. */
+const REST_RUN_TITLE = /^(rest|rest or cross[- ]?train|what's next|full rest|active recovery \+ strength)/i;
+
+function hrTargetFor(zone: number | undefined): Pick<BuildStepParams, 'targetType' | 'targetValue'> {
+  return zone == null ? { targetType: 'OPEN' } : { targetType: 'HEART_RATE', targetValue: zone };
+}
+
+/**
+ * Only work carries a target. A warm-up or cool-down is run to feel, so pinning
+ * it to the session's RPE would have the watch nagging through both.
+ */
+function specStep(
+  counter: StepCounter,
+  intensity: WorkoutStepItem['intensity'],
+  spec: Pick<RunStepSpec, 'durationType' | 'durationValue' | 'description' | 'hrZone'>,
+): WorkoutStepItem {
+  const targeted = intensity === 'ACTIVE' || intensity === 'INTERVAL';
+  return buildStep(counter, {
+    intensity,
+    description: spec.description ?? null,
+    durationType: spec.durationType,
+    durationValue: spec.durationValue,
+    ...hrTargetFor(targeted ? spec.hrZone : undefined),
+  });
+}
+
+/**
+ * Builds a run session from the structured rows the program stores, rather
+ * than by re-reading the joined prose.
+ *
+ * Returns null for a rest day, so nothing is pushed for it. Returns null too
+ * when the day carries no structured rows, which leaves the CSV-derived days
+ * to the older text-parsing builders.
+ */
+export function mapRunStructured(day: WorkoutDay): GarminWorkout | null {
+  const specs = day.exercises
+    .map((e) => e.runSpec)
+    .filter((r): r is RunStepSpec => r != null);
+  if (specs.length === 0) return null;
+
+  const hasWork = specs.some(
+    (r) => r.role !== 'recovery' && (r.durationValue ?? 0) > 0,
+  );
+  if (REST_RUN_TITLE.test(day.title.trim()) && !hasWork) return null;
+
+  const counter = new StepCounter();
+  const steps: WorkoutStep[] = [];
+  let estimated = 0;
+
+  const warmup = specs.find((r) => r.role === 'warmup');
+  const cooldown = specs.find((r) => r.role === 'cooldown');
+  const recoveryRow = specs.find((r) => r.role === 'recovery');
+  const work = specs.filter((r) => r.role === 'work');
+
+  const structured =
+    specs.some((r) => (r.reps ?? 0) > 1) || STRUCTURED_RUN_TITLE.test(day.title);
+
+  const addTime = (secs: number | null | undefined) => {
+    if (secs) estimated += secs;
+  };
+
+  // ── Warm-up ───────────────────────────────────────────────────────────────
+  // A stored warm-up is always sent, whatever kind of day it is — a race day
+  // stores one and dropping it would lose a step the plan asked for. Only the
+  // 15-minute default is reserved for structured sessions.
+  if (warmup) {
+    steps.push(specStep(counter, 'WARMUP', warmup));
+    if (warmup.durationType === 'TIME') addTime(warmup.durationValue);
+  } else if (structured) {
+    steps.push(buildStep(counter, {
+      intensity: 'WARMUP',
+      description: 'Easy jog warm-up',
+      durationType: 'TIME',
+      durationValue: DEFAULT_WARMUP_SECS,
+      targetType: 'OPEN',
+    }));
+    addTime(DEFAULT_WARMUP_SECS);
+  }
+
+  // ── Work ──────────────────────────────────────────────────────────────────
+  for (const row of work) {
+    const reps = row.reps ?? 0;
+    if (reps <= 1) {
+      steps.push(specStep(counter, structured ? 'ACTIVE' : 'ACTIVE', row));
+      if (row.durationType === 'TIME') addTime(row.durationValue);
+      continue;
+    }
+
+    // Recovery is never left open: the row's own figure first, then the day's
+    // dedicated recovery row, then a default set by how long the rep is.
+    const recovery = row.recovery
+      ?? (recoveryRow && recoveryRow.durationValue != null
+            ? { durationType: recoveryRow.durationType as 'TIME' | 'DISTANCE',
+                durationValue: recoveryRow.durationValue }
+            : defaultRecovery(row));
+
+    steps.push(buildRepeat(counter, reps, () => [
+      specStep(counter, 'INTERVAL', row),
+      buildStep(counter, {
+        intensity: 'RECOVERY',
+        description: 'Recovery jog',
+        durationType: recovery.durationType,
+        durationValue: recovery.durationValue,
+        targetType: 'OPEN',
+      }),
+    ]));
+
+    if (row.durationType === 'TIME') addTime((row.durationValue ?? 0) * reps);
+    if (recovery.durationType === 'TIME') addTime(recovery.durationValue * reps);
+  }
+
+  // ── Cool-down ─────────────────────────────────────────────────────────────
+  if (cooldown) {
+    steps.push(specStep(counter, 'COOLDOWN', cooldown));
+    if (cooldown.durationType === 'TIME') addTime(cooldown.durationValue);
+  } else if (structured) {
+    steps.push(buildStep(counter, {
+      intensity: 'COOLDOWN',
+      description: 'Cool down — press lap when done',
+      durationType: 'OPEN',
+      targetType: 'OPEN',
+    }));
+  }
+
+  if (steps.length === 0) return null;
+  return makeWorkout(day, 'RUNNING', steps, estimated || undefined);
+}
+
+/** 2 min after a long rep, 90 s after a short one. */
+function defaultRecovery(row: RunStepSpec): { durationType: 'TIME'; durationValue: number } {
+  const long =
+    (row.durationType === 'DISTANCE' && (row.durationValue ?? 0) >= 1000) ||
+    (row.durationType === 'TIME' && (row.durationValue ?? 0) >= 180);
+  return { durationType: 'TIME', durationValue: long ? 120 : 90 };
+}
+
 export function mapWorkoutDay(day: WorkoutDay): GarminWorkout | null {
   // When sessionType is explicitly provided, use it to bypass the heuristic classifier.
   if (day.sessionType) {
@@ -829,7 +1067,13 @@ export function mapWorkoutDay(day: WorkoutDay): GarminWorkout | null {
       case 'rest':
         return null;
       case 'run': {
-        // Still use content-based classification to distinguish intervals vs easy.
+        // Stored programs carry the session's structure on the rows themselves.
+        // Only CSV-derived days, which have no runSpec, fall back to reading
+        // the structure back out of the prose.
+        const structured = mapRunStructured(day);
+        if (structured) return structured;
+        if (day.exercises.some((e) => e.runSpec)) return null;  // rest day
+
         const category = classifyWorkout(day);
         return category === 'run_intervals' ? mapRunIntervals(day) : mapRunEasy(day);
       }
