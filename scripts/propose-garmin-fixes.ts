@@ -220,10 +220,14 @@ function main() {
             const target = hrTarget(run?.effortLevel);
             const durationChanged = durationType !== st.durationType
                                  || durationValue !== st.durationValue;
-            const changed = durationChanged || !!target;
+            // A step that already carries a target needs no target proposal.
+            const needsTarget = st.targetType === 'OPEN' && !!target;
+            const changed = durationChanged || needsTarget;
+            if (!changed) continue;
             proposals.push({
               programId: p.id, entryIdx: d.entryIdx, day: d.day, sessionIdx: s.sessionIdx, stepOrder: st.stepOrder,
-              changed, durationChanged, durationType, durationValue, human, target,
+              changed, durationChanged, durationType, durationValue, human,
+              ...(needsTarget ? { target } : {}),
               ...(durationType === 'DISTANCE' ? { durationValueType: 'METER' } : {}),
               reason: [reason, target ? `RPE ${run.effortLevel} is stored on the run but no target is sent today.` : '']
                         .filter(Boolean).join(' '),
@@ -237,6 +241,8 @@ function main() {
           for (const { st } of steps) {
             const target = hrTarget(workRuns[0]?.effortLevel);
             if (!target || st.intensity === 'REST') continue;
+            if (st.targetType !== 'OPEN') continue;   // already targeted
+            if (st.intensity !== 'ACTIVE' && st.intensity !== 'INTERVAL') continue;
             proposals.push({
               programId: p.id, entryIdx: d.entryIdx, day: d.day, sessionIdx: s.sessionIdx, stepOrder: st.stepOrder,
               changed: true, target,

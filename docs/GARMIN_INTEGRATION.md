@@ -114,7 +114,41 @@ Only set these if your Partner Training API spec uses different hosts
 
 ---
 
-## 6. Limitations / TODO
+## 6. How a run session is built
+
+A run day is built from its stored `PlannedRun` rows rather than by reading
+the joined description text. `program-adapter.ts` settles each row on one
+unit — a duration the description states, then the row's stored distance,
+then a distance the description states — and hands the mapper a `RunStepSpec`.
+A step is timed or measured, never both.
+
+Two guards matter, and both exist because the plans are written for humans:
+
+- A time introduced by "hold for", "every", "each", "before" or "after" is an
+  aside, not a length. Without this, "5km at Threshold pace (a pace you could
+  hold for approx. 1 hour)" goes to the watch as an hour-long run.
+- A duration is rejected when it could not cover the row's stored distance —
+  outside 2:30/km to 20:00/km. Rows that pack a session into shorthand
+  ("WU 10. 3x90s at 6% incline, 2 min walk. CD 5." over 5.2 km) otherwise
+  send the walk as the whole session.
+
+Sessions with repeats, and those whose titles name interval work, are
+bookended: a stored warm-up or cool-down is honoured in its own unit, and only
+a session with neither gets a 15-minute warm-up and a lap-press cool-down. Rep
+recovery is never left open — the row's own figure where it gives one,
+otherwise 2 minutes after a rep of a kilometre or three minutes and over, 90
+seconds below that.
+
+Rest days stored as an empty run row push nothing. Their `sessionType` is
+`run`, so they bypass the classifier; without the check, `mapRunEasy`'s
+30-minute default sent every rest day to the watch as a half-hour run.
+
+Days that come from a CSV import carry no `RunStepSpec` and still map through
+the older text-parsing builders.
+
+---
+
+## 7. Limitations / TODO
 
 - **Strength weights aren't pushed** — the mapper omits `weightValue`
   until per-user 1RM data is wired through. Fill it in at
@@ -129,8 +163,21 @@ Only set these if your Partner Training API spec uses different hosts
 - **Webhook auth** — Garmin uses IP-allowlisting rather than signed
   headers for partner webhooks. If your portal exposes a verifying
   secret/signature, validate it inside the webhook route.
-- **Verify enum IDs**: the canonical Garmin Connect step/sport/duration
-  IDs in the mapper match most published partner specs, but cross-check
-  against your specific Training API contract once you have it.
+- **Enum IDs are verified** against Training API V2 v1.0 (26/05/2025)
+  §3.2.1: sports, intensities, duration types and repeat types all
+  conform, and no workout comes near the 100-step or 512-character
+  limits. Two things remain open. `durationValueType` is described as a
+  modifier for HR and POWER only, yet every DISTANCE example in the spec
+  sets it to `METER` — we currently send `null`, so confirm which is
+  right. And the `exerciseCategory` / `exerciseName` enums live in
+  Appendix B, an Excel file supplied separately, so the lookup table in
+  `program-enricher.ts` is still unchecked against them.
+
+- **Targets are only as good as the athlete's zones.** A zone target sets
+  `targetType: 'HEART_RATE'` with the zone in `targetValue` (1-5);
+  `targetValueLow`/`High` are for a custom bpm range instead. The spec
+  notes the zones must already be defined and saved on the athlete's
+  Garmin account, so a workout can arrive with a zone the watch has no
+  bounds for.
 - **Multi-instance scaling**: `src/lib/rate-limit.ts` is in-process. Move
   to Redis if App Hosting maxInstances goes above 1.

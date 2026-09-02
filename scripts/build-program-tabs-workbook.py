@@ -60,6 +60,10 @@ NSTEP = len(STEP_HEADERS)
 # athlete has to lap through on the watch.
 NOTE_ROW = re.compile(r"^(notes?|session notes|format|coaching|focus|cue|reminder)\b", re.I)
 
+# A rest day stored as an empty run row. Pushing nothing for one is correct,
+# so it must not be reported as a day that reaches the watch with nothing.
+REST_TITLE = re.compile(r"^(rest|rest or cross[- ]?train|what's next|full rest)", re.I)
+
 # What a human reads as sets x reps. parseSetsReps() in the mapper is stricter:
 # it matches an ASCII "x" only, so the Unicode multiplication sign and the
 # spelled-out "3 sets x 20 reps" shape both fall through it.
@@ -255,7 +259,9 @@ def program_flags(p):
                 out.append([pname, dno, title, "Duplicate day number",
                             f"Day {dno} appears in {day_counts[dno]} separate workouts[] entries."])
 
-        if (d["exercises"] or d["runs"]) and not mapped:
+        is_rest = bool(REST_TITLE.match(title.strip())) and not any(
+            (r.get("distance") or 0) > 0 for r in d["runs"])
+        if (d["exercises"] or d["runs"]) and not mapped and not is_rest:
             out.append([pname, dno, title, "Nothing pushed to Garmin",
                         f"Day has content but produced no Garmin workout "
                         f"(category: {', '.join(sorted({s['category'] for s in sessions})) or 'none'})."])
@@ -326,9 +332,14 @@ def program_flags(p):
                                     f"Step is {secs // 60}:{secs % 60:02d} for a planned {km}km "
                                     f"({pace / 60:.1f} min/km). Duration was read from the description "
                                     "text, not the distance."])
-                iv = [r for r in d["runs"]
-                      if (r.get("noIntervals") or 0) > 1 or r.get("type") in ("intervals", "tempo")]
-                if iv:
+                # Only a genuine flattening: the session emitted no repeat block.
+                has_repeat = any(
+                    x.get("type") == "WorkoutRepeatStep"
+                    for seg in w["segments"] for x in seg.get("steps", []))
+                # A row typed 'intervals' with a single rep is a continuous
+                # effort — a time trial — not a flattened interval session.
+                iv = [r for r in d["runs"] if (r.get("noIntervals") or 0) > 1]
+                if iv and not has_repeat:
                     out.append([pname, dno, title, "Intervals flattened",
                                 f"{len(iv)} interval/tempo run(s) stored, but the day classified as "
                                 f"'{s['category']}', so it maps to one steady run. The interval structure "
