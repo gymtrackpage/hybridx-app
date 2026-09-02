@@ -27,7 +27,7 @@ const EXERCISE_LOOKUP: GarminExerciseMatch[] = [
   // Deadlift variants — specific first
   { patterns: [/romanian/i, /\brdl\b/i], exerciseCategory: 'DEADLIFT', exerciseName: 'ROMANIAN_DEADLIFT' },
   { patterns: [/sumo\s+deadlift/i], exerciseCategory: 'DEADLIFT', exerciseName: 'SUMO_DEADLIFT' },
-  { patterns: [/trap\s*bar\s+deadlift/i, /hex\s*bar\s+deadlift/i], exerciseCategory: 'DEADLIFT', exerciseName: 'TRAP_BAR_DEADLIFT' },
+  { patterns: [/trap\s*bar\s+(?:deadlift|dl)\b/i, /hex\s*bar\s+(?:deadlift|dl)\b/i], exerciseCategory: 'DEADLIFT', exerciseName: 'TRAP_BAR_DEADLIFT' },
   { patterns: [/deadlift/i], exerciseCategory: 'DEADLIFT', exerciseName: 'BARBELL_DEADLIFT' },
 
   // Squat variants
@@ -88,11 +88,40 @@ const EXERCISE_LOOKUP: GarminExerciseMatch[] = [
   { patterns: [/mountain\s+climber/i], exerciseCategory: 'PLANK', exerciseName: 'MOUNTAIN_CLIMBER' },
   { patterns: [/plank/i], exerciseCategory: 'PLANK', exerciseName: 'PLANK' },
 
-  // Curl
+  // Curl — hamstring first: "Nordic hamstring curl" is not a bicep/dumbbell/barbell curl
+  { patterns: [/nordic\s+(?:hamstring\s+)?curl/i], exerciseCategory: 'LEG_CURL', exerciseName: 'NORDIC_HAMSTRING_CURL' },
   { patterns: [/bicep\s+curl/i, /dumbbell\s+curl/i, /barbell\s+curl/i], exerciseCategory: 'CURL', exerciseName: 'DUMBBELL_BICEP_CURL' },
 
-  // Calf
+  // Calf — iso hold before "raise" so a hold with no "raise" in it still matches
+  { patterns: [/calf.{0,10}iso(?:metric)?\s+hold/i], exerciseCategory: 'CALF_RAISE', exerciseName: 'SINGLE_LEG_CALF_RAISE' },
   { patterns: [/calf\s+raise/i], exerciseCategory: 'CALF_RAISE', exerciseName: 'CALF_RAISE' },
+
+  // Core — Dead Bug is the only single-name core drill these plans use by that
+  // exact title; a bare "Core" row is a session label with no specific
+  // movement named, so it is deliberately left unmatched rather than guessed.
+  { patterns: [/dead\s*bug/i], exerciseCategory: 'CORE', exerciseName: 'DEAD_BUG' },
+
+  // Triceps
+  { patterns: [/dip/i], exerciseCategory: 'TRICEPS_EXTENSION', exerciseName: 'TRICEPS_DIP' },
+
+  // Hip / glute stability — banded and single-leg drills, specific before general
+  { patterns: [/clamshell/i], exerciseCategory: 'HIP_STABILITY', exerciseName: 'CLAMSHELL' },
+  { patterns: [/lateral\s+band\s+walk/i], exerciseCategory: 'HIP_STABILITY', exerciseName: 'LATERAL_BAND_WALK' },
+  { patterns: [/side.?lying\s+hip\s+abduction/i], exerciseCategory: 'HIP_STABILITY', exerciseName: 'SIDE_LYING_HIP_ABDUCTION' },
+  { patterns: [/single.?leg\s+balance/i], exerciseCategory: 'HIP_STABILITY', exerciseName: 'SINGLE_LEG_BALANCE' },
+
+  // Band pull-apart — a light rear-delt/row drill, not a loaded row
+  { patterns: [/band\s+pull.?apart/i], exerciseCategory: 'ROW', exerciseName: 'BAND_PULL_APART' },
+
+  // Step-ups / step-downs — box variant before the bare pattern
+  { patterns: [/box\s+step.?up/i], exerciseCategory: 'LUNGE', exerciseName: 'BOX_STEP_UP' },
+  { patterns: [/step.?down/i], exerciseCategory: 'LUNGE', exerciseName: 'STEP_DOWN' },
+  { patterns: [/step.?up/i], exerciseCategory: 'LUNGE', exerciseName: 'STEP_UP' },
+
+  // Shoulder-to-overhead — strongman/hybrid-competition pressing complex,
+  // named as "S2OH" in programs that pair it with Back Squat and Bench Press
+  // on the same competition day.
+  { patterns: [/\bs2oh\b/i, /shoulder.to.overhead/i], exerciseCategory: 'SHOULDER_PRESS', exerciseName: 'BARBELL_SHOULDER_PRESS' },
 ];
 
 export function lookupGarminExercise(
