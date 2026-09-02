@@ -32,8 +32,18 @@ export interface PendingGarminAuth {
 /** Mapping of program day → Garmin workout id, so we can push updates / deletes. */
 export interface GarminPlanSync {
   programId: string;
-  /** Map keyed by day number (as string for Firestore-friendly keys). */
-  workouts: Record<string, { workoutId: string; scheduleId?: string; scheduledDate?: string }>;
+  /**
+   * Map keyed by `${day}_${sessionIndex}` (older records use a bare day
+   * number, which is normalised on read). `hash` fingerprints the pushed
+   * content so an unchanged session is left alone on the next sync instead of
+   * being deleted and re-created.
+   */
+  workouts: Record<
+    string,
+    { workoutId: string; scheduleId?: string; scheduledDate?: string; hash?: string }
+  >;
+  /** Workouts whose removal from Garmin failed; retried on every later sync. */
+  pendingDeletes?: Array<{ workoutId: string; scheduleId?: string }>;
   lastSyncedAt: Date;
 }
 

@@ -92,9 +92,14 @@ export function GarminIntegrationCard({ isConnected, onChange }: Props) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Sync failed.');
+      const parts = [`${data.pushed} pushed`];
+      if (data.unchanged) parts.push(`${data.unchanged} already up to date`);
+      if (data.removed) parts.push(`${data.removed} replaced`);
+      if (data.skipped) parts.push(`${data.skipped} skipped`);
+      if (data.failed) parts.push(`${data.failed} failed`);
       toast({
         title: 'Synced to Garmin',
-        description: `Pushed ${data.pushed}, skipped ${data.skipped}, failed ${data.failed}.`,
+        description: `${parts.join(', ')}.`,
       });
     } catch (e) {
       toast({ title: 'Sync failed', description: e instanceof Error ? e.message : String(e), variant: 'destructive' });
